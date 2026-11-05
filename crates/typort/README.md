@@ -13,7 +13,7 @@ http.server`, Rails, anything) in the tray. Open one in the browser, copy its UR
   command, directory, and whether it is reachable from other machines (`localhost only` /
   `all interfaces`).
 - **Stop** (SIGTERM) and **Force kill** (SIGKILL), plus **Stop all**.
-- The icon turns yellow while anything is listening.
+- The icon only shows while something is listening, and is yellow then.
 - CLI for scripts and keybindings, and `status --follow` for bars.
 - Only reads `/proc`: no root, no `ss` or `lsof`.
 

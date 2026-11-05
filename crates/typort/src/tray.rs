@@ -47,12 +47,15 @@ pub fn run(config: AppConfig) -> Result<()> {
         spec(&config, &[]),
         actions_tx,
     )?;
+    // Hidden until something is listening.
+    applet.set_visible(false);
 
     // The ports in the menu, for the action handler.
     let shown: Rc<RefCell<Vec<Port>>> = Rc::default();
     let refresh_config = config.clone();
     let shown_by_scan = shown.clone();
     tray::drain_actions(ports_rx, move |scan: Vec<Port>| {
+        applet.set_visible(!scan.is_empty());
         applet.update(spec(&refresh_config, &scan));
         shown_by_scan.replace(scan);
         ControlFlow::Continue
