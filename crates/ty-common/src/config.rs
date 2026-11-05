@@ -137,17 +137,17 @@ pub fn parse<T: DeserializeOwned>(raw: &str) -> Result<T> {
 
 /// Parse YAML text into the tool's config and the shared `env:` section.
 pub fn parse_with_env<T: DeserializeOwned>(raw: &str) -> Result<(T, Env)> {
-    let mut value: serde_yaml::Value = if raw.trim().is_empty() {
-        serde_yaml::Value::Mapping(Default::default())
+    let mut value: serde_yaml_ng::Value = if raw.trim().is_empty() {
+        serde_yaml_ng::Value::Mapping(Default::default())
     } else {
-        serde_yaml::from_str(raw)?
+        serde_yaml_ng::from_str(raw)?
     };
     let env = match value.as_mapping_mut().and_then(|map| map.remove(ENV_KEY)) {
-        Some(env) => serde_yaml::from_value(env)
+        Some(env) => serde_yaml_ng::from_value(env)
             .context("`env` must map variable names to strings or { file: <path> }")?,
         None => Env::new(),
     };
-    Ok((serde_yaml::from_value(value)?, env))
+    Ok((serde_yaml_ng::from_value(value)?, env))
 }
 
 /// Set every variable in `env`.
