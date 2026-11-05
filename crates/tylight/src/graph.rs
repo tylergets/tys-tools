@@ -150,7 +150,7 @@ fn draw(cr: &Context, w: f64, h: f64, shared: &Shared) -> Result<(), cairo::Erro
         let mut x = plot.x0;
         while x < plot.x1 {
             let t = plot.start + (x - plot.x0) / (plot.x1 - plot.x0) * (plot.end - plot.start);
-            let progress = solar::day_progress(solar::elevation(t, location), &config.elevation);
+            let progress = solar::day_progress(solar::elevation(t, location), &config.schedule);
             set(cr, (0.25, 0.35, 0.75), 0.22 * (1.0 - progress));
             cr.rectangle(x, plot.y0, 2.0, plot.y1 - plot.y0);
             cr.fill()?;
@@ -200,7 +200,7 @@ fn draw(cr: &Context, w: f64, h: f64, shared: &Shared) -> Result<(), cairo::Erro
     let scheduled: Vec<(f64, crate::color::Setting)> = (0..=steps)
         .map(|i| {
             let t = plot.start + f64::from(i) / f64::from(steps) * (plot.end - plot.start);
-            (t, schedule::scheduled(config, status.location, t).0)
+            (t, schedule::scheduled(config, status.location, t).setting)
         })
         .collect();
     cr.set_line_width(1.5);

@@ -3,10 +3,24 @@ import ./lib.nix {inherit self;} {
   name = "tylight";
   description = "tylight screen color temperature daemon";
   settingsExample = {
-    temperature = {
-      day = 6500;
-      night = 3500;
-    };
+    schedule = [
+      {
+        name = "day";
+        elevation = 6;
+        temperature = 6500;
+      }
+      {
+        name = "evening";
+        elevation = -4;
+        temperature = 4500;
+      }
+      {
+        name = "night";
+        elevation = -12;
+        temperature = 3200;
+        brightness = 0.9;
+      }
+    ];
     location = {
       latitude = 39.1;
       longitude = -84.5;

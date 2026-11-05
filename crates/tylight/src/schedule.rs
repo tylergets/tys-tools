@@ -1,5 +1,5 @@
-//! The day/night schedule (what the sun alone asks for), and a short history of what was
-//! applied, for the graph.
+//! The schedule (what the sun alone asks for), and a short history of what was applied,
+//! for the graph.
 
 use std::collections::VecDeque;
 use std::fs;
@@ -8,35 +8,74 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::color::Setting;
-use crate::config::{AppConfig, APP_NAME};
+use crate::config::{AppConfig, Stop, APP_NAME};
 use crate::protocol::Period;
 use crate::solar::{self, Location};
 
-/// The scheduled setting at `unix`, its period and the sun elevation.
-pub fn scheduled(
-    config: &AppConfig,
-    location: Option<Location>,
-    unix: f64,
-) -> (Setting, Period, Option<f64>) {
-    let day = Setting {
-        temperature: f64::from(config.temperature.day),
-        brightness: config.brightness.day,
-    };
-    let night = Setting {
-        temperature: f64::from(config.temperature.night),
-        brightness: config.brightness.night,
-    };
+/// What the schedule asks for at some moment.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Scheduled {
+    pub setting: Setting,
+    pub period: Period,
+    /// Name of the closest stop.
+    pub stage: Option<String>,
+    pub elevation: Option<f64>,
+}
+
+/// The scheduled setting at `unix`.
+pub fn scheduled(config: &AppConfig, location: Option<Location>, unix: f64) -> Scheduled {
     let Some(location) = location else {
-        return (day, Period::Unknown, None);
+        return Scheduled {
+            setting: config
+                .schedule
+                .first()
+                .map_or(Setting::NEUTRAL, Stop::setting),
+            period: Period::Unknown,
+            stage: None,
+            elevation: None,
+        };
     };
     let elevation = solar::elevation(unix, location);
-    let progress = solar::day_progress(elevation, &config.elevation);
+    let progress = solar::day_progress(elevation, &config.schedule);
     let period = match progress {
         p if p >= 1.0 => Period::Day,
         p if p <= 0.0 => Period::Night,
         _ => Period::Transition,
     };
-    (night.lerp(day, progress), period, Some(elevation))
+    let stage = config
+        .schedule
+        .iter()
+        .min_by(|a, b| {
+            (a.elevation - elevation)
+                .abs()
+                .total_cmp(&(b.elevation - elevation).abs())
+        })
+        .and_then(|stop| stop.name.clone());
+    Scheduled {
+        setting: at_elevation(&config.schedule, elevation),
+        period,
+        stage,
+        elevation: Some(elevation),
+    }
+}
+
+/// The setting at `elevation`: the first stop above the highest, the last below the
+/// lowest, and blended between the two stops around it.
+pub fn at_elevation(stops: &[Stop], elevation: f64) -> Setting {
+    let (Some(first), Some(last)) = (stops.first(), stops.last()) else {
+        return Setting::NEUTRAL;
+    };
+    if elevation >= first.elevation {
+        return first.setting();
+    }
+    for pair in stops.windows(2) {
+        let (above, below) = (&pair[0], &pair[1]);
+        if elevation >= below.elevation {
+            let t = (elevation - below.elevation) / (above.elevation - below.elevation);
+            return below.setting().lerp(above.setting(), t);
+        }
+    }
+    last.setting()
 }
 
 /// One minute of history.
@@ -153,9 +192,44 @@ mod tests {
     #[test]
     fn schedule_without_location_is_day() {
         let config = AppConfig::default();
-        let (setting, period, elevation) = scheduled(&config, None, 0.0);
-        assert_eq!(setting.temperature, 6500.0);
-        assert_eq!(period, Period::Unknown);
-        assert!(elevation.is_none());
+        let now = scheduled(&config, None, 0.0);
+        assert_eq!(now.setting.temperature, 6500.0);
+        assert_eq!(now.period, Period::Unknown);
+        assert!(now.elevation.is_none());
+    }
+
+    #[test]
+    fn blends_between_stops() {
+        let stops = AppConfig::default().schedule;
+        let kelvin = |elevation| at_elevation(&stops, elevation).temperature;
+        assert_eq!(kelvin(40.0), 6500.0);
+        assert_eq!(kelvin(8.0), 6500.0);
+        assert_eq!(kelvin(5.0), 6000.0);
+        assert_eq!(kelvin(2.0), 5500.0);
+        assert_eq!(kelvin(-8.0), 4000.0);
+        assert_eq!(kelvin(-11.0), 3800.0);
+        assert_eq!(kelvin(-40.0), 3600.0);
+        // Getting warmer the whole way down.
+        let mut last = f64::MAX;
+        for tenth in (-200..=100).rev() {
+            let k = kelvin(f64::from(tenth) / 10.0);
+            assert!(k <= last);
+            last = k;
+        }
+    }
+
+    #[test]
+    fn names_the_closest_stage() {
+        let config = AppConfig::default();
+        let greenwich = Location {
+            latitude: 51.48,
+            longitude: 0.0,
+        };
+        // 2024-06-21 12:00 UTC (sun ~62° up) and midnight before it.
+        let noon = scheduled(&config, Some(greenwich), 1718971200.0);
+        assert_eq!(noon.stage.as_deref(), Some("day"));
+        assert_eq!(noon.period, Period::Day);
+        let midnight = scheduled(&config, Some(greenwich), 1718971200.0 - 12.0 * 3600.0);
+        assert_eq!(midnight.stage.as_deref(), Some("night"));
     }
 }

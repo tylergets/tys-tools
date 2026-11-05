@@ -16,14 +16,12 @@ pub const MAX_TEMPERATURE: u32 = 25000;
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AppConfig {
-    pub temperature: Temperature,
-    /// Gamma dimming (1.0 = none). Separate from the monitors' own brightness.
-    pub brightness: Brightness,
+    /// Settings by sun elevation, from highest to lowest, blended in between.
+    pub schedule: Vec<Stop>,
     /// Gamma correction applied to every channel.
     pub gamma: f64,
     /// Fixed location. When unset, GeoClue2 is asked (and the last fix is cached).
     pub location: Option<Location>,
-    pub elevation: Elevation,
     /// Length of the fade when tylight is toggled or the temperature is set, in seconds.
     /// 0 switches instantly.
     pub fade_seconds: f64,
@@ -41,11 +39,9 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            temperature: Temperature::default(),
-            brightness: Brightness::default(),
+            schedule: default_schedule(),
             gamma: 1.0,
             location: None,
-            elevation: Elevation::default(),
             fade_seconds: 2.0,
             backend: BackendKind::Auto,
             tray: true,
@@ -55,6 +51,22 @@ impl Default for AppConfig {
             presets: default_presets(),
         }
     }
+}
+
+fn default_schedule() -> Vec<Stop> {
+    let stop = |name: &str, elevation, temperature| Stop {
+        name: Some(name.to_string()),
+        elevation,
+        temperature,
+        brightness: 1.0,
+    };
+    vec![
+        stop("day", 8.0, 6500),
+        stop("golden hour", 2.0, 5500),
+        stop("sunset", -3.0, 4600),
+        stop("dusk", -8.0, 4000),
+        stop("night", -14.0, 3600),
+    ]
 }
 
 fn default_presets() -> BTreeMap<String, Preset> {
@@ -129,52 +141,29 @@ impl Default for AutoBrightness {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Temperature {
-    pub day: u32,
-    pub night: u32,
+/// One step of the schedule: the setting once the sun is at `elevation` degrees.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Stop {
+    /// Shown in the status ("4600K · sunset").
+    #[serde(default)]
+    pub name: Option<String>,
+    pub elevation: f64,
+    pub temperature: u32,
+    /// Gamma dimming, 0.1-1.0 (1.0 = none). Separate from the monitors' own brightness.
+    #[serde(default = "full_brightness")]
+    pub brightness: f64,
 }
 
-impl Default for Temperature {
-    fn default() -> Self {
-        Self {
-            day: 6500,
-            night: 4000,
-        }
-    }
+fn full_brightness() -> f64 {
+    1.0
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Brightness {
-    pub day: f64,
-    pub night: f64,
-}
-
-impl Default for Brightness {
-    fn default() -> Self {
-        Self {
-            day: 1.0,
-            night: 1.0,
-        }
-    }
-}
-
-/// Solar elevations (degrees) where the day and night settings start. In between, the
-/// settings blend.
-#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Elevation {
-    pub high: f64,
-    pub low: f64,
-}
-
-impl Default for Elevation {
-    fn default() -> Self {
-        Self {
-            high: 3.0,
-            low: -6.0,
+impl Stop {
+    pub fn setting(&self) -> crate::color::Setting {
+        crate::color::Setting {
+            temperature: f64::from(self.temperature),
+            brightness: self.brightness,
         }
     }
 }
@@ -216,28 +205,33 @@ impl AppConfig {
     }
 
     pub fn validate(&self) -> Result<()> {
-        for (name, value) in [
-            ("temperature.day", self.temperature.day),
-            ("temperature.night", self.temperature.night),
-        ] {
-            validate_temperature(name, value)?;
+        if self.schedule.is_empty() {
+            bail!("schedule needs at least one stop");
         }
-        for (name, value) in [
-            ("brightness.day", self.brightness.day),
-            ("brightness.night", self.brightness.night),
-        ] {
-            if !(0.1..=1.0).contains(&value) {
-                bail!("{name} must be between 0.1 and 1.0 (got {value})");
+        for (i, stop) in self.schedule.iter().enumerate() {
+            validate_temperature(&format!("schedule[{i}].temperature"), stop.temperature)?;
+            if !(0.1..=1.0).contains(&stop.brightness) {
+                bail!(
+                    "schedule[{i}].brightness must be between 0.1 and 1.0 (got {})",
+                    stop.brightness
+                );
             }
+            if !(-90.0..=90.0).contains(&stop.elevation) {
+                bail!("schedule[{i}].elevation must be between -90 and 90");
+            }
+        }
+        if self
+            .schedule
+            .windows(2)
+            .any(|pair| pair[1].elevation >= pair[0].elevation)
+        {
+            bail!("schedule elevations must go from highest (day) to lowest (night)");
         }
         if !(0.1..=10.0).contains(&self.gamma) {
             bail!("gamma must be between 0.1 and 10.0 (got {})", self.gamma);
         }
         if let Some(location) = &self.location {
             location.validate()?;
-        }
-        if self.elevation.high <= self.elevation.low {
-            bail!("elevation.high must be above elevation.low");
         }
         if !(0.0..=60.0).contains(&self.fade_seconds) {
             bail!("fade_seconds must be between 0 and 60");
@@ -334,11 +328,13 @@ mod tests {
     #[test]
     fn parses_partial_sections_and_location() {
         let config: AppConfig = ty_common::config::parse(
-            "temperature: {night: 3000}\nlocation: {latitude: 40.7, longitude: -74.0}\nbackend: x11\n",
+            "schedule: [{elevation: 3, temperature: 6500}, {elevation: -6, temperature: 3000, brightness: 0.8}]\nlocation: {latitude: 40.7, longitude: -74.0}\nbackend: x11\n",
         )
         .unwrap();
-        assert_eq!(config.temperature.day, 6500);
-        assert_eq!(config.temperature.night, 3000);
+        assert_eq!(config.schedule.len(), 2);
+        assert_eq!(config.schedule[0].brightness, 1.0);
+        assert_eq!(config.schedule[1].temperature, 3000);
+        assert_eq!(config.schedule[1].name, None);
         assert_eq!(config.location.unwrap().latitude, 40.7);
         assert_eq!(config.backend, BackendKind::X11);
         config.validate().unwrap();
@@ -352,10 +348,15 @@ mod tests {
                 .validate()
                 .is_err()
         };
-        assert!(bad("temperature: {night: 500}"));
-        assert!(bad("brightness: {night: 0}"));
+        assert!(bad("schedule: [{elevation: 0, temperature: 500}]"));
+        assert!(bad(
+            "schedule: [{elevation: 0, temperature: 4000, brightness: 0}]"
+        ));
+        assert!(bad("schedule: []"));
+        assert!(bad(
+            "schedule: [{elevation: -6, temperature: 4000}, {elevation: 3, temperature: 6500}]"
+        ));
         assert!(bad("location: {latitude: 91, longitude: 0}"));
-        assert!(bad("elevation: {high: -6, low: 3}"));
         assert!(ty_common::config::parse::<AppConfig>("nope: 1").is_err());
         assert!(bad("presets: {x: {}}"));
         assert!(bad("presets: {x: {temperature: 100}}"));

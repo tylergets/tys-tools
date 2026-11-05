@@ -6,8 +6,9 @@ wlroots Wayland compositors (Sway, Hyprland, river, niri, labwc, ...).
 
 ## Features
 
-- Color temperature follows the sun: day and night settings, blended as the sun moves from
-  3° above to 6° below the horizon.
+- Color temperature follows the sun in steps: day, golden hour, sunset, dusk and night by
+  default, blended smoothly as the sun sinks from 8° above to 14° below the horizon (and
+  back in the morning). Add, remove or retune the steps in `schedule`.
 - Location from **GeoClue2**, with the last fix cached so it starts right offline. A fixed
   location in the config overrides GeoClue.
 - **Smooth fades** when you toggle, disable or set a temperature.
@@ -79,19 +80,18 @@ the daemon it changes the displays directly.
 defaults:
 
 ```yaml
-temperature:
-  day: 6500          # kelvin, 1700-25000; 6500 is neutral
-  night: 4000
-brightness:          # gamma dimming, 0.1-1.0 (not the monitors' own brightness)
-  day: 1.0
-  night: 1.0
+schedule:            # by sun elevation (degrees), highest first; blended in between
+  # temperature: kelvin, 1700-25000 (6500 is neutral)
+  # brightness: gamma dimming, 0.1-1.0, default 1.0 (not the monitors' own brightness)
+  - {name: day,         elevation: 8,   temperature: 6500}
+  - {name: golden hour, elevation: 2,   temperature: 5500}
+  - {name: sunset,      elevation: -3,  temperature: 4600}
+  - {name: dusk,        elevation: -8,  temperature: 4000}
+  - {name: night,       elevation: -14, temperature: 3600}
 gamma: 1.0
 # location:          # set this to skip GeoClue
 #   latitude: 39.10
 #   longitude: -84.51
-elevation:           # sun elevation (degrees) where day and night start
-  high: 3.0
-  low: -6.0
 fade_seconds: 2      # 0 switches instantly
 backend: auto        # auto | x11 | wayland
 tray: true
@@ -129,6 +129,25 @@ presets:             # setting this replaces the defaults; omitted fields follow
   level the light settled at.
 - Changing brightness by hand (tylight, the tray or your brightness keys) while auto is on
   shifts the curve by that much instead of being undone.
+
+### The schedule
+
+Each stop is the setting once the sun is at that elevation. Above the first stop it's
+day, below the last it's night, and in between tylight blends the two stops around the
+sun. The same steps run in reverse at dawn. Setting `schedule` replaces the whole list,
+and `name` is what `tylight status` shows ("4600K · sunset").
+
+For reference: the sun sets at about -1°, civil twilight ends at -6°, nautical at -12°.
+Far from the equator in summer the sun may never get to the last stop, so the night
+setting isn't reached.
+
+Old configs with `temperature: {day, night}` translate to two stops:
+
+```yaml
+schedule:
+  - {elevation: 3, temperature: 6500}
+  - {elevation: -6, temperature: 4000}
+```
 
 ## i3
 

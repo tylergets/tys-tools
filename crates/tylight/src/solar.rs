@@ -1,9 +1,9 @@
-//! Solar elevation (NOAA solar calculator equations) and day/night blending.
+//! Solar elevation (NOAA solar calculator equations) and how far into the day it is.
 
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::config::Elevation;
+use crate::config::Stop;
 
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -61,19 +61,30 @@ pub fn elevation(unix: f64, location: Location) -> f64 {
     90.0 - cos_zenith.acos().to_degrees()
 }
 
-/// How far into the day setting `elevation` is: 0 at night, 1 by day.
-pub fn day_progress(elevation: f64, limits: &Elevation) -> f64 {
-    ((elevation - limits.low) / (limits.high - limits.low)).clamp(0.0, 1.0)
+/// How far into the day `elevation` is: 0 at or below the lowest stop (night), 1 at or
+/// above the highest (day).
+pub fn day_progress(elevation: f64, stops: &[Stop]) -> f64 {
+    let (Some(high), Some(low)) = (stops.first(), stops.last()) else {
+        return 1.0;
+    };
+    if high.elevation <= low.elevation {
+        return if elevation >= high.elevation {
+            1.0
+        } else {
+            0.0
+        };
+    }
+    ((elevation - low.elevation) / (high.elevation - low.elevation)).clamp(0.0, 1.0)
 }
 
 /// The next time (unix seconds, minute resolution) after `unix` at which it is fully day,
 /// within two days. `None` for polar night.
-pub fn next_day_start(unix: f64, location: Location, limits: &Elevation) -> Option<f64> {
-    let mut was_day = day_progress(elevation(unix, location), limits) >= 1.0;
+pub fn next_day_start(unix: f64, location: Location, stops: &[Stop]) -> Option<f64> {
+    let mut was_day = day_progress(elevation(unix, location), stops) >= 1.0;
     (1..=2 * 24 * 60)
         .map(|m| unix + m as f64 * 60.0)
         .find(|&t| {
-            let is_day = day_progress(elevation(t, location), limits) >= 1.0;
+            let is_day = day_progress(elevation(t, location), stops) >= 1.0;
             let started = is_day && !was_day;
             was_day = is_day;
             started
@@ -83,6 +94,7 @@ pub fn next_day_start(unix: f64, location: Location, limits: &Elevation) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::AppConfig;
 
     const GREENWICH: Location = Location {
         latitude: 51.48,
@@ -115,19 +127,19 @@ mod tests {
     }
 
     #[test]
-    fn progress_blends_between_limits() {
-        let limits = Elevation::default();
-        assert_eq!(day_progress(10.0, &limits), 1.0);
-        assert_eq!(day_progress(-10.0, &limits), 0.0);
-        assert!((day_progress(-1.5, &limits) - 0.5).abs() < 1e-9);
+    fn progress_spans_the_schedule() {
+        let stops = AppConfig::default().schedule;
+        assert_eq!(day_progress(10.0, &stops), 1.0);
+        assert_eq!(day_progress(-20.0, &stops), 0.0);
+        assert!((day_progress(-3.0, &stops) - 0.5).abs() < 1e-9);
     }
 
     #[test]
     fn next_day_start_is_the_morning() {
         let midnight = SOLSTICE_NOON - 12.0 * 3600.0;
-        let start = next_day_start(midnight, GREENWICH, &Elevation::default()).unwrap();
+        let start = next_day_start(midnight, GREENWICH, &AppConfig::default().schedule).unwrap();
         let hours = (start - midnight) / 3600.0;
-        // Sunrise is ~03:43 UTC; the day setting starts a bit after.
-        assert!((3.5..5.0).contains(&hours), "{hours}");
+        // Sunrise is ~03:43 UTC; the sun is 8° up about an hour later.
+        assert!((4.0..5.5).contains(&hours), "{hours}");
     }
 }

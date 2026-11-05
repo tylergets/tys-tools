@@ -141,6 +141,9 @@ pub struct Status {
     /// Active preset.
     pub preset: Option<String>,
     pub period: Period,
+    /// Name of the schedule stop closest to the sun now ("sunset", "dusk", ...).
+    #[serde(default)]
+    pub stage: Option<String>,
     /// Applied color temperature (K).
     pub temperature: u32,
     /// Applied gamma dimming.
@@ -187,10 +190,11 @@ impl Status {
         let what = match (&self.preset, self.manual, self.period) {
             (Some(preset), _, _) => preset.as_str(),
             (None, Some(_), _) => "manual",
+            (None, None, Period::Unknown) => "no location yet",
+            (None, None, _) if self.stage.is_some() => self.stage.as_deref().unwrap_or_default(),
             (None, None, Period::Day) => "day",
             (None, None, Period::Night) => "night",
             (None, None, Period::Transition) => "transition",
-            (None, None, Period::Unknown) => "no location yet",
         };
         format!("{}K · {what}", self.temperature)
     }
@@ -275,6 +279,12 @@ mod tests {
             ..Status::default()
         };
         assert_eq!(status.format_plain(), "4000K · night · monitors 60%");
+        let dusk = Status {
+            period: Period::Transition,
+            stage: Some("dusk".into()),
+            ..status.clone()
+        };
+        assert_eq!(dusk.format_plain(), "4000K · dusk · monitors 60%");
         assert_eq!(status.format_polybar(), "4000K");
         assert_eq!(Status::offline().format_polybar(), "");
     }

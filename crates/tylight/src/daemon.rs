@@ -18,8 +18,8 @@ use crate::backend::{self, Backend};
 use crate::color::Setting;
 use crate::config::{validate_temperature, AppConfig, APP_NAME};
 use crate::monitors::{Change, Monitors, MANUAL_FADE};
-use crate::protocol::{Command, Period, Status};
-use crate::schedule::{self, History, Sample};
+use crate::protocol::{Command, Status};
+use crate::schedule::{self, History, Sample, Scheduled};
 use crate::solar::{self, Location};
 use crate::{control, geoclue};
 
@@ -340,7 +340,7 @@ impl Daemon {
                     bail!("the location isn't known yet");
                 };
                 let Some(morning) =
-                    solar::next_day_start(unix_now(), location, &self.config.elevation)
+                    solar::next_day_start(unix_now(), location, &self.config.schedule)
                 else {
                     bail!("the sun doesn't come up in the next two days here");
                 };
@@ -394,10 +394,11 @@ impl Daemon {
         self.disabled_until = until;
     }
 
-    /// The setting to aim for now, the period, and the sun elevation.
-    fn target(&self, now: f64) -> (Setting, Period, Option<f64>) {
+    /// The setting to aim for now, and what the schedule says.
+    fn target(&self, now: f64) -> (Setting, Scheduled) {
         let location = self.location.map(|(location, _)| location);
-        let (base, period, elevation) = schedule::scheduled(&self.config, location, now);
+        let scheduled = schedule::scheduled(&self.config, location, now);
+        let base = scheduled.setting;
         let setting = match &self.manual {
             _ if !self.enabled => Setting::NEUTRAL,
             Some(manual) => Setting {
@@ -406,7 +407,7 @@ impl Daemon {
             },
             None => base,
         };
-        (setting, period, elevation)
+        (setting, scheduled)
     }
 
     fn update(&mut self) -> Result<()> {
@@ -415,7 +416,7 @@ impl Daemon {
             self.enable();
         }
         let reapply = self.backend.poll()?;
-        let (target, period, elevation) = self.target(now);
+        let (target, scheduled) = self.target(now);
         let current = self.applied.unwrap_or(Setting::NEUTRAL);
 
         // Fade on jumps (toggles, `set`, the first location fix); the sun moves slowly
@@ -479,10 +480,11 @@ impl Daemon {
                 .manual
                 .as_ref()
                 .and_then(|manual| manual.preset.clone()),
-            period,
+            period: scheduled.period,
+            stage: scheduled.stage,
             temperature: setting.temperature.round() as u32,
             brightness: setting.brightness,
-            elevation,
+            elevation: scheduled.elevation,
             location: self.location.map(|(location, _)| location),
             location_source: self.location.map(|(_, source)| source.to_string()),
             backend: self.backend.name().to_string(),
