@@ -236,6 +236,39 @@ monitor_brightness:
   backlight: true
   ddc: true`,
   },
+  {
+    name: "tygesture",
+    tagline: "Touchpad gestures, your commands.",
+    summary:
+      "Maps touchpad swipes, pinches, twists and holds to shell commands, like fusuma or " +
+      "libinput-gestures. It reads libinput directly, so gestures can also work like sliders.",
+    features: [
+      "Swipe, pinch, rotate and hold, per finger count",
+      "Repeat bindings that fire while you move: a swipe as a volume slider, a twist as a knob",
+      "Reads gestures straight from libinput, not debug-events text",
+      "A live window that draws each gesture against its threshold",
+      "Tray icon that flashes on each gesture, with pause and resume",
+      "Works on X11 and Wayland",
+    ],
+    requirements: [
+      "Read access to /dev/input/event* (the input group)",
+      "A system tray (optional, for the tray applet and window)",
+    ],
+    usage: `tygesture run                   # daemon + tray
+tygesture debug                 # print gestures as you make them
+tygesture check                 # validate the config, list bindings
+tygesture show                  # open the gesture window`,
+    config: `swipe:
+  3:
+    left: xdotool key alt+Right
+    right: xdotool key alt+Left
+    up: { command: "pactl set-sink-volume @DEFAULT_SINK@ +5%", repeat: true }
+  4:
+    left: i3-msg workspace prev
+    right: i3-msg workspace next
+pinch:
+  2: { in: xdotool key ctrl+minus, out: xdotool key ctrl+plus }`,
+  },
 ];
 
 export const findTool = (name) => tools.find((t) => t.name === name);
