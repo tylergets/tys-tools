@@ -96,6 +96,7 @@ enum TrayAction {
     Cancel,
     SelectModel(&'static str),
     CancelDownload,
+    RetryModel,
     OpenModelsFolder,
     Quit,
 }
@@ -187,6 +188,10 @@ impl App {
                     app.download.borrow_mut().take();
                     Ok(())
                 }
+                TrayAction::RetryModel => {
+                    app.retry_model();
+                    Ok(())
+                }
                 TrayAction::OpenModelsFolder => app.open_models_folder(),
                 TrayAction::Quit => app.quit(),
             };
@@ -212,6 +217,10 @@ impl App {
             Request::Status => Ok(Reply::Text(serde_json::to_string(&self.snapshot())?)),
             Request::ListModels => Ok(Reply::Text(serde_json::to_string(&self.listing())?)),
             Request::SetModel(id) => self.select_model(&id).map(|_| Reply::Empty),
+            Request::Retry => {
+                self.retry_model();
+                Ok(Reply::Empty)
+            }
         };
         self.tick();
         reply
@@ -373,6 +382,17 @@ impl App {
         Ok(())
     }
 
+    /// Download (or load) the selected model again, e.g. after a failure. A partial download
+    /// is resumed. Does nothing while it is already downloading, loading or loaded.
+    fn retry_model(&self) {
+        let model = self.selected.get();
+        if self.active.get() == Some(model) || self.loading.get() == Some(model) {
+            return;
+        }
+        self.failed.borrow_mut().take();
+        self.ensure_model(true);
+    }
+
     /// Load the selected model, downloading it first if needed (and allowed).
     fn ensure_model(&self, download_if_missing: bool) {
         let model = self.selected.get();
@@ -425,9 +445,10 @@ impl App {
             Err(err) if download::is_cancelled(&err) => {}
             Err(err) => {
                 *self.failed.borrow_mut() = Some((model.id, format!("{err:#}")));
-                self.report(Err(
-                    err.context(format!("downloading {} failed", model.name))
-                ));
+                self.report(Err(err.context(format!(
+                    "downloading {} failed; use Retry Download in the tray or `tyspeak retry`",
+                    model.name
+                ))));
             }
         }
     }
@@ -588,7 +609,7 @@ impl App {
                 (None, Some(loading)) => format!("Loading {}…", loading.name),
                 (None, None) if download.is_some() => "Waiting for the download…".to_string(),
                 (None, None) if status.model_state == ModelState::Failed => {
-                    format!("{} failed — pick a model below", selected.name)
+                    format!("{} failed", selected.name)
                 }
                 (None, None) => "No model — pick one below".to_string(),
             },
@@ -636,6 +657,17 @@ impl App {
                 true,
                 TrayAction::CancelDownload,
             ));
+        }
+        let retry_label = match status.model_state {
+            ModelState::Failed if self.downloaded.borrow().contains(&selected.id) => {
+                Some("Retry Loading".to_string())
+            }
+            ModelState::Failed => Some("Retry Download".to_string()),
+            ModelState::Missing => Some(format!("Download {}", selected.name)),
+            _ => None,
+        };
+        if let Some(label) = retry_label {
+            menu.push(action(label, true, TrayAction::RetryModel));
         }
         menu.extend([
             action(

@@ -39,6 +39,8 @@ pub enum Commands {
         /// Model id, as listed by `tyspeak models`.
         id: String,
     },
+    /// Retry downloading (or loading) the selected model after a failure.
+    Retry,
     /// Transcribe a WAV file without the daemon (downloads the model if needed).
     Transcribe {
         file: PathBuf,
