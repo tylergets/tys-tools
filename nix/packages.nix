@@ -37,7 +37,9 @@
         dbus
         libx11
         libxi
+        libinput
         libxtst
+        udev
         xdotool
       ]);
     TRANSCRIBE_CMAKE_ARGS = transcribeCmakeArgs;
@@ -124,5 +126,11 @@ in {
     name = "tylight";
     description = "Screen color temperature and monitor brightness daemon (X11 and wlroots)";
     runtimeDeps = [pkgs.ddcutil];
+  };
+
+  tygesture = mkTool {
+    name = "tygesture";
+    description = "Touchpad gesture daemon (libinput)";
+    runtimeDeps = with pkgs; [xdotool wtype];
   };
 }

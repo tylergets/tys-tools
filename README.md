@@ -12,6 +12,7 @@ Rust, packaged with Nix, MIT licensed.
 | [tyshot](crates/tyshot) | Screenshots you can mark up with arrows, text and blur. |
 | [tyspeak](crates/tyspeak) | Dictation that stays on your machine. |
 | [tylight](crates/tylight) | Warmer screen colors at night, plus monitor brightness. X11 and wlroots. |
+| [tygesture](crates/tygesture) | Touchpad gestures (swipe, pinch, rotate, hold) mapped to commands, read straight from libinput. X11 and Wayland. |
 
 Each tool's README has the full details.
 
@@ -78,7 +79,7 @@ tykey also has typed options (`expansions`, `snippets`, `matchBehavior`, `bounda
 
 ```nix
 nixpkgs.overlays = [inputs.tys-tools.overlays.default];
-# adds pkgs.tyboard, pkgs.tykey, pkgs.tycapture, pkgs.tyshot, pkgs.tyspeak, pkgs.tylight
+# adds pkgs.tyboard, pkgs.tykey, pkgs.tycapture, pkgs.tyshot, pkgs.tyspeak, pkgs.tylight, pkgs.tygesture
 ```
 
 ## Configuration

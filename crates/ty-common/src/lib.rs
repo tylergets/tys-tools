@@ -1,4 +1,4 @@
-//! Shared plumbing for the ty* desktop tools (tyboard, tycapture, tykey, tyshot, tyspeak, tylight).
+//! Shared plumbing for the ty* desktop tools (tyboard, tycapture, tykey, tyshot, tyspeak, tylight, tygesture).
 
 pub mod config;
 #[cfg(target_os = "linux")]

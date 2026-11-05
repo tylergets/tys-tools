@@ -1,0 +1,14 @@
+[package]
+name = "tygesture"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ty-common.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+gtk.workspace = true
+input.workspace = true
+libc.workspace = true
+serde.workspace = true

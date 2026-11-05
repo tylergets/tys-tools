@@ -19,16 +19,18 @@ pub enum Tool {
     Shot,
     Speak,
     Light,
+    Gesture,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 6] = [
+    pub const ALL: [Tool; 7] = [
         Tool::Board,
         Tool::Key,
         Tool::Capture,
         Tool::Shot,
         Tool::Speak,
         Tool::Light,
+        Tool::Gesture,
     ];
 
     pub fn name(self) -> &'static str {
@@ -39,6 +41,7 @@ impl Tool {
             Tool::Shot => "tyshot",
             Tool::Speak => "tyspeak",
             Tool::Light => "tylight",
+            Tool::Gesture => "tygesture",
         }
     }
 
@@ -51,6 +54,7 @@ impl Tool {
             Tool::Shot => include_str!("../icons/tyshot.svg"),
             Tool::Speak => include_str!("../icons/tyspeak.svg"),
             Tool::Light => include_str!("../icons/tylight.svg"),
+            Tool::Gesture => include_str!("../icons/tygesture.svg"),
         }
     }
 
@@ -63,6 +67,7 @@ impl Tool {
             Tool::Shot => "camera-photo",
             Tool::Speak => "audio-input-microphone",
             Tool::Light => "weather-clear-night",
+            Tool::Gesture => "input-touchpad",
         }
     }
 
