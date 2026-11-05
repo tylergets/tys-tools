@@ -2,11 +2,57 @@
 //!
 //! Discovery order: `./<app>.yaml`, then `$XDG_CONFIG_HOME/<app>/config.yaml`. An explicit
 //! path (`--config`, used by the Home Manager modules) skips discovery.
+//!
+//! Every tool's config may have a top-level `env:` map of environment variables to set for
+//! the tool and the programs it runs. A value is a string, or `{ file: <path> }` to read it
+//! from a file (trimmed), e.g. a secret:
+//!
+//! ```yaml
+//! env:
+//!   GH_TOKEN: { file: /run/secrets/github }
+//!   LANG: en_US.UTF-8
+//! ```
+//!
+//! The variables are set when a config file is first loaded (before the tool starts threads);
+//! later reloads don't change them. They override the inherited environment.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::{bail, Context, Result};
 use serde::de::DeserializeOwned;
+use serde::Deserialize;
+
+/// The shared top-level key, removed before a tool's own config is parsed.
+const ENV_KEY: &str = "env";
+
+/// Whether `env:` was applied already (only the first load sets variables).
+static ENV_APPLIED: AtomicBool = AtomicBool::new(false);
+
+/// One `env:` value.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(untagged)]
+pub enum EnvValue {
+    Value(String),
+    File { file: PathBuf },
+}
+
+impl EnvValue {
+    fn resolve(&self) -> Result<String> {
+        match self {
+            EnvValue::Value(value) => Ok(value.clone()),
+            EnvValue::File { file } => {
+                let path = expand_user(file);
+                let value = std::fs::read_to_string(&path)
+                    .with_context(|| format!("failed to read env file {}", path.display()))?;
+                Ok(value.trim().to_string())
+            }
+        }
+    }
+}
+
+pub type Env = BTreeMap<String, EnvValue>;
 
 /// A parsed config and the file it came from (`None` when defaults are used).
 #[derive(Debug, Clone)]
@@ -70,19 +116,56 @@ pub fn load_required<T: DeserializeOwned>(
     })
 }
 
-/// Parse a YAML file. An empty file parses as an empty mapping.
+/// Parse a YAML file and apply its `env:` section (on the first load). An empty file parses
+/// as an empty mapping.
 pub fn read<T: DeserializeOwned>(path: &Path) -> Result<T> {
     let raw = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read config: {}", path.display()))?;
-    parse(&raw).with_context(|| format!("failed to parse YAML config: {}", path.display()))
+    let (config, env) = parse_with_env(&raw)
+        .with_context(|| format!("failed to parse YAML config: {}", path.display()))?;
+    if !ENV_APPLIED.swap(true, Ordering::SeqCst) {
+        apply_env(&env).with_context(|| format!("in config {}", path.display()))?;
+    }
+    Ok(config)
 }
 
 /// Parse YAML text. Blank input parses as an empty mapping so all-default configs work.
+/// The shared `env:` section is accepted but not applied.
 pub fn parse<T: DeserializeOwned>(raw: &str) -> Result<T> {
-    if raw.trim().is_empty() {
-        return Ok(serde_yaml::from_str("{}")?);
+    Ok(parse_with_env(raw)?.0)
+}
+
+/// Parse YAML text into the tool's config and the shared `env:` section.
+pub fn parse_with_env<T: DeserializeOwned>(raw: &str) -> Result<(T, Env)> {
+    let mut value: serde_yaml::Value = if raw.trim().is_empty() {
+        serde_yaml::Value::Mapping(Default::default())
+    } else {
+        serde_yaml::from_str(raw)?
+    };
+    let env = match value.as_mapping_mut().and_then(|map| map.remove(ENV_KEY)) {
+        Some(env) => serde_yaml::from_value(env)
+            .context("`env` must map variable names to strings or { file: <path> }")?,
+        None => Env::new(),
+    };
+    Ok((serde_yaml::from_value(value)?, env))
+}
+
+/// Set every variable in `env`.
+pub fn apply_env(env: &Env) -> Result<()> {
+    // Resolve everything first so a bad entry doesn't leave the environment half set.
+    let resolved = env
+        .iter()
+        .map(|(name, value)| {
+            if name.is_empty() || name.contains(['=', '\0']) {
+                bail!("invalid env variable name {name:?}");
+            }
+            Ok((name, value.resolve()?))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    for (name, value) in resolved {
+        std::env::set_var(name, value);
     }
-    Ok(serde_yaml::from_str(raw)?)
+    Ok(())
 }
 
 /// Replace a leading `~` with `home`.
@@ -115,6 +198,30 @@ mod tests {
     fn blank_yaml_is_default() {
         assert_eq!(parse::<Sample>("  \n").unwrap(), Sample::default());
     }
+
+    #[test]
+    fn env_section_is_split_off() {
+        let dir = std::env::temp_dir().join(format!("ty-common-env-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let secret = dir.join("secret");
+        std::fs::write(&secret, "s3cret\n").unwrap();
+        let raw = format!(
+            "name: x\nenv:\n  PLAIN: hi\n  SECRET: {{ file: {} }}\n",
+            secret.display()
+        );
+        let (config, env): (Sample, Env) = parse_with_env(&raw).unwrap();
+        assert_eq!(config.name, "x");
+        assert_eq!(env["PLAIN"], EnvValue::Value("hi".into()));
+        assert_eq!(env["SECRET"].resolve().unwrap(), "s3cret");
+        assert!(parse::<Strict>("env: { A: b }").is_ok());
+        assert!(parse::<Strict>("other: 1").is_err());
+        assert!(parse::<Sample>("env: [nope]").is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[derive(Debug, Default, serde::Deserialize)]
+    #[serde(default, deny_unknown_fields)]
+    struct Strict {}
 
     #[test]
     fn expands_tilde() {

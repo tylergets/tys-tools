@@ -169,10 +169,14 @@ pub struct Summary {
 
 impl Report for Summary {
     fn format_plain(&self) -> String {
-        format!(
+        let mut line = format!(
             "{} running, {} failed, {} open PRs",
             self.running, self.failed, self.pull_requests
-        )
+        );
+        if self.errors > 0 {
+            line.push_str(&format!(" ({} gh errors, see tyci list)", self.errors));
+        }
+        line
     }
 
     fn format_polybar(&self) -> String {

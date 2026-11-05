@@ -13,7 +13,7 @@ needs no token of its own.
 
 ## Requirements
 
-- `gh`, logged in (`gh auth login`, or `GH_TOKEN` in the service's environment)
+- `gh`, logged in (`gh auth login`, or `GH_TOKEN`, which can come from the config's `env:`)
 - `xdg-open`, `notify-send`
 - A system tray (eww, waybar, KDE, …)
 
@@ -80,5 +80,10 @@ programs.tyci = {
 ```
 
 The systemd service needs gh's credentials. `gh auth login` stores them in
-`~/.config/gh/hosts.yml` (or the keyring), which works as is; if you rely on `GH_TOKEN`, set it
-for the service too, e.g. `systemd.user.services.tyci.Service.EnvironmentFile`.
+`~/.config/gh/hosts.yml` (or the keyring), which works as is. If you only have `GH_TOKEN` in
+your shell, set it from the file it comes from (e.g. a sops secret) with the shared `env:`
+config section:
+
+```nix
+programs.tyci.settings.env.GH_TOKEN.file = "/run/secrets/github";
+```

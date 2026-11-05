@@ -89,6 +89,15 @@ nixpkgs.overlays = [inputs.tys-tools.overlays.default];
 Each tool reads its config from `./<tool>.yaml`, then `~/.config/<tool>/config.yaml`, or from
 the path given with `--config`.
 
+Every tool's config can also have an `env:` section: environment variables set for the tool
+and the programs it runs. A value is a string, or `{ file: <path> }` to read it from a file,
+which keeps secrets out of the config (and out of the Nix store):
+
+```yaml
+env:
+  GH_TOKEN: { file: /run/secrets/github }
+```
+
 ## Development
 
 ```sh
