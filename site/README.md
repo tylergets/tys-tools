@@ -35,6 +35,7 @@ Add pages under `src/pages/` (for example `src/pages/tyboard/Docs.vue`) and rout
 
 ## Deploy
 
-Publish `dist/` to any static host. The router uses HTML5 history, so the host must serve
-`index.html` for unknown paths (Netlify/Cloudflare Pages: SPA fallback; GitHub Pages: copy
-`index.html` to `404.html`).
+Pushes to `main` that touch `site/` build and publish it to GitHub Pages at
+<https://tys.tools> (`.github/workflows/pages.yml`). The custom domain is set in the repo's
+Pages settings. The router uses HTML5 history, so the workflow copies `index.html` to
+`404.html` to serve unknown paths.
