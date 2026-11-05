@@ -422,6 +422,14 @@ pub struct TrayThread {
 /// How long [`spawn_gtk_thread`] waits for `setup` before carrying on without it.
 const TRAY_STARTUP_TIMEOUT: Duration = Duration::from_secs(3);
 
+/// Initialize GTK on this thread and apply the shared appearance settings
+/// (`appearance.font`). Use instead of `gtk::init` so widgets follow the config.
+pub fn init_gtk() -> Result<()> {
+    gtk::init().context("failed to initialize GTK")?;
+    crate::appearance::apply_gtk();
+    Ok(())
+}
+
 /// Start GTK on a new thread, run `setup` there (build the [`Applet`], timers, ...), then run
 /// the GTK main loop. Whatever `setup` returns stays alive for the life of the loop.
 ///
@@ -439,9 +447,7 @@ where
 
     let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
     let thread = thread::spawn(move || {
-        let kept = gtk::init()
-            .context("failed to initialize GTK")
-            .and_then(|()| setup());
+        let kept = init_gtk().and_then(|()| setup());
         match kept {
             Ok(_kept) => {
                 let _ = ready_tx.send(Ok(()));

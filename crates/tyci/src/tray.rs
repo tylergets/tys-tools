@@ -7,7 +7,7 @@ use std::process::Command;
 use std::rc::Rc;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use gtk::glib::{self, ControlFlow};
 use ty_common::icons::Tool;
@@ -46,7 +46,7 @@ struct App {
 }
 
 pub fn run(config: AppConfig) -> Result<()> {
-    gtk::init().context("failed to initialize GTK")?;
+    tray::init_gtk()?;
     let (tx, rx) = tray::channel();
     let applet = Applet::new(
         APP_NAME,

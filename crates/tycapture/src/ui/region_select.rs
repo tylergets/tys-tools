@@ -292,6 +292,7 @@ fn draw(cr: &gtk::cairo::Context, (width, height): (f64, f64), s: &State) {
 
     let scale = s.screen_scale;
     let label = format!("{}x{}", (w * scale).round(), (h * scale).round());
+    ty_common::appearance::select_font(cr, gtk::cairo::FontWeight::Normal);
     cr.set_font_size(14.0);
     cr.set_source_rgba(1.0, 1.0, 1.0, 1.0);
     let label_y = if y > 24.0 { y - 8.0 } else { y + h + 20.0 };

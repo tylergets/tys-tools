@@ -3,6 +3,7 @@
 //! The display layer (`session`, `screen`, `wm`, `overlay`, `clipboard`, `input`) hides the
 //! difference between X11 and Wayland, so the tools themselves don't need to care.
 
+pub mod appearance;
 #[cfg(target_os = "linux")]
 pub mod clipboard;
 pub mod config;

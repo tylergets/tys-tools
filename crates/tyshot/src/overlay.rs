@@ -1114,7 +1114,7 @@ const PILL_PAD_Y: f64 = 6.0;
 const FONT_SIZE: f64 = 13.0;
 
 fn set_font(cr: &cairo::Context) {
-    cr.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ty_common::appearance::select_font(cr, cairo::FontWeight::Bold);
     cr.set_font_size(FONT_SIZE);
 }
 

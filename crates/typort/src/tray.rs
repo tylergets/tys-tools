@@ -7,7 +7,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use gtk::glib::{self, ControlFlow};
 use ty_common::icons::Tool;
 use ty_common::lock::InstanceLock;
@@ -34,7 +34,7 @@ enum Action {
 
 pub fn run(config: AppConfig) -> Result<()> {
     let _lock = InstanceLock::acquire(APP_NAME)?;
-    gtk::init().context("failed to initialize GTK")?;
+    tray::init_gtk()?;
 
     let (ports_tx, ports_rx) = tray::channel();
     let (rescan_tx, rescan_rx) = mpsc::channel();

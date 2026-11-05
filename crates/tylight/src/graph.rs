@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use chrono::{Local, Offset, TimeZone};
-use gtk::cairo::{self, Context, FontSlant, FontWeight};
+use gtk::cairo::{self, Context, FontWeight};
 use gtk::glib::{self, ControlFlow};
 use gtk::prelude::*;
 
@@ -142,7 +142,7 @@ fn draw(cr: &Context, w: f64, h: f64, shared: &Shared) -> Result<(), cairo::Erro
 
     set(cr, BG, 1.0);
     cr.paint()?;
-    cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
+    ty_common::appearance::select_font(cr, FontWeight::Normal);
     cr.set_font_size(11.0);
 
     // Night shading.

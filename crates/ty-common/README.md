@@ -6,7 +6,8 @@ its own. If two tools need the same thing, it belongs here.
 
 | Module   | What it does |
 |----------|--------------|
-| `config` | Finds and loads a tool's YAML config, including the shared `env:` section |
+| `config` | Finds and loads a tool's YAML config, including the shared `env:` and `appearance:` sections |
+| `appearance` | The shared `appearance:` settings: the font for cairo text (`select_font`) and GTK widgets |
 | `lock`   | Single-instance lock, a Unix socket that can double as the control socket |
 | `notify` | Desktop notifications through `notify-send`, with optional action buttons |
 | `status` | The `status [--follow] [--format plain\|json\|polybar]` subcommand for bar modules |
@@ -52,10 +53,30 @@ env:
 ```
 
 `env:` is applied only on the first load, before the tool starts threads; reloading the
-config doesn't change it. `env:` is removed before the tool's own config is parsed, so tools
-with `deny_unknown_fields` accept it.
+config doesn't change it.
+
+Every tool also accepts a top-level `appearance:` section, kept in `appearance::current()`
+and replaced on every load:
+
+```yaml
+appearance:
+  font: Iosevka   # font family; unset follows the GTK font
+```
+
+Both sections are removed before the tool's own config is parsed, so tools with
+`deny_unknown_fields` accept them. `config::parse` validates them without applying them.
 
 Also: `expand_user` / `expand_home` for leading `~` in paths.
+
+## appearance
+
+- `appearance::font_family()`: `appearance.font`, else the family of GTK's `gtk-font-name`
+  (on the GTK thread), else `Sans`.
+- `appearance::select_font(cr, weight)`: `select_font_face` with that family. Every cairo
+  text site uses it instead of naming `Sans`; set the size afterwards as usual.
+- `tray::init_gtk()`: `gtk::init` plus `appearance::apply_gtk()`, which installs a CSS
+  provider so GTK widgets (dialogs, menus) use `appearance.font` when it is set. Use it
+  wherever a tool initializes GTK itself; `spawn_gtk_thread` already does.
 
 ## lock
 

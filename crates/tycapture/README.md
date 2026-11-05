@@ -126,7 +126,7 @@ intro:
   title: ""
   logo: null                # image path, supports ~/
   duration: 3.0             # seconds, 1–10
-  font: Sans
+  font: null                # fontconfig pattern; unset follows the shared appearance.font
 frame:                      # frame around the video, added when post-processing
   style: none               # none | browser | mobile | window
   background: "#ffffff"     # shown outside the frame's rounded corners

@@ -4,6 +4,7 @@
 #     enable = true;
 #     package = pkgs.<name>;      # from the overlay, else this flake's package
 #     settings = { ... };          # written to ~/.config/<name>/config.yaml
+#     appearance.font = "Iosevka"; # the shared `appearance.font` (null follows GTK)
 #     service.enable = true;       # systemd user service bound to graphical-session.target
 #   };
 #
@@ -26,7 +27,10 @@
 }: let
   cfg = config.programs.${name};
   yaml = pkgs.formats.yaml {};
-  settings = lib.recursiveUpdate (toSettings cfg) cfg.settings;
+  shared = lib.optionalAttrs (cfg.appearance.font != null) {
+    appearance.font = cfg.appearance.font;
+  };
+  settings = lib.recursiveUpdate (lib.recursiveUpdate shared (toSettings cfg)) cfg.settings;
   configFile = yaml.generate "${name}-config.yaml" settings;
   system = pkgs.stdenv.hostPlatform.system;
 in {
@@ -48,6 +52,16 @@ in {
         description = ''
           ${name} configuration, written to {file}`~/.config/${name}/config.yaml`
           (see the ${name} README for keys). Merged over any typed options.
+        '';
+      };
+
+      appearance.font = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "Iosevka";
+        description = ''
+          Font family for the text ${name} draws and its GTK widgets (the shared
+          `appearance.font` config key). Null follows the GTK font.
         '';
       };
 

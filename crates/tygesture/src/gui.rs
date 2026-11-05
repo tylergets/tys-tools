@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::f64::consts::{FRAC_PI_2, TAU};
 use std::time::{Duration, Instant};
 
-use gtk::cairo::{self, Context, FontSlant, FontWeight};
+use gtk::cairo::{self, Context, FontWeight};
 use gtk::glib::{self, ControlFlow};
 use gtk::prelude::*;
 
@@ -118,7 +118,7 @@ fn ago(at: Instant) -> String {
 fn draw(cr: &Context, w: f64, h: f64, status: &Status) -> Result<(), cairo::Error> {
     set(cr, BG, 1.0);
     cr.paint()?;
-    cr.select_font_face("Sans", FontSlant::Normal, FontWeight::Normal);
+    ty_common::appearance::select_font(cr, FontWeight::Normal);
 
     // Header.
     cr.set_font_size(13.0);

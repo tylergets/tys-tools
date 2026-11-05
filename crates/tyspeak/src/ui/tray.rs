@@ -36,7 +36,7 @@ const SILENCE_PEAK_DB: f32 = -50.0;
 
 pub fn run(config: AppConfig) -> Result<()> {
     ty_common::session::require("tyspeak")?;
-    gtk::init()?;
+    ty_common::tray::init_gtk()?;
     let model_dir = config.resolved_model_dir()?;
 
     // Claim the bus name first, so a second instance exits before showing a tray icon.

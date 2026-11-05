@@ -133,8 +133,8 @@ pub struct IntroConfig {
     pub logo: Option<PathBuf>,
     /// Length of the title card in seconds, including its fades.
     pub duration: f64,
-    /// fontconfig pattern for the title.
-    pub font: String,
+    /// fontconfig pattern for the title. Unset follows the shared `appearance.font`.
+    pub font: Option<String>,
 }
 
 impl Default for IntroConfig {
@@ -144,7 +144,7 @@ impl Default for IntroConfig {
             title: String::new(),
             logo: None,
             duration: 3.0,
-            font: "Sans".to_string(),
+            font: None,
         }
     }
 }
@@ -316,7 +316,11 @@ impl IntroConfig {
         if !(1.0..=10.0).contains(&self.duration) {
             bail!("intro.duration must be between 1 and 10 seconds");
         }
-        if self.font.trim().is_empty() {
+        if self
+            .font
+            .as_deref()
+            .is_some_and(|font| font.trim().is_empty())
+        {
             bail!("intro.font cannot be empty");
         }
         Ok(())

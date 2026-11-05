@@ -120,6 +120,16 @@ env:
   GH_TOKEN: { file: /run/secrets/github }
 ```
 
+And an `appearance:` section, the same in every tool. Text the tools draw and their GTK
+widgets follow your GTK font unless `font` names another family:
+
+```yaml
+appearance:
+  font: Iosevka
+```
+
+In Home Manager that is `programs.<tool>.appearance.font`.
+
 ## Development
 
 ```sh

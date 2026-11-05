@@ -54,7 +54,7 @@ fn load_config(path: Option<std::path::PathBuf>) -> Result<AppConfig> {
 
 fn gui(config_path: Option<std::path::PathBuf>, args: GuiArgs) -> Result<ExitCode> {
     let config = load_config(config_path)?;
-    gtk::init().context("failed to initialize GTK")?;
+    ty_common::tray::init_gtk()?;
     let snapshot = take_snapshot(args.delay)?;
     let windows = visible_windows();
 
@@ -83,7 +83,7 @@ fn gui(config_path: Option<std::path::PathBuf>, args: GuiArgs) -> Result<ExitCod
 
 fn pin_file(config_path: Option<std::path::PathBuf>, args: PinArgs) -> Result<ExitCode> {
     let config = load_config(config_path)?;
-    gtk::init().context("failed to initialize GTK")?;
+    ty_common::tray::init_gtk()?;
     let image = Pixbuf::from_file(&args.file)
         .with_context(|| format!("failed to read {}", args.file.display()))?;
     // A file's pixels are taken as device pixels, like a capture's.

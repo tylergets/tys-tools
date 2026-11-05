@@ -62,7 +62,7 @@ fn spec() -> TraySpec<TrayAction> {
 
 /// Run the tray until Quit is chosen. `config_path` is forwarded to the capture commands.
 pub fn run(config: AppConfig, config_path: Option<PathBuf>) -> Result<()> {
-    gtk::init().context("failed to initialize GTK")?;
+    tray::init_gtk()?;
     let exe = env::current_exe().context("failed to find the tyshot executable")?;
     let launcher = Launcher { exe, config_path };
 

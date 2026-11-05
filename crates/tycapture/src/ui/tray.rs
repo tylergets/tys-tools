@@ -47,7 +47,7 @@ fn notify(summary: &str, body: &str) {
 
 pub fn run(config: AppConfig, control_listener: UnixListener) -> Result<()> {
     ty_common::session::require("tycapture")?;
-    gtk::init()?;
+    tray::init_gtk()?;
 
     let (tray_tx, tray_rx) = tray::channel();
     let applet = Applet::new(
@@ -577,7 +577,12 @@ impl App {
         let intro = options.intro.then(|| IntroSettings {
             title: options.intro_title.clone(),
             logo: options.intro_logo.clone(),
-            font: self.config.intro.font.clone(),
+            font: self
+                .config
+                .intro
+                .font
+                .clone()
+                .unwrap_or_else(ty_common::appearance::font_family),
             duration: Duration::from_secs_f64(self.config.intro.duration),
             width,
             height,

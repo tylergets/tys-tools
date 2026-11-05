@@ -293,7 +293,7 @@ pub fn step_radius(font_size: f64) -> f64 {
 }
 
 fn set_text_font(cr: &cairo::Context, size: f64) {
-    cr.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    ty_common::appearance::select_font(cr, cairo::FontWeight::Bold);
     cr.set_font_size(size);
 }
 
