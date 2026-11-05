@@ -22,9 +22,14 @@ Monorepo for the ty* X11 desktop tools. One Cargo workspace, one Nix flake.
   crates use `dep.workspace = true`.
 
 ## Validation
-- `nix flake check` builds every tool and runs tests, clippy and rustfmt. Run it (or at least
-  `nix build .#<tool>` plus `cargo test -p <tool>`) after changes that affect program behavior.
-  Not required for docs-only changes.
+Builds are slow and CPU-heavy, so run them sparingly.
+- While iterating, use the cheapest check that covers the change: `cargo check -p <tool>`,
+  then `cargo test -p <tool>` only if you touched tested logic. Scope to the crate you changed.
+- Do not run `nix build` or `nix flake check` after every edit. Run `nix flake check` once,
+  at the end, only before a release/deploy or when the user asks.
+- Run `nix build .#<tool>` only when you changed Nix files (`nix/`, `flake.nix`) or runtime deps.
+- Skip validation entirely for docs-only, README, or comment changes.
+- Don't rerun a build that just passed unless the code changed since.
 
 ## Deployment
 - All tools share one version: bump `[workspace.package] version` in the root `Cargo.toml`
