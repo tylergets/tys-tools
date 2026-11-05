@@ -1,0 +1,22 @@
+[package]
+name = "tyspeak"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ty-common.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+dirs.workspace = true
+gtk.workspace = true
+hound.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+transcribe-cpp.workspace = true
+ureq = { workspace = true, features = ["rustls", "gzip"] }
+
+[features]
+# GPU inference through ggml's Vulkan backend (needs Vulkan headers, loader and glslc).
+vulkan = ["transcribe-cpp/vulkan"]

@@ -1,0 +1,37 @@
+watch: true
+
+match_behavior: immediate
+
+notifications:
+  on_expansion: true
+  on_snippet_copy: true
+
+globals:
+  signoff: "Thanks, Tyler{{KEY:ENTER}}"
+  today: "{{DATE}} {{TIME}}"
+  fortune: "{{CMD:fortune}}"
+  rocket: "{{EMOJI:rocket}}"
+
+expansions:
+  - trigger: '$$fortune'
+    expansion: "{{fortune}}"
+  - trigger: '$$time'
+    expansion: "{{today}}"
+  - trigger: "tg@"
+    expansion: "tylergetsay@gmail.com"
+  - trigger: "sig;"
+    expansion: "{{signoff}}"
+  - trigger: "$$ship"
+    expansion: "Shipped {{rocket}}"
+
+snippets:
+  - title: "Fortune"
+    content: "{{fortune}}"
+  - title: "Today"
+    content: "{{today}}"
+  - title: "Personal email"
+    content: "tylergetsay@gmail.com"
+  - title: "Signature"
+    content: "Thanks, Tyler"
+  - title: "Ship status"
+    content: "Shipped {{EMOJI:rocket}}"

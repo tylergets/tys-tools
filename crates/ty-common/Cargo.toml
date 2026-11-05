@@ -1,0 +1,18 @@
+[package]
+name = "ty-common"
+description = "Shared plumbing for the ty* desktop tools: tray applet, single-instance lock, config discovery, notifications."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+dirs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk.workspace = true
+libappindicator.workspace = true

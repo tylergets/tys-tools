@@ -1,0 +1,59 @@
+<script setup>
+import { tools, version } from "../tools.js";
+import ToolIcon from "../ToolIcon.vue";
+</script>
+
+<template>
+  <h1>ty's tools</h1>
+  <p class="lede">
+    Small desktop tools for Linux. Each one does one job, most sit in the system tray, and
+    all of them can be scripted from the command line. Built for X11 and used daily on i3.
+    Written in Rust, packaged with Nix, MIT licensed.
+  </p>
+  <p class="muted">v{{ version }}</p>
+
+  <h2>Why use them</h2>
+  <ul class="plain">
+    <li>
+      <strong>No telemetry. Private by design.</strong> Nothing phones home. No analytics, no
+      accounts, no cloud. Your data stays on your machine.
+    </li>
+    <li><strong>Works offline.</strong> Everything runs locally.</li>
+    <li>
+      <strong>Plain config.</strong> One YAML file per tool, easy to keep in your dotfiles.
+    </li>
+    <li><strong>Scriptable.</strong> Every tool has a CLI and plays well with your bar and keybindings.</li>
+    <li><strong>Small and fast.</strong> Native Rust. No Electron.</li>
+    <li><strong>Reproducible.</strong> One Nix flake, with Home Manager modules for each tool.</li>
+    <li><strong>Open source.</strong> MIT licensed.</li>
+  </ul>
+
+  <h2>Tools</h2>
+  <ul class="tools">
+    <li v-for="t in tools" :key="t.name">
+      <h3>
+        <ToolIcon :name="t.name" />
+        <RouterLink :to="`/${t.name}`">{{ t.name }}</RouterLink>
+      </h3>
+      <p class="tagline">{{ t.tagline }}</p>
+      <p>{{ t.summary }}</p>
+    </li>
+  </ul>
+
+  <h2>Install</h2>
+  <p>Everything lives in one Nix flake.</p>
+  <pre><code># try one
+nix run github:tylergets/tys-tools#tyshot
+
+# install all of them
+nix profile install github:tylergets/tys-tools</code></pre>
+  <p>Home Manager, all tools at once:</p>
+  <pre><code>inputs.tys-tools.url = "github:tylergets/tys-tools";
+
+imports = [ inputs.tys-tools.homeManagerModules.default ];
+programs.tyboard.enable = true;
+programs.tyshot.enable = true;</code></pre>
+  <p>From source:</p>
+  <pre><code>nix develop
+cargo run -p tyboard -- run</code></pre>
+</template>

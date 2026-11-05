@@ -1,0 +1,16 @@
+[package]
+name = "tykey"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ty-common.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+emojis.workspace = true
+enigo.workspace = true
+gtk.workspace = true
+rdev.workspace = true
+serde.workspace = true
