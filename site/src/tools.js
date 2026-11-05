@@ -66,6 +66,7 @@ tyboard-rofi                # pick an entry and restore it`,
     ],
     usage: `tykey run                 # start listening
 tykey validate-config
+tykey status --follow --json   # for bars
 tykey -c /path/to/config.yaml run`,
     config: `match_behavior: immediate   # immediate | boundary
 watch: true
@@ -277,7 +278,8 @@ monitor_brightness:
     usage: `tygesture run                   # daemon + tray
 tygesture debug                 # print gestures as you make them
 tygesture check                 # validate the config, list bindings
-tygesture show                  # open the gesture window`,
+tygesture show                  # open the gesture window
+tygesture status --follow --json  # for bars`,
     config: `swipe:
   3:
     left: xdotool key alt+Right

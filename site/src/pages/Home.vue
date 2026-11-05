@@ -16,12 +16,9 @@ import ToolIcon from "../ToolIcon.vue";
   <h2>Why use them</h2>
   <ul class="plain">
     <li><strong>Private.</strong> No telemetry, no accounts, no cloud. Works offline.</li>
-    <li><strong>Plain config.</strong> One YAML file per tool, ready for your dotfiles.</li>
+    <li><strong>Lightweight.</strong> Native Rust, no Electron. Idle tools sleep, not poll.</li>
     <li><strong>Scriptable.</strong> A CLI for everything, made for bars and keybindings.</li>
-    <li><strong>Small and fast.</strong> Native Rust, no Electron.</li>
-    <li><strong>Zero idle cost.</strong> No polling. When you're not using them, they sleep.</li>
-    <li><strong>Quiet.</strong> No setup wizards, no pop-ups, no nagging.</li>
-    <li><strong>No ads.</strong> No upsells, no "pro" version.</li>
+    <li><strong>Plain config.</strong> One YAML file per tool, ready for your dotfiles.</li>
     <li><strong>Reproducible.</strong> One Nix flake, Home Manager modules included.</li>
     <li><strong>Minimal, auditable dependencies.</strong> <RouterLink to="/deps">See the list</RouterLink>.</li>
     <li><strong>Open source.</strong> <a :href="license">MIT licensed</a>.</li>
