@@ -133,4 +133,9 @@ in {
     description = "Touchpad gesture daemon (libinput)";
     runtimeDeps = with pkgs; [xdotool wtype];
   };
+
+  typort = mkTool {
+    name = "typort";
+    description = "Tray applet for your listening ports: open them in the browser or stop them";
+  };
 }

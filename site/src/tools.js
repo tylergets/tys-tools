@@ -269,6 +269,30 @@ tygesture show                  # open the gesture window`,
 pinch:
   2: { in: xdotool key ctrl+minus, out: xdotool key ctrl+plus }`,
   },
+  {
+    name: "typort",
+    tagline: "Your dev servers, one click away.",
+    summary:
+      "Lists the ports your user is listening on (Vite, Next.js, http.server, …) in the tray. " +
+      "Open one in the browser, copy its URL, or stop it.",
+    features: [
+      "One menu entry per port, with the page title, the server (vite, next) and its project folder",
+      "Click the URL to open it, copy it, stop or force kill",
+      "Shows whether a port is reachable from other machines",
+      "Reads /proc directly: no root, no lsof",
+      "CLI and live status output for bars",
+    ],
+    requirements: ["Linux", "A system tray (eww, waybar, KDE, …)"],
+    usage: `typort run                 # tray applet
+typort list                # your listening ports
+typort open 5173           # in the browser
+typort kill 5173           # stop it (--force for SIGKILL)
+typort status --follow --format polybar`,
+    config: `ignore_ports: [631]
+ignore_processes: [kdeconnectd]
+https_ports: [8443]
+browser: [firefox, --new-tab]   # default xdg-open`,
+  },
 ];
 
 export const findTool = (name) => tools.find((t) => t.name === name);
