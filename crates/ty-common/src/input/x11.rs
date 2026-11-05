@@ -125,7 +125,11 @@ impl Keymap {
     /// The character a press produces, following the core protocol's rules for Shift,
     /// Caps Lock and the level-3 shift (AltGr).
     fn text(&self, keycode: u8, shift: bool, caps: bool, level3: bool) -> Option<char> {
-        let base = if level3 && self.get(keycode, 4) != NO_SYMBOL { 4 } else { 0 };
+        let base = if level3 && self.get(keycode, 4) != NO_SYMBOL {
+            4
+        } else {
+            0
+        };
         let mut keysym = self.get(keycode, base + usize::from(shift));
         if keysym == NO_SYMBOL {
             keysym = self.get(keycode, base);
@@ -133,7 +137,11 @@ impl Keymap {
         let c = char::from_u32(xkb::keysym_to_utf32(xkb::Keysym::new(keysym)))
             .filter(|&c| c != '\0')?;
         if caps && c.is_alphabetic() {
-            let flipped = if shift { c.to_lowercase().next() } else { c.to_uppercase().next() };
+            let flipped = if shift {
+                c.to_lowercase().next()
+            } else {
+                c.to_uppercase().next()
+            };
             return flipped.or(Some(c));
         }
         // A shifted letter with no explicit level-2 keysym is its uppercase form.

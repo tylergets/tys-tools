@@ -279,7 +279,13 @@ static SIGNAL_PIPE: AtomicI32 = AtomicI32::new(-1);
 extern "C" fn on_signal(_: libc::c_int) {
     // Only async-signal-safe calls here: write one byte for the watcher thread.
     let byte = 1u8;
-    unsafe { libc::write(SIGNAL_PIPE.load(Ordering::Relaxed), (&raw const byte).cast(), 1) };
+    unsafe {
+        libc::write(
+            SIGNAL_PIPE.load(Ordering::Relaxed),
+            (&raw const byte).cast(),
+            1,
+        )
+    };
 }
 
 /// Quit cleanly (restoring gamma) on SIGTERM, SIGINT or SIGHUP.
