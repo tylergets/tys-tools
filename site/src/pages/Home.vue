@@ -24,6 +24,15 @@ import ToolIcon from "../ToolIcon.vue";
     </li>
     <li><strong>Scriptable.</strong> Every tool has a CLI and plays well with your bar and keybindings.</li>
     <li><strong>Small and fast.</strong> Native Rust. No Electron.</li>
+    <li>
+      <strong>Basically zero idle cost.</strong> When you're not using them, they sleep. No
+      polling loops, no background busywork, no battery drain.
+    </li>
+    <li>
+      <strong>Out of your way.</strong> No setup wizards, no pop-ups, no nagging. A
+      notification only when something you started finishes or needs you.
+    </li>
+    <li><strong>Never any ads.</strong> No upsells, no "pro" version, no sponsored anything.</li>
     <li><strong>Reproducible.</strong> One Nix flake, with Home Manager modules for each tool.</li>
     <li><strong>Open source.</strong> MIT licensed.</li>
   </ul>
