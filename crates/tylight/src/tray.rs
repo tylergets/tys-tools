@@ -15,7 +15,7 @@ use crate::monitors::Change;
 use crate::protocol::{Command, Status};
 
 const REFRESH: Duration = Duration::from_millis(500);
-const TEMPERATURES: [u32; 6] = [6500, 5500, 4500, 3500, 2700, 2000];
+const TEMPERATURES: [u32; 7] = [6500, 5500, 4500, 3500, 3100, 2700, 2000];
 const BRIGHTNESS_LEVELS: [u8; 5] = [100, 75, 50, 25, 10];
 
 pub fn start(tx: Sender<Msg>, shared: Shared) -> Option<TrayThread> {
