@@ -5,6 +5,8 @@ them can be scripted from the command line. Built for X11 and used daily on i3; 
 too on wlroots compositors such as sway and Hyprland (see [Wayland](#wayland)). Written in
 Rust, packaged with Nix, MIT licensed.
 
+Website: <https://tys.tools> (with every tool's [dependencies](https://tys.tools/deps)).
+
 | Tool | What it does |
 | --- | --- |
 | [tyboard](crates/tyboard) | Clipboard history in your tray, with a rofi picker. |
