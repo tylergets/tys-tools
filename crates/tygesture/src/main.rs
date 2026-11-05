@@ -90,7 +90,10 @@ fn run(cfg: &Config) -> Result<()> {
     }
     let status: state::Shared = Arc::new(Mutex::new(state::Status::new(cfg)));
     let (waker, wakeups) = ty_common::wake::pair();
-    let _tray = cfg.tray.then(|| tray::start(status.clone(), wakeups)).flatten();
+    let _tray = cfg
+        .tray
+        .then(|| tray::start(status.clone(), wakeups))
+        .flatten();
     serve(lock.listener().try_clone()?, status.clone(), waker.clone());
 
     let mut recognizer = Recognizer::default();

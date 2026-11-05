@@ -138,10 +138,7 @@ fn handle_connection(
 
     let mut stream = stream;
     match request {
-        Request::Status => write_line(
-            &mut stream,
-            &Response::status(status.get()),
-        ),
+        Request::Status => write_line(&mut stream, &Response::status(status.get())),
         Request::Subscribe => {
             let mut last: Option<Status> = None;
             let mut last_sent = Instant::now();

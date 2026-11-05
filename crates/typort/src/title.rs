@@ -30,11 +30,10 @@ impl Cache {
     /// Set `title` on each port (skipping `https_ports`), fetching stale ones in parallel.
     pub fn fill(&mut self, ports: &mut [Port], https_ports: &[u16]) {
         let now = Instant::now();
-        self.entries
-            .retain(|_, (fetched, title)| {
-                let ttl = if title.is_some() { CACHE_TTL } else { MISS_TTL };
-                now.duration_since(*fetched) < ttl
-            });
+        self.entries.retain(|_, (fetched, title)| {
+            let ttl = if title.is_some() { CACHE_TTL } else { MISS_TTL };
+            now.duration_since(*fetched) < ttl
+        });
 
         let stale: Vec<(usize, SocketAddr)> = ports
             .iter()
