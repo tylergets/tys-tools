@@ -11,6 +11,7 @@ Rust, packaged with Nix, MIT licensed.
 | [tycapture](crates/tycapture) | Screen recording of the screen, a region or one window, with zoom on clicks. |
 | [tyshot](crates/tyshot) | Screenshots you can mark up with arrows, text and blur. |
 | [tyspeak](crates/tyspeak) | Dictation that stays on your machine. |
+| [tylight](crates/tylight) | Warmer screen colors at night, plus monitor brightness. X11 and wlroots. |
 
 Each tool's README has the full details.
 
@@ -77,7 +78,7 @@ tykey also has typed options (`expansions`, `snippets`, `matchBehavior`, `bounda
 
 ```nix
 nixpkgs.overlays = [inputs.tys-tools.overlays.default];
-# adds pkgs.tyboard, pkgs.tykey, pkgs.tycapture, pkgs.tyshot, pkgs.tyspeak
+# adds pkgs.tyboard, pkgs.tykey, pkgs.tycapture, pkgs.tyshot, pkgs.tyspeak, pkgs.tylight
 ```
 
 ## Configuration

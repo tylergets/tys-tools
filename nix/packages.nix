@@ -119,4 +119,10 @@ in {
     description = "Speech-to-text dictation tray daemon";
     runtimeDeps = with pkgs; [pulseaudio xdotool];
   };
+
+  tylight = mkTool {
+    name = "tylight";
+    description = "Screen color temperature and monitor brightness daemon (X11 and wlroots)";
+    runtimeDeps = [pkgs.ddcutil];
+  };
 }

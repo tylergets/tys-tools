@@ -188,6 +188,54 @@ output:
   mode: type          # type | clipboard | both | none
   trailing_space: true`,
   },
+  {
+    name: "tylight",
+    tagline: "Warmer screen at night.",
+    summary:
+      "Warms your screen colors after sunset and cools them back at sunrise, like Redshift " +
+      "or Gammastep. It also sets your monitors' real brightness, with smooth fades.",
+    features: [
+      "Color temperature follows the sun, with smooth fades",
+      "Location from GeoClue2, or a fixed latitude and longitude in the config",
+      "Disable for 30 minutes, 1 hour, 2 hours, or until morning",
+      "Monitor brightness: laptop backlights (through logind, no root) and external monitors over DDC/CI",
+      "Ambient light sensor reading in the tray",
+      "Optional auto brightness from the light sensor, smoothed so it doesn't jump around",
+      "Named presets of temperature and brightness",
+      "A small graph of the day's temperature and brightness",
+      "Works on X11 and wlroots Wayland (Sway, Hyprland, river, niri, …)",
+      "Live status output for polybar, eww and other bars",
+    ],
+    requirements: [
+      "X11 (RandR 1.3+), or a Wayland compositor with wlr-gamma-control",
+      "GeoClue2, unless you set a location",
+      "ddcutil (optional, for external monitors) and access to /dev/i2c-*",
+      "A system tray (optional, for the tray applet)",
+    ],
+    usage: `tylight run                     # daemon + tray
+tylight toggle                  # on / off, with a fade
+tylight disable --for 1h        # or --until-morning
+tylight set 3400                # hold a temperature
+tylight auto                    # follow the sun again
+tylight brightness +10          # monitor brightness
+tylight status --follow --format polybar
+
+# i3 keybindings
+bindsym $mod+F9 exec tylight toggle
+bindsym XF86MonBrightnessUp exec tylight brightness +10
+bindsym XF86MonBrightnessDown exec tylight brightness -10`,
+    config: `temperature:
+  day: 6500          # kelvin; 6500 is neutral
+  night: 4000
+# location:          # set this to skip GeoClue
+#   latitude: 39.10
+#   longitude: -84.51
+fade_seconds: 2
+backend: auto        # auto | x11 | wayland
+monitor_brightness:
+  backlight: true
+  ddc: true`,
+  },
 ];
 
 export const findTool = (name) => tools.find((t) => t.name === name);
