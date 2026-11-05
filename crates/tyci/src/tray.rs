@@ -5,7 +5,6 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::process::Command;
 use std::rc::Rc;
-use std::sync::mpsc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -18,7 +17,6 @@ use crate::config::{AppConfig, APP_NAME};
 use crate::github::{PullRequest, Run};
 use crate::snapshot::{ago, Snapshot};
 
-const ACTION_POLL_INTERVAL: Duration = Duration::from_millis(50);
 /// Keeps the "4m" ages in the menu current between refreshes.
 const RELABEL_INTERVAL: Duration = Duration::from_secs(30);
 const NOTIFY_TIMEOUT: Duration = Duration::from_secs(8);
@@ -49,7 +47,7 @@ struct App {
 
 pub fn run(config: AppConfig) -> Result<()> {
     gtk::init().context("failed to initialize GTK")?;
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = tray::channel();
     let applet = Applet::new(
         APP_NAME,
         &Tool::Ci.tray_icons(),
@@ -75,7 +73,7 @@ pub fn run(config: AppConfig) -> Result<()> {
     });
 
     let handler = app.clone();
-    tray::drain_actions(rx, ACTION_POLL_INTERVAL, move |action| {
+    tray::drain_actions(rx, move |action| {
         match action {
             TrayAction::Open(url) => open_url(&url),
             TrayAction::Refresh => refresh(&handler),

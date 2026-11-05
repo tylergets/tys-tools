@@ -4,18 +4,14 @@
 use std::collections::HashMap;
 
 use std::process;
-use std::sync::mpsc;
-use std::time::Duration;
 
 use gtk::glib::ControlFlow;
 use ty_common::icons::Tool;
-use ty_common::tray::{drain_actions, Applet, IconState, MenuEntry, TraySpec};
+use ty_common::tray::{self, drain_actions, Applet, IconState, MenuEntry, TraySpec};
 
 use crate::config::{MenuSnippet, NotificationConfig, APP_NAME};
 use crate::core::expansion::render_template_macros;
 use crate::platform::notify;
-
-const ACTION_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TrayAction {
@@ -32,14 +28,14 @@ pub fn start(
     notifications: NotificationConfig,
 ) -> Option<AppIndicator> {
     ty_common::tray::spawn_gtk_thread(move || {
-        let (action_tx, action_rx) = mpsc::channel();
+        let (action_tx, action_rx) = tray::channel();
         let applet = Applet::new(
             APP_NAME,
             &Tool::Key.tray_icons(),
             tray_spec(&snippets),
             action_tx,
         )?;
-        drain_actions(action_rx, ACTION_POLL_INTERVAL, move |action| {
+        drain_actions(action_rx, move |action| {
             match action {
                 TrayAction::Copy(index) => {
                     if let Some(snippet) = snippets.get(index) {

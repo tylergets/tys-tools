@@ -10,6 +10,7 @@ pub mod status;
 pub mod tray;
 #[cfg(target_os = "linux")]
 mod tray_sni;
+pub mod wake;
 
 /// `$USER`, or `"user"` if unset. Used to keep per-user runtime files apart.
 pub fn user_hint() -> String {

@@ -126,9 +126,10 @@ impl Report for Status {
 }
 
 fn status(config: &AppConfig, args: StatusArgs) -> Result<()> {
-    let fetch = || -> Result<Status> {
+    let mut scanner = ports::Scanner::default();
+    let mut fetch = || -> Result<Status> {
         Ok(Status {
-            ports: actions::list(config, false)?,
+            ports: actions::list_with(&mut scanner, config, false)?,
         })
     };
     if !args.follow {

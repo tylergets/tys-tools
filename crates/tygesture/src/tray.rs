@@ -1,17 +1,16 @@
 //! Tray applet: flashes when a gesture fires, shows the last one, opens the window and can
 //! pause tygesture.
 
-use std::sync::mpsc;
-use std::time::Duration;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::time::Instant;
 
 use gtk::glib::{self, ControlFlow};
 use ty_common::icons::Tool;
-use ty_common::tray::{self, Applet, IconState, MenuEntry, TraySpec, TrayThread};
+use ty_common::tray::{self, Applet, IconState, MenuEntry, TraySpec, TrayThread, Wakeups};
 
 use crate::state::{Shared, Status};
 use crate::APP;
-
-const REFRESH: Duration = Duration::from_millis(50);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
@@ -20,30 +19,27 @@ enum Action {
     Quit,
 }
 
-pub fn start(shared: Shared) -> Option<TrayThread> {
+type SharedApplet = Rc<RefCell<Applet<Action>>>;
+
+/// `wakeups` fire whenever `shared` changes in a way the tray shows.
+pub fn start(shared: Shared, wakeups: Wakeups) -> Option<TrayThread> {
     tray::spawn_gtk_thread(move || {
-        let (actions_tx, actions_rx) = mpsc::channel();
-        let mut applet = Applet::new(
+        let (actions_tx, actions_rx) = tray::channel();
+        let applet: SharedApplet = Rc::new(RefCell::new(Applet::new(
             APP,
             &Tool::Gesture.tray_icons(),
             spec(&shared.lock().unwrap()),
             actions_tx,
-        )?;
+        )?));
 
-        let refresh = shared.clone();
-        glib::timeout_add_local(REFRESH, move || {
-            let show = {
-                let mut status = refresh.lock().unwrap();
-                applet.update(spec(&status));
-                std::mem::take(&mut status.show_window)
-            };
-            if show {
-                crate::gui::open(&refresh);
-            }
+        let (on_wake_applet, on_wake_shared) = (applet.clone(), shared.clone());
+        tray::on_wake(wakeups, move || {
+            refresh(&on_wake_applet, &on_wake_shared);
             ControlFlow::Continue
         });
 
-        tray::drain_actions(actions_rx, REFRESH, move |action| {
+        let kept = applet.clone();
+        tray::drain_actions(actions_rx, move |action| {
             match action {
                 Action::Show => crate::gui::open(&shared),
                 Action::TogglePause => {
@@ -52,10 +48,29 @@ pub fn start(shared: Shared) -> Option<TrayThread> {
                 }
                 Action::Quit => std::process::exit(0),
             }
+            refresh(&applet, &shared);
             ControlFlow::Continue
         });
-        Ok(())
+        Ok(kept)
     })
+}
+
+/// Update the tray, open the window if asked, and come back when the flash ends.
+fn refresh(applet: &SharedApplet, shared: &Shared) {
+    let (show, flash_until) = {
+        let mut status = shared.lock().unwrap();
+        applet.borrow_mut().update(spec(&status));
+        let lit = status.is_lit().then_some(status.flash_until).flatten();
+        (std::mem::take(&mut status.show_window), lit)
+    };
+    if show {
+        crate::gui::open(shared);
+    }
+    if let Some(until) = flash_until {
+        let (applet, shared) = (applet.clone(), shared.clone());
+        let wait = until.saturating_duration_since(Instant::now());
+        glib::timeout_add_local_once(wait, move || refresh(&applet, &shared));
+    }
 }
 
 fn spec(status: &Status) -> TraySpec<Action> {

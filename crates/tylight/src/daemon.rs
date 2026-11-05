@@ -10,6 +10,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use anyhow::{bail, Result};
 use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
 use ty_common::lock::InstanceLock;
+use ty_common::wake::{self, Waker, Wakeups};
 
 use crate::adaptive::Adaptive;
 use crate::ambient::Sensor;
@@ -48,11 +49,15 @@ pub struct Shared {
     /// Whether the GTK (tray) thread is running, so windows can be shown.
     pub gui: Arc<AtomicBool>,
     pub has_sensor: Arc<AtomicBool>,
+    /// Tells the tray that `status` (or `show_graph`) changed.
+    pub waker: Waker,
 }
 
 impl Shared {
-    pub fn new(config: AppConfig) -> Self {
-        Self {
+    /// The shared state, and the tray's end of [`Shared::waker`].
+    pub fn new(config: AppConfig) -> (Self, Wakeups) {
+        let (waker, wakeups) = wake::pair();
+        let shared = Self {
             adaptive: Arc::new(Mutex::new(Adaptive::new(config.auto_brightness.clone()))),
             config: Arc::new(config),
             status: Arc::default(),
@@ -61,7 +66,9 @@ impl Shared {
             show_graph: Arc::default(),
             gui: Arc::default(),
             has_sensor: Arc::default(),
-        }
+            waker,
+        };
+        (shared, wakeups)
     }
 
     pub fn status(&self) -> Status {
@@ -71,6 +78,7 @@ impl Shared {
     fn set_monitor_status(&self, percent: u8) -> Status {
         let mut status = self.status.lock().expect("status lock");
         status.monitor_brightness = Some(percent);
+        self.waker.wake();
         status.clone()
     }
 
@@ -114,6 +122,7 @@ impl Shared {
         };
         let mut status = self.status.lock().expect("status lock");
         status.auto_brightness = Some(enabled);
+        self.waker.wake();
         Ok(status.clone())
     }
 
@@ -122,6 +131,7 @@ impl Shared {
             bail!("the graph needs the tray (set `tray: true`)");
         }
         self.show_graph.store(true, Ordering::Relaxed);
+        self.waker.wake();
         Ok(self.status())
     }
 }
@@ -132,7 +142,13 @@ fn watch_sensor(sensor: Sensor, shared: Shared) {
         let mut last_error = String::new();
         loop {
             let lux = sensor.lux();
-            shared.status.lock().expect("status lock").ambient_lux = lux;
+            let changed = {
+                let mut status = shared.status.lock().expect("status lock");
+                std::mem::replace(&mut status.ambient_lux, lux) != lux
+            };
+            if changed {
+                shared.waker.wake();
+            }
             if let Some(lux) = lux {
                 // Notice brightness changed elsewhere (brightness keys, other tools).
                 // Skipped while a change is running (the monitors are locked).
@@ -196,7 +212,7 @@ struct Daemon {
 pub fn run(config: AppConfig) -> Result<()> {
     let lock = InstanceLock::acquire(APP_NAME)?;
     let (tx, rx) = mpsc::channel();
-    let shared = Shared::new(config.clone());
+    let (shared, _wakeups) = Shared::new(config.clone());
 
     let backend = backend::open(config.backend)?;
     println!("Using the {} backend", backend.name());
@@ -232,7 +248,7 @@ pub fn run(config: AppConfig) -> Result<()> {
     #[cfg(target_os = "linux")]
     let _tray = config
         .tray
-        .then(|| crate::tray::start(tx.clone(), shared.clone()))
+        .then(|| crate::tray::start(tx.clone(), shared.clone(), _wakeups))
         .flatten();
 
     let mut daemon = Daemon {
@@ -450,7 +466,7 @@ impl Daemon {
             .load(Ordering::Relaxed)
             .then(|| self.shared.adaptive.lock().expect("adaptive lock").enabled);
         let mut status = self.shared.status.lock().expect("status lock");
-        *status = Status {
+        let next = Status {
             running: true,
             enabled: self.enabled,
             disabled_until: self.disabled_until,
@@ -475,6 +491,10 @@ impl Daemon {
             ambient_lux: status.ambient_lux,
             auto_brightness,
         };
+        if *status != next {
+            *status = next;
+            self.shared.waker.wake();
+        }
         let sample = Sample {
             unix: now,
             temperature: status.temperature,

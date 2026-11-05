@@ -1,28 +1,27 @@
 //! Tray applet: current state, toggle, timed disable, temperature and monitor brightness.
 
 use std::sync::atomic::Ordering;
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::Sender;
 use std::thread;
-use std::time::Duration;
 
-use gtk::glib::{self, ControlFlow};
+use gtk::glib::ControlFlow;
 use ty_common::icons::Tool;
-use ty_common::tray::{self, Applet, IconState, MenuEntry, TraySpec, TrayThread};
+use ty_common::tray::{self, Applet, IconState, MenuEntry, TraySpec, TrayThread, Wakeups};
 
 use crate::config::APP_NAME;
 use crate::daemon::{Msg, Shared};
 use crate::monitors::Change;
 use crate::protocol::{Command, Status};
 
-const REFRESH: Duration = Duration::from_millis(500);
 const TEMPERATURES: [u32; 7] = [6500, 5500, 4500, 3500, 3100, 2700, 2000];
 const BRIGHTNESS_LEVELS: [u8; 5] = [100, 75, 50, 25, 10];
 
-pub fn start(tx: Sender<Msg>, shared: Shared) -> Option<TrayThread> {
+/// `wakeups` fire whenever the shared status changes.
+pub fn start(tx: Sender<Msg>, shared: Shared, wakeups: Wakeups) -> Option<TrayThread> {
     let step = i32::from(shared.config.monitor_brightness.step);
     let presets: Vec<String> = shared.config.presets.keys().cloned().collect();
     tray::spawn_gtk_thread(move || {
-        let (actions_tx, actions_rx) = mpsc::channel::<Command>();
+        let (actions_tx, actions_rx) = tray::channel::<Command>();
         let mut applet = Applet::new(
             APP_NAME,
             &Tool::Light.tray_icons(),
@@ -33,7 +32,7 @@ pub fn start(tx: Sender<Msg>, shared: Shared) -> Option<TrayThread> {
         shared.gui.store(true, Ordering::Relaxed);
 
         let refresh_shared = shared.clone();
-        glib::timeout_add_local(REFRESH, move || {
+        tray::on_wake(wakeups, move || {
             applet.update(spec(&refresh_shared.status(), step, &presets));
             if refresh_shared.show_graph.swap(false, Ordering::Relaxed) {
                 crate::graph::open(&refresh_shared);
@@ -41,7 +40,7 @@ pub fn start(tx: Sender<Msg>, shared: Shared) -> Option<TrayThread> {
             ControlFlow::Continue
         });
 
-        tray::drain_actions(actions_rx, Duration::from_millis(50), move |command| {
+        tray::drain_actions(actions_rx, move |command| {
             match command {
                 Command::Brightness(change) => {
                     let shared = shared.clone();

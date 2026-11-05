@@ -6,12 +6,16 @@ use std::fs;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use serde::Serialize;
 
 /// `TCP_LISTEN` in `/proc/net/tcp`.
 const LISTEN: &str = "0A";
+/// How long [`Scanner`] trusts its socket owners while the listening sockets stay the same
+/// (a process can still change its command line or working directory).
+const OWNERS_TTL: Duration = Duration::from_secs(60);
 
 /// A listening socket from `/proc/net/tcp{,6}`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -120,21 +124,47 @@ impl Port {
 
 /// Every port the current user listens on, sorted by port.
 pub fn scan() -> Result<Vec<Port>> {
-    let uid = fs::metadata("/proc/self")
-        .context("failed to read /proc/self")?
-        .uid();
-    let mut sockets = Vec::new();
-    for (path, v6) in [("/proc/net/tcp", false), ("/proc/net/tcp6", true)] {
-        match fs::read_to_string(path) {
-            Ok(text) => sockets.extend(parse_net_tcp(&text, v6, uid)),
-            // No IPv6 is fine; no IPv4 table means no /proc.
-            Err(_) if v6 => {}
-            Err(err) => return Err(err).with_context(|| format!("failed to read {path}")),
-        }
-    }
-    let inodes: HashSet<u64> = sockets.iter().map(|s| s.inode).collect();
-    let owners = socket_owners(uid, &inodes);
+    Scanner::default().scan()
+}
 
+/// Scans repeatedly. Finding a socket's processes walks every process's open files, so
+/// that is only redone when the listening sockets change (or after [`OWNERS_TTL`]); the
+/// socket tables themselves are cheap to read.
+#[derive(Default)]
+pub struct Scanner {
+    inodes: HashSet<u64>,
+    owners: HashMap<u64, Vec<Process>>,
+    checked: Option<Instant>,
+}
+
+impl Scanner {
+    pub fn scan(&mut self) -> Result<Vec<Port>> {
+        let uid = fs::metadata("/proc/self")
+            .context("failed to read /proc/self")?
+            .uid();
+        let mut sockets = Vec::new();
+        for (path, v6) in [("/proc/net/tcp", false), ("/proc/net/tcp6", true)] {
+            match fs::read_to_string(path) {
+                Ok(text) => sockets.extend(parse_net_tcp(&text, v6, uid)),
+                // No IPv6 is fine; no IPv4 table means no /proc.
+                Err(_) if v6 => {}
+                Err(err) => return Err(err).with_context(|| format!("failed to read {path}")),
+            }
+        }
+        let inodes: HashSet<u64> = sockets.iter().map(|s| s.inode).collect();
+        let fresh = self
+            .checked
+            .is_some_and(|checked| checked.elapsed() < OWNERS_TTL);
+        if !fresh || inodes != self.inodes {
+            self.owners = socket_owners(uid, &inodes);
+            self.inodes = inodes;
+            self.checked = Some(Instant::now());
+        }
+        Ok(build_ports(sockets, &self.owners))
+    }
+}
+
+fn build_ports(sockets: Vec<Socket>, owners: &HashMap<u64, Vec<Process>>) -> Vec<Port> {
     let mut ports: BTreeMap<u16, Port> = BTreeMap::new();
     for socket in sockets {
         let port = ports.entry(socket.port).or_insert_with(|| Port {
@@ -152,7 +182,7 @@ pub fn scan() -> Result<Vec<Port>> {
             }
         }
     }
-    Ok(ports
+    ports
         .into_values()
         .map(|mut port| {
             port.addrs.sort();
@@ -160,7 +190,7 @@ pub fn scan() -> Result<Vec<Port>> {
             port.processes.sort_by_key(|p| p.pid);
             port
         })
-        .collect())
+        .collect()
 }
 
 /// Listening sockets owned by `uid` in a `/proc/net/tcp` or `tcp6` table.

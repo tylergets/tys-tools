@@ -10,7 +10,12 @@ use crate::ports::{self, Port};
 
 /// The visible ports (`all` includes ignored ones).
 pub fn list(config: &AppConfig, all: bool) -> Result<Vec<Port>> {
-    let mut ports = ports::scan()?;
+    list_with(&mut ports::Scanner::default(), config, all)
+}
+
+/// Like [`list`], reusing `scanner` between calls.
+pub fn list_with(scanner: &mut ports::Scanner, config: &AppConfig, all: bool) -> Result<Vec<Port>> {
+    let mut ports = scanner.scan()?;
     if !all {
         ports.retain(|port| !config.ignored(port));
     }

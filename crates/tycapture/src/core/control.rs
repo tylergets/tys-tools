@@ -3,8 +3,8 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc;
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::capture::Target;
 use crate::core::status::Status;
+use ty_common::tray::Sender;
 
-const SUBSCRIBE_INTERVAL: Duration = Duration::from_millis(250);
 /// Subscribers get a line at least this often, even without changes, so dead peers are noticed.
 const SUBSCRIBE_HEARTBEAT: Duration = Duration::from_secs(5);
 const ACTION_TIMEOUT: Duration = Duration::from_secs(5);
@@ -73,11 +73,42 @@ impl Response {
 }
 
 /// An action plus the channel its result is reported on.
-pub type ActionRequest = (Action, Sender<Result<()>>);
+pub type ActionRequest = (Action, mpsc::Sender<Result<()>>);
+
+/// The latest status, published by the UI; subscribers wait for changes.
+#[derive(Default)]
+pub struct SharedStatus {
+    status: Mutex<Status>,
+    changed: Condvar,
+}
+
+impl SharedStatus {
+    pub fn get(&self) -> Status {
+        self.status.lock().unwrap().clone()
+    }
+
+    pub fn set(&self, status: Status) {
+        let mut current = self.status.lock().unwrap();
+        if *current != status {
+            *current = status;
+            self.changed.notify_all();
+        }
+    }
+
+    /// The status once it differs from `last`, or the current one after `timeout`.
+    fn wait_changed(&self, last: Option<&Status>, timeout: Duration) -> Status {
+        let current = self.status.lock().unwrap();
+        let (current, _) = self
+            .changed
+            .wait_timeout_while(current, timeout, |status| Some(&*status) == last)
+            .unwrap();
+        current.clone()
+    }
+}
 
 /// Serve the control socket on background threads. `status` is kept current by the UI;
 /// actions are forwarded to `actions`.
-pub fn serve(listener: UnixListener, status: Arc<Mutex<Status>>, actions: Sender<ActionRequest>) {
+pub fn serve(listener: UnixListener, status: Arc<SharedStatus>, actions: Sender<ActionRequest>) {
     thread::spawn(move || {
         for stream in listener.incoming() {
             let Ok(stream) = stream else { continue };
@@ -94,7 +125,7 @@ pub fn serve(listener: UnixListener, status: Arc<Mutex<Status>>, actions: Sender
 
 fn handle_connection(
     stream: UnixStream,
-    status: &Mutex<Status>,
+    status: &SharedStatus,
     actions: &Sender<ActionRequest>,
 ) -> Result<()> {
     let mut line = String::new();
@@ -109,13 +140,13 @@ fn handle_connection(
     match request {
         Request::Status => write_line(
             &mut stream,
-            &Response::status(status.lock().unwrap().clone()),
+            &Response::status(status.get()),
         ),
         Request::Subscribe => {
             let mut last: Option<Status> = None;
             let mut last_sent = Instant::now();
             loop {
-                let current = status.lock().unwrap().clone();
+                let current = status.wait_changed(last.as_ref(), SUBSCRIBE_HEARTBEAT);
                 if last.as_ref() != Some(&current) || last_sent.elapsed() >= SUBSCRIBE_HEARTBEAT {
                     // A write error means the subscriber went away.
                     if write_line(&mut stream, &current).is_err() {
@@ -124,13 +155,12 @@ fn handle_connection(
                     last = Some(current);
                     last_sent = Instant::now();
                 }
-                thread::sleep(SUBSCRIBE_INTERVAL);
             }
         }
         Request::Action(action) => {
             let (reply_tx, reply_rx) = mpsc::channel();
             actions
-                .send((action, reply_tx))
+                .send_blocking((action, reply_tx))
                 .context("applet is shutting down")?;
             let result = reply_rx
                 .recv_timeout(ACTION_TIMEOUT)

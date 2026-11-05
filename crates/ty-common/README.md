@@ -12,6 +12,7 @@ its own. If two tools need the same thing, it belongs here.
 | `status` | The `status [--follow] [--format plain\|json\|polybar]` subcommand for bar modules |
 | `tray`   | AppIndicator tray applet built from a plain `TraySpec` (Linux only) |
 | `icons`  | The ty* icon set and its idle/attention/busy tray colors (Linux only) |
+| `wake`   | A "something changed" signal from any thread to the GTK thread |
 
 Plus `runtime_dir()` (`$XDG_RUNTIME_DIR`, or the temp dir) and `user_hint()` (`$USER`, or
 `"user"`), for per-user runtime files.
@@ -74,18 +75,24 @@ modules. The polybar format prints an empty line when idle.
 
 ## tray
 
-The tool describes the whole tray as data and the applet keeps the AppIndicator in sync:
+The tool describes the whole tray as data and the applet keeps the AppIndicator in sync.
+Nothing polls: the GTK thread sleeps until a click, a message or a wake arrives.
 
 ```rust
 use ty_common::icons::Tool;
 use ty_common::tray::{self, Applet, IconState, MenuEntry, TraySpec};
 
+let (waker, wakeups) = ty_common::wake::pair();
+// Other threads call waker.wake() after changing the shared state.
 tray::spawn_gtk_thread(move || {
-    let (tx, rx) = std::sync::mpsc::channel();
-    let mut applet = Applet::new("tygesture", &Tool::Gesture.tray_icons(), spec(&state), tx)?;
-    // On a timer: applet.update(spec(&state));
-    tray::drain_actions(rx, interval, |action| { /* handle Action */ ControlFlow::Continue });
-    Ok(())
+    let (tx, rx) = tray::channel();
+    let applet = Rc::new(RefCell::new(Applet::new(
+        "tygesture", &Tool::Gesture.tray_icons(), spec(&state), tx,
+    )?));
+    let on_wake = applet.clone();
+    tray::on_wake(wakeups, move || { on_wake.borrow_mut().update(spec(&state)); ControlFlow::Continue });
+    tray::drain_actions(rx, |action| { /* handle Action */ ControlFlow::Continue });
+    Ok(applet)
 });
 ```
 
@@ -93,8 +100,15 @@ tray::spawn_gtk_thread(move || {
   `menu` is a list of `MenuEntry` (`Label`, `Action`, `Submenu`, `Separator`) carrying the
   tool's own action type; `click_action` is sent on a middle click (a left click always opens
   the menu).
-- `Applet::update` is cheap to call often: it does nothing if the spec is unchanged, and
-  updates labels in place when the menu's shape is the same, so an open menu doesn't close.
+- `Applet::update` is cheap: it does nothing if the spec is unchanged, and updates labels
+  in place when the menu's shape is the same. While the menu is open, updates wait until it
+  closes, since tray hosts (e.g. eww) don't resize an open menu (at most a minute, in case a
+  host never reports closing).
+- `tray::channel()` is the channel for menu actions and other messages; `drain_actions`
+  handles them on the GTK thread as they arrive. `on_wake` does the same for a `wake::Waker`,
+  which coalesces repeated wakes into one.
+- For things that change on their own (a recording's elapsed time), run a timer only while
+  they are in progress, not all the time.
 - `spawn_gtk_thread` runs GTK on its own thread. Without `$DISPLAY`, or if setup fails, it
   logs and returns `None`, so tools keep running without a tray.
 - `spawn_blocking` runs work off the GTK thread and hands the result back to it.
@@ -103,7 +117,7 @@ tray::spawn_gtk_thread(move || {
   doesn't do this on its own).
 
 Don't hold a `RefCell` borrow across GTK calls that run a nested main loop (such as
-`gtk::Clipboard::wait_for_*`): `drain_actions` and timers can run inside them.
+`gtk::Clipboard::wait_for_*`): `drain_actions`, `on_wake` and timers can run inside them.
 
 ## icons
 

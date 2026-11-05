@@ -13,8 +13,11 @@ const TIMEOUT: Duration = Duration::from_millis(400);
 /// Enough for the `<head>` of any page.
 const MAX_BYTES: u64 = 64 * 1024;
 const MAX_CHARS: usize = 80;
-/// How long a fetched title (or no title) is reused.
-const CACHE_TTL: Duration = Duration::from_secs(10);
+/// How long a fetched title is reused. The key includes the pids, so a restarted server is
+/// fetched again right away.
+const CACHE_TTL: Duration = Duration::from_secs(300);
+/// How long "no title" is reused: the server may still be starting up.
+const MISS_TTL: Duration = Duration::from_secs(10);
 
 /// Remembers titles per port and processes, so the tray doesn't fetch every page on every
 /// scan.
@@ -28,7 +31,10 @@ impl Cache {
     pub fn fill(&mut self, ports: &mut [Port], https_ports: &[u16]) {
         let now = Instant::now();
         self.entries
-            .retain(|_, (fetched, _)| now.duration_since(*fetched) < CACHE_TTL);
+            .retain(|_, (fetched, title)| {
+                let ttl = if title.is_some() { CACHE_TTL } else { MISS_TTL };
+                now.duration_since(*fetched) < ttl
+            });
 
         let stale: Vec<(usize, SocketAddr)> = ports
             .iter()

@@ -4,14 +4,15 @@ use std::cell::{Cell, OnceCell, RefCell};
 use std::path::PathBuf;
 use std::process::{self, Command};
 use std::rc::{Rc, Weak};
-use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use gtk::glib::{self, ControlFlow, SourceId};
 use serde::Serialize;
 use ty_common::icons::Tool;
-use ty_common::tray::{drain_actions, spawn_blocking, Applet, IconState, MenuEntry, TraySpec};
+use ty_common::tray::{
+    self, drain_actions, spawn_blocking, Applet, IconState, MenuEntry, Receiver, TraySpec,
+};
 
 use crate::config::AppConfig;
 use crate::core::dbus::{Reply, Request, Service};
@@ -25,9 +26,8 @@ use crate::speech::models::{self, ModelInfo, MODELS};
 
 const APP_ID: &str = "tyspeak";
 const NOTIFY_TIMEOUT: Duration = Duration::from_millis(4000);
-/// Menu, status and download refresh rate.
+/// Menu, status and download refresh rate while recording, transcribing or downloading.
 const TICK_INTERVAL: Duration = Duration::from_millis(250);
-const ACTION_POLL_INTERVAL: Duration = Duration::from_millis(50);
 /// Recordings shorter than this are dropped.
 const MIN_SAMPLES: usize = SAMPLE_RATE as usize / 4;
 /// Recordings whose peak stays below this are treated as silence (models tend to invent
@@ -61,7 +61,7 @@ pub fn run(config: AppConfig) -> Result<()> {
         .or_else(|| models::find(&config.model))
         .context("no model selected")?;
 
-    let (tray_tx, tray_rx) = mpsc::channel();
+    let (tray_tx, tray_rx) = tray::channel();
     let placeholder = TraySpec {
         icon: IconState::Normal,
         title: APP_ID.to_string(),
@@ -76,14 +76,6 @@ pub fn run(config: AppConfig) -> Result<()> {
     let auto_download = app.config.auto_download;
     app.ensure_model(auto_download);
     app.tick();
-    let weak = Rc::downgrade(&app);
-    glib::timeout_add_local(TICK_INTERVAL, move || match weak.upgrade() {
-        Some(app) => {
-            app.tick();
-            ControlFlow::Continue
-        }
-        None => ControlFlow::Break,
-    });
 
     gtk::main();
     Ok(())
@@ -127,6 +119,8 @@ struct App {
     pending_stop: RefCell<Option<SourceId>>,
     /// Recordings handed to the engine and not yet returned.
     transcribing: Cell<u32>,
+    /// Whether the refresh timer runs (only while [`App::busy`]).
+    ticking: Cell<bool>,
     last_status: RefCell<Option<Status>>,
 }
 
@@ -165,6 +159,7 @@ impl App {
             recorder: RefCell::new(None),
             pending_stop: RefCell::new(None),
             transcribing: Cell::new(0),
+            ticking: Cell::new(false),
             last_status: RefCell::new(None),
         });
         app.refresh_downloaded();
@@ -173,7 +168,7 @@ impl App {
 
     fn listen_for_tray(self: &Rc<Self>, tray_actions: Receiver<TrayAction>) {
         let weak = Rc::downgrade(self);
-        drain_actions(tray_actions, ACTION_POLL_INTERVAL, move |action| {
+        drain_actions(tray_actions, move |action| {
             let Some(app) = weak.upgrade() else {
                 return ControlFlow::Break;
             };
@@ -512,7 +507,37 @@ impl App {
 
     // ---- Status ---------------------------------------------------------------------------
 
+    /// Refresh now, and keep refreshing while something is in progress.
     fn tick(&self) {
+        self.refresh();
+        if self.ticking.get() || !self.busy() {
+            return;
+        }
+        self.ticking.set(true);
+        let weak = self.this.clone();
+        glib::timeout_add_local(TICK_INTERVAL, move || {
+            let Some(app) = weak.upgrade() else {
+                return ControlFlow::Break;
+            };
+            app.refresh();
+            if app.busy() {
+                return ControlFlow::Continue;
+            }
+            app.ticking.set(false);
+            ControlFlow::Break
+        });
+    }
+
+    /// Something changes on its own (elapsed time, levels, progress) and needs refreshing.
+    fn busy(&self) -> bool {
+        self.recorder.borrow().is_some()
+            || self.pending_stop.borrow().is_some()
+            || self.transcribing.get() > 0
+            || self.loading.get().is_some()
+            || self.download.borrow().is_some()
+    }
+
+    fn refresh(&self) {
         self.poll_download();
         self.check_recorder();
         let status = self.snapshot();

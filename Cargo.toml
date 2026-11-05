@@ -12,6 +12,7 @@ repository = "https://github.com/tylergets/tys-tools"
 ty-common = { path = "crates/ty-common" }
 anyhow = "1"
 base64 = "0.22"
+async-channel = "2"
 chrono = "0.4"
 clap = { version = "4", features = ["derive"] }
 dbus = "0.9"

@@ -1,26 +1,25 @@
-//! The tray applet: a GTK thread that polls the clipboard, records history and shows it in
-//! an AppIndicator menu (see `ty_common::tray`).
+//! The tray applet: a GTK thread that reads the clipboard whenever it changes, records
+//! history and shows it in an AppIndicator menu (see `ty_common::tray`).
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::process;
 use std::rc::Rc;
-use std::sync::mpsc;
 use std::time::Duration;
 
+use gtk::gio;
 use gtk::glib::{self, ControlFlow};
+use gtk::prelude::*;
 use ty_common::icons::Tool;
-use ty_common::tray::{drain_actions, Applet, IconState, MenuEntry, TraySpec};
+use ty_common::tray::{self, drain_actions, Applet, IconState, MenuEntry, TraySpec};
 
 use crate::clipboard::backend::{menu_label, set_clipboard_value, GtkClipboardBackend};
 use crate::clipboard::poller::ClipboardPoller;
 use crate::clipboard::{ClipboardEntry, SharedClipboardState};
 use crate::config::{ClipboardBackend, ClipboardConfig};
 use crate::core::active_window::provider_from_config;
-use crate::core::capture_control::{is_capture_paused, set_capture_paused};
+use crate::core::capture_control::{is_capture_paused, pause_path, set_capture_paused};
 
 const APP_ID: &str = "tyboard";
-const CLIPBOARD_POLL_INTERVAL: Duration = Duration::from_millis(750);
-const ACTION_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const NOTIFICATION_TIMEOUT: Duration = Duration::from_millis(1000);
 const MENU_LABEL_CHAR_LIMIT: usize = 70;
 
@@ -60,50 +59,54 @@ pub fn start(
             eprintln!("warning: failed to read capture pause state: {err}");
             false
         });
-        let (actions_tx, actions_rx) = mpsc::channel();
+        let (actions_tx, actions_rx) = tray::channel();
         let spec = tray_spec(paused, &shared_state.history_snapshot());
         let applet = Applet::new(APP_ID, &Tool::Board.tray_icons(), spec, actions_tx)?;
         let tray = Rc::new(RefCell::new(Tray {
             applet,
             state: shared_state,
-            clipboard,
+            clipboard: clipboard.clone(),
             paused,
+            _pause_monitor: None,
         }));
 
         let tray_for_actions = tray.clone();
-        drain_actions(actions_rx, ACTION_POLL_INTERVAL, move |action| {
+        drain_actions(actions_rx, move |action| {
             handle_action(&tray_for_actions, action);
             ControlFlow::Continue
         });
 
-        let tray_for_poll = tray.clone();
-        glib::timeout_add_local(CLIPBOARD_POLL_INTERVAL, move || {
-            let entry = poller.poll_once();
-            let mut tray = tray_for_poll.borrow_mut();
-            let paused = tray.read_paused();
-            let mut changed = paused != tray.paused;
-            tray.paused = paused;
-
-            if let Some(entry) = entry.filter(|_| !paused) {
-                let body = match entry {
-                    ClipboardEntry::Text { .. } => "text copied to clipboard",
-                    ClipboardEntry::Image { .. } => "image copied to clipboard",
-                };
-                let recorded = tray.state.record_entry(entry).unwrap_or_else(|err| {
-                    eprintln!("failed to record clipboard history: {err}");
-                    false
+        // `tyboard pause` / `resume` from the CLI flip a marker file; watch it.
+        let monitor = gio::File::for_path(pause_path())
+            .monitor_file(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE);
+        match monitor {
+            Ok(monitor) => {
+                let tray_for_pause = tray.clone();
+                monitor.connect_changed(move |_, _, _, _| {
+                    let mut tray = tray_for_pause.borrow_mut();
+                    let paused = tray.read_paused();
+                    if paused != tray.paused {
+                        tray.paused = paused;
+                        tray.refresh();
+                    }
                 });
-                if recorded {
-                    println!("clipboard event: {body}");
-                    ty_common::notify::notify(APP_ID, APP_ID, body, NOTIFICATION_TIMEOUT);
-                    changed = true;
-                }
+                tray.borrow_mut()._pause_monitor = Some(monitor);
             }
+            Err(err) => eprintln!("warning: cannot watch the pause marker: {err}"),
+        }
 
-            if changed {
-                tray.refresh();
-            }
-            ControlFlow::Continue
+        // Read the clipboard when its owner changes rather than polling it.
+        let watcher = Rc::new(ClipboardWatcher {
+            poller: RefCell::new(poller),
+            pending: Cell::new(false),
+            tray: tray.clone(),
+        });
+        // (gtk-rs 0.18 has no typed binding for this signal.)
+        clipboard.connect_local("owner-change", false, move |_| {
+            // Reading runs a nested main loop, so don't do it inside the signal.
+            let watcher = watcher.clone();
+            glib::idle_add_local_once(move || watcher.on_change());
+            None
         });
 
         Ok(tray)
@@ -157,12 +160,65 @@ pub fn tray_spec(paused: bool, history: &[ClipboardEntry]) -> TraySpec<TrayActio
 }
 
 /// GTK-thread state. Never borrowed across a call that can spin a nested main loop
-/// (clipboard reads and `store()`), since the poll timer and action handler share it.
+/// (clipboard reads and `store()`), since the clipboard watcher and action handler share it.
 struct Tray {
     applet: Applet<TrayAction>,
     state: SharedClipboardState,
     clipboard: gtk::Clipboard,
     paused: bool,
+    _pause_monitor: Option<gio::FileMonitor>,
+}
+
+/// Records the clipboard after each owner change.
+struct ClipboardWatcher {
+    poller: RefCell<ClipboardPoller<GtkClipboardBackend>>,
+    /// A change arrived while a read was running (reads spin a nested main loop).
+    pending: Cell<bool>,
+    tray: Rc<RefCell<Tray>>,
+}
+
+impl ClipboardWatcher {
+    fn on_change(&self) {
+        let Ok(mut poller) = self.poller.try_borrow_mut() else {
+            self.pending.set(true);
+            return;
+        };
+        loop {
+            self.pending.set(false);
+            let entry = poller.poll_once();
+            self.record(entry);
+            if !self.pending.get() {
+                return;
+            }
+        }
+    }
+
+    fn record(&self, entry: Option<ClipboardEntry>) {
+        let mut tray = self.tray.borrow_mut();
+        let paused = tray.read_paused();
+        let mut changed = paused != tray.paused;
+        tray.paused = paused;
+
+        if let Some(entry) = entry.filter(|_| !paused) {
+            let body = match entry {
+                ClipboardEntry::Text { .. } => "text copied to clipboard",
+                ClipboardEntry::Image { .. } => "image copied to clipboard",
+            };
+            let recorded = tray.state.record_entry(entry).unwrap_or_else(|err| {
+                eprintln!("failed to record clipboard history: {err}");
+                false
+            });
+            if recorded {
+                println!("clipboard event: {body}");
+                ty_common::notify::notify(APP_ID, APP_ID, body, NOTIFICATION_TIMEOUT);
+                changed = true;
+            }
+        }
+
+        if changed {
+            tray.refresh();
+        }
+    }
 }
 
 impl Tray {
@@ -199,7 +255,7 @@ fn handle_action(tray: &RefCell<Tray>, action: TrayAction) {
                     tray.state.history_snapshot().get(index).cloned(),
                 )
             };
-            // The next poll picks the new value up and moves it to the top of the history.
+            // The owner change picks the new value up and moves it to the top of the history.
             if let Some(entry) = entry {
                 set_clipboard_value(&clipboard, &entry);
             }

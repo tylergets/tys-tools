@@ -19,6 +19,7 @@ use clap::{Parser, Subcommand};
 use config::Config;
 use gesture::{Gesture, Output, Raw, Recognizer};
 use touchpad::Item;
+use ty_common::wake::Waker;
 
 const APP: &str = "tygesture";
 
@@ -88,8 +89,9 @@ fn run(cfg: &Config) -> Result<()> {
         eprintln!("{APP}: no gestures bound; see `{APP} check`");
     }
     let status: state::Shared = Arc::new(Mutex::new(state::Status::new(cfg)));
-    let _tray = cfg.tray.then(|| tray::start(status.clone())).flatten();
-    serve(lock.listener().try_clone()?, status.clone());
+    let (waker, wakeups) = ty_common::wake::pair();
+    let _tray = cfg.tray.then(|| tray::start(status.clone(), wakeups)).flatten();
+    serve(lock.listener().try_clone()?, status.clone(), waker.clone());
 
     let mut recognizer = Recognizer::default();
     touchpad::run(|item| match item {
@@ -99,6 +101,7 @@ fn run(cfg: &Config) -> Result<()> {
                 if added { "added" } else { "removed" }
             );
             status.lock().unwrap().touchpad = added.then_some(name);
+            waker.wake();
         }
         Item::Gesture(raw) => {
             status.lock().unwrap().track(raw);
@@ -115,6 +118,7 @@ fn run(cfg: &Config) -> Result<()> {
                 }
                 status.fired(gesture.to_string(), binding.command.clone());
                 drop(status);
+                waker.wake();
                 eprintln!("{gesture}: {}", binding.command);
                 spawn(&binding.command, gesture);
             }
@@ -149,7 +153,7 @@ fn listen_debug(cfg: &Config, updates: bool) -> Result<()> {
 }
 
 /// Answer `tygesture show` on the instance socket.
-fn serve(listener: UnixListener, status: state::Shared) {
+fn serve(listener: UnixListener, status: state::Shared, waker: Waker) {
     std::thread::spawn(move || {
         for stream in listener.incoming().flatten() {
             let mut line = String::new();
@@ -160,6 +164,7 @@ fn serve(listener: UnixListener, status: state::Shared) {
             let reply = match line.trim() {
                 "show" => {
                     status.lock().unwrap().show_window = true;
+                    waker.wake();
                     "ok"
                 }
                 _ => "unknown command",

@@ -6,20 +6,17 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::mpsc;
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use gtk::glib::ControlFlow;
 use ty_common::icons::Tool;
-use ty_common::tray::{drain_actions, Applet, IconState, MenuEntry, TraySpec};
+use ty_common::tray::{self, drain_actions, Applet, IconState, MenuEntry, TraySpec};
 
 use crate::config::AppConfig;
 
 const ID: &str = "tyshot";
 /// Gives the tray menu time to disappear from the screen before the snapshot is taken.
 const MENU_CLOSE_DELAY: &str = "0.25";
-const ACTION_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 /// Tray menu and click actions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,12 +55,12 @@ pub fn run(config: AppConfig, config_path: Option<PathBuf>) -> Result<()> {
     let exe = env::current_exe().context("failed to find the tyshot executable")?;
     let launcher = Launcher { exe, config_path };
 
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = tray::channel();
     // Kept alive until gtk::main returns.
     let _applet = Applet::new(ID, &Tool::Shot.tray_icons(), spec(), tx)?;
 
     let save = config.save;
-    drain_actions(rx, ACTION_POLL_INTERVAL, move |action| {
+    drain_actions(rx, move |action| {
         match action {
             TrayAction::CaptureRegion => launcher.spawn(&["gui", "--delay", MENU_CLOSE_DELAY]),
             TrayAction::CaptureScreen => launcher.spawn(&["full", "--delay", MENU_CLOSE_DELAY]),

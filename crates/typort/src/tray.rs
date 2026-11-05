@@ -3,7 +3,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::Duration;
 
@@ -16,10 +16,9 @@ use ty_common::tray::{self, Applet, IconState, MenuEntry, TraySpec};
 
 use crate::actions;
 use crate::config::{AppConfig, APP_NAME};
-use crate::ports::Port;
+use crate::ports::{Port, Scanner};
 use crate::title;
 
-const POLL: Duration = Duration::from_millis(50);
 const NOTIFY_TIMEOUT: Duration = Duration::from_secs(3);
 /// Longest command line shown in a menu.
 const MAX_COMMAND_CHARS: usize = 70;
@@ -37,11 +36,11 @@ pub fn run(config: AppConfig) -> Result<()> {
     let _lock = InstanceLock::acquire(APP_NAME)?;
     gtk::init().context("failed to initialize GTK")?;
 
-    let (ports_tx, ports_rx) = mpsc::channel();
+    let (ports_tx, ports_rx) = tray::channel();
     let (rescan_tx, rescan_rx) = mpsc::channel();
     spawn_scanner(config.clone(), ports_tx, rescan_rx);
 
-    let (actions_tx, actions_rx) = mpsc::channel();
+    let (actions_tx, actions_rx) = tray::channel();
     let mut applet = Applet::new(
         APP_NAME,
         &Tool::Port.tray_icons(),
@@ -52,24 +51,14 @@ pub fn run(config: AppConfig) -> Result<()> {
     // The ports in the menu, for the action handler.
     let shown: Rc<RefCell<Vec<Port>>> = Rc::default();
     let refresh_config = config.clone();
-    let shown_by_timer = shown.clone();
-    glib::timeout_add_local(POLL, move || {
-        let mut latest = None;
-        loop {
-            match ports_rx.try_recv() {
-                Ok(scan) => latest = Some(scan),
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => return ControlFlow::Break,
-            }
-        }
-        if let Some(scan) = latest {
-            applet.update(spec(&refresh_config, &scan));
-            shown_by_timer.replace(scan);
-        }
+    let shown_by_scan = shown.clone();
+    tray::drain_actions(ports_rx, move |scan: Vec<Port>| {
+        applet.update(spec(&refresh_config, &scan));
+        shown_by_scan.replace(scan);
         ControlFlow::Continue
     });
 
-    tray::drain_actions(actions_rx, POLL, move |action| {
+    tray::drain_actions(actions_rx, move |action| {
         handle(&config, &shown.borrow(), action);
         // Rescan now, and again once the process had time to exit.
         let _ = rescan_tx.send(());
@@ -85,19 +74,20 @@ pub fn run(config: AppConfig) -> Result<()> {
 }
 
 /// Scan every `refresh_seconds` (or when asked) and send the ports when they change.
-fn spawn_scanner(config: AppConfig, ports: Sender<Vec<Port>>, rescan: Receiver<()>) {
+fn spawn_scanner(config: AppConfig, ports: tray::Sender<Vec<Port>>, rescan: Receiver<()>) {
     let interval = Duration::from_secs_f64(config.refresh_seconds);
     thread::spawn(move || {
         let mut last = None;
         let mut titles = title::Cache::default();
+        let mut scanner = Scanner::default();
         loop {
-            let scan = actions::list(&config, false).map(|mut ports| {
+            let scan = actions::list_with(&mut scanner, &config, false).map(|mut ports| {
                 titles.fill(&mut ports, &config.https_ports);
                 ports
             });
             match scan {
                 Ok(scan) if last.as_ref() != Some(&scan) => {
-                    if ports.send(scan.clone()).is_err() {
+                    if ports.send_blocking(scan.clone()).is_err() {
                         return;
                     }
                     last = Some(scan);
