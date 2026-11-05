@@ -1,5 +1,5 @@
 <script setup>
-import { tools, repo, license } from "./tools.js";
+import { repo, license } from "./tools.js";
 </script>
 
 <template>
@@ -16,9 +16,6 @@ import { tools, repo, license } from "./tools.js";
         GitHub
       </a>
     </div>
-    <nav>
-      <RouterLink v-for="t in tools" :key="t.name" :to="`/${t.name}`">{{ t.name }}</RouterLink>
-    </nav>
   </header>
 
   <main>

@@ -8,7 +8,7 @@ site/
   cargo-deps.js         # Vite plugin: reads Cargo.toml/Cargo.lock for the /deps page
   src/
     main.js
-    App.vue             # header, nav, footer
+    App.vue             # header, footer
     router.js           # routes
     tools.js            # all tool content: cards, nav and tool pages
     pages/Home.vue
@@ -28,7 +28,7 @@ npm run preview   # serve dist/
 
 ## Adding a tool
 
-Add an entry to `src/tools.js`. The card, nav link and `/<tool>` page appear automatically.
+Add an entry to `src/tools.js`. The card and `/<tool>` page appear automatically.
 
 ## Dependencies page
 

@@ -1,4 +1,4 @@
-// Every tool on the site. The home page, nav and tool pages are all built from this list.
+// Every tool on the site. The home page and tool pages are all built from this list.
 // Keep text short; full details live in each crate's README.
 
 export const repo = "https://github.com/tylergets/tys-tools";
