@@ -7,8 +7,8 @@ import ToolIcon from "../ToolIcon.vue";
   <h1>ty's tools</h1>
   <p class="lede">
     Small desktop tools for Linux. Each one does one job, most sit in the system tray, and
-    all of them can be scripted from the command line. Built for X11 and used daily on i3.
-    Written in Rust, packaged with Nix, MIT licensed.
+    all of them can be scripted from the command line. Built for X11 and used daily on i3;
+    they run on Wayland too. Written in Rust, packaged with Nix, MIT licensed.
   </p>
   <p class="muted">v{{ version }}</p>
 
@@ -24,6 +24,15 @@ import ToolIcon from "../ToolIcon.vue";
     </li>
     <li><strong>Scriptable.</strong> Every tool has a CLI and plays well with your bar and keybindings.</li>
     <li><strong>Small and fast.</strong> Native Rust. No Electron.</li>
+    <li>
+      <strong>Basically zero idle cost.</strong> When you're not using them, they sleep. No
+      polling loops, no background busywork, no battery drain.
+    </li>
+    <li>
+      <strong>Out of your way.</strong> No setup wizards, no pop-ups, no nagging. A
+      notification only when something you started finishes or needs you.
+    </li>
+    <li><strong>Never any ads.</strong> No upsells, no "pro" version, no sponsored anything.</li>
     <li><strong>Reproducible.</strong> One Nix flake, with Home Manager modules for each tool.</li>
     <li><strong>Open source.</strong> MIT licensed.</li>
   </ul>
@@ -39,6 +48,14 @@ import ToolIcon from "../ToolIcon.vue";
       <p>{{ t.summary }}</p>
     </li>
   </ul>
+
+  <h2>Wayland</h2>
+  <p>
+    Every tool runs on Wayland compositors with the wlroots protocols (layer-shell, screencopy,
+    data-control, virtual-keyboard): sway, Hyprland, river and similar. KDE covers most of it;
+    GNOME doesn't offer these protocols. Each tool's page says what changes on Wayland, and
+    the Nix packages bring the helpers it needs (wl-clipboard, wtype, grim, wf-recorder).
+  </p>
 
   <h2>Install</h2>
   <p>Everything lives in one Nix flake.</p>

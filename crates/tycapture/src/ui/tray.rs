@@ -2,16 +2,15 @@ use std::cell::{Cell, RefCell};
 use std::os::unix::net::UnixListener;
 use std::path::{Path, PathBuf};
 use std::process::{self, Command};
-use std::rc::Rc;
-use std::sync::mpsc::{self, Receiver};
-use std::sync::{Arc, Mutex};
+use std::rc::{Rc, Weak};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use gtk::glib::{self, ControlFlow, SourceId};
 use ty_common::icons::Tool;
 use ty_common::screen;
-use ty_common::tray::{self, Applet, IconState, MenuEntry, TraySpec};
+use ty_common::tray::{self, Applet, IconState, MenuEntry, Receiver, TraySpec};
 use ty_common::wm::{self, WindowId, WindowPlacement};
 
 use crate::capture::encoder::{self, VideoEncoder};
@@ -19,7 +18,7 @@ use crate::capture::options::{sanitize_base_name, Format};
 use crate::capture::transcode::{IntroSettings, JobState, TranscodeJob, TranscodeSettings};
 use crate::capture::{Recording, RecordingOptions, Region, Target, VideoSource};
 use crate::config::AppConfig;
-use crate::core::control::{self, Action, ActionRequest};
+use crate::core::control::{self, Action, ActionRequest, SharedStatus};
 use crate::core::saved_options;
 use crate::core::status::{format_elapsed, JobStatus, State, Status};
 use crate::platform::desktop;
@@ -33,9 +32,8 @@ use crate::zoom::zoomed_path;
 const APP_ID: &str = "tycapture";
 /// Time given to i3/sway to apply floating/resize before reading the window geometry.
 const WINDOW_SETTLE_DELAY: Duration = Duration::from_millis(400);
-/// Menu, status and job refresh rate.
+/// Menu, status and job refresh rate while recording or processing.
 const TICK_INTERVAL: Duration = Duration::from_millis(250);
-const ACTION_POLL_INTERVAL: Duration = Duration::from_millis(50);
 /// How long the "Recording saved" notification (with its actions) stays up.
 const SAVED_NOTIFICATION_TIMEOUT: Duration = Duration::from_secs(10);
 const NOTIFICATION_TIMEOUT: Duration = Duration::from_millis(3000);
@@ -48,7 +46,7 @@ pub fn run(config: AppConfig, control_listener: UnixListener) -> Result<()> {
     ty_common::session::require("tycapture")?;
     gtk::init()?;
 
-    let (tray_tx, tray_rx) = mpsc::channel();
+    let (tray_tx, tray_rx) = tray::channel();
     let applet = Applet::new(
         APP_ID,
         &Tool::Capture.tray_icons(),
@@ -66,19 +64,11 @@ pub fn run(config: AppConfig, control_listener: UnixListener) -> Result<()> {
     }
     let app = App::new(config, applet);
 
-    let (actions_tx, actions_rx) = mpsc::channel();
+    let (actions_tx, actions_rx) = tray::channel();
     control::serve(control_listener, app.shared_status.clone(), actions_tx);
     app.listen_for_actions(actions_rx, tray_rx);
 
     app.tick();
-    let weak = Rc::downgrade(&app);
-    glib::timeout_add_local(TICK_INTERVAL, move || match weak.upgrade() {
-        Some(app) => {
-            app.tick();
-            ControlFlow::Continue
-        }
-        None => ControlFlow::Break,
-    });
 
     gtk::main();
     Ok(())
@@ -125,6 +115,8 @@ struct PendingStart {
 }
 
 struct App {
+    /// Handle for timers that outlive a borrow of the app.
+    this: Weak<App>,
     config: AppConfig,
     applet: RefCell<Applet<TrayAction>>,
     phase: Cell<Phase>,
@@ -135,12 +127,15 @@ struct App {
     marker: RefCell<Option<Marker>>,
     /// Options from the last setup dialog (saved across restarts), offered next time.
     last_options: RefCell<RecordingOptions>,
-    shared_status: Arc<Mutex<Status>>,
+    shared_status: Arc<SharedStatus>,
+    /// Whether the refresh timer runs (only while [`App::busy`]).
+    ticking: Cell<bool>,
 }
 
 impl App {
     fn new(config: AppConfig, applet: Applet<TrayAction>) -> Rc<Self> {
-        Rc::new(Self {
+        Rc::new_cyclic(|this| Self {
+            this: this.clone(),
             last_options: RefCell::new(saved_options::load(config.default_options())),
             config,
             applet: RefCell::new(applet),
@@ -149,7 +144,8 @@ impl App {
             countdown: RefCell::new(None),
             jobs: RefCell::new(Vec::new()),
             marker: RefCell::new(None),
-            shared_status: Arc::new(Mutex::new(Status::default())),
+            shared_status: Arc::default(),
+            ticking: Cell::new(false),
         })
     }
 
@@ -161,57 +157,59 @@ impl App {
         tray_actions: Receiver<TrayAction>,
     ) {
         let weak = Rc::downgrade(self);
-        glib::timeout_add_local(ACTION_POLL_INTERVAL, move || {
+        tray::drain_actions(tray_actions, move |action| {
             let Some(app) = weak.upgrade() else {
                 return ControlFlow::Break;
             };
-            while let Ok(action) = tray_actions.try_recv() {
-                // Defer: menu callbacks may open dialogs with their own main loop.
-                let app = app.clone();
-                glib::idle_add_local_once(move || match action {
-                    TrayAction::Start(target) => {
-                        if app.phase.get() == Phase::Idle {
-                            let result = app.start(target, false);
-                            app.report(result);
-                        }
+            // Defer: menu callbacks may open dialogs with their own main loop.
+            glib::idle_add_local_once(move || match action {
+                TrayAction::Start(target) => {
+                    if app.phase.get() == Phase::Idle {
+                        let result = app.start(target, false);
+                        app.report(result);
                     }
-                    TrayAction::Stop => app.stop(),
-                    TrayAction::OpenFolder => app.open_folder(),
-                    TrayAction::Quit => app.quit(),
-                });
-            }
-            while let Ok((action, reply)) = actions.try_recv() {
-                let (target, skip_dialog) = match action {
-                    Action::Stop => {
-                        app.stop();
-                        let _ = reply.send(Ok(()));
-                        continue;
-                    }
-                    Action::Toggle { .. } if app.phase.get() != Phase::Idle => {
-                        app.stop();
-                        let _ = reply.send(Ok(()));
-                        continue;
-                    }
-                    Action::Start {
-                        target,
-                        skip_dialog,
-                    }
-                    | Action::Toggle {
-                        target,
-                        skip_dialog,
-                    } => (target, skip_dialog),
-                };
-                if app.phase.get() != Phase::Idle {
-                    let _ = reply.send(Err(anyhow::anyhow!("already recording or preparing")));
-                    continue;
                 }
-                let _ = reply.send(Ok(()));
-                let app = app.clone();
-                glib::idle_add_local_once(move || {
-                    let result = app.start(target, skip_dialog);
-                    app.report(result);
-                });
+                TrayAction::Stop => app.stop(),
+                TrayAction::OpenFolder => app.open_folder(),
+                TrayAction::Quit => app.quit(),
+            });
+            ControlFlow::Continue
+        });
+
+        let weak = Rc::downgrade(self);
+        tray::drain_actions(actions, move |(action, reply)| {
+            let Some(app) = weak.upgrade() else {
+                return ControlFlow::Break;
+            };
+            let (target, skip_dialog) = match action {
+                Action::Stop => {
+                    app.stop();
+                    let _ = reply.send(Ok(()));
+                    return ControlFlow::Continue;
+                }
+                Action::Toggle { .. } if app.phase.get() != Phase::Idle => {
+                    app.stop();
+                    let _ = reply.send(Ok(()));
+                    return ControlFlow::Continue;
+                }
+                Action::Start {
+                    target,
+                    skip_dialog,
+                }
+                | Action::Toggle {
+                    target,
+                    skip_dialog,
+                } => (target, skip_dialog),
+            };
+            if app.phase.get() != Phase::Idle {
+                let _ = reply.send(Err(anyhow::anyhow!("already recording or preparing")));
+                return ControlFlow::Continue;
             }
+            let _ = reply.send(Ok(()));
+            glib::idle_add_local_once(move || {
+                let result = app.start(target, skip_dialog);
+                app.report(result);
+            });
             ControlFlow::Continue
         });
     }
@@ -616,12 +614,40 @@ impl App {
 
     // ---- Periodic refresh -----------------------------------------------------------------
 
+    /// Refresh now, and keep refreshing while something is in progress.
     fn tick(&self) {
+        self.refresh();
+        if self.ticking.get() || !self.busy() {
+            return;
+        }
+        self.ticking.set(true);
+        let weak = self.this.clone();
+        glib::timeout_add_local(TICK_INTERVAL, move || {
+            let Some(app) = weak.upgrade() else {
+                return ControlFlow::Break;
+            };
+            app.refresh();
+            if app.busy() {
+                return ControlFlow::Continue;
+            }
+            app.ticking.set(false);
+            ControlFlow::Break
+        });
+    }
+
+    /// Something changes on its own (elapsed time, levels, job progress) and needs refreshing.
+    fn busy(&self) -> bool {
+        self.phase.get() != Phase::Idle
+            || self.recording.borrow().is_some()
+            || !self.jobs.borrow().is_empty()
+    }
+
+    fn refresh(&self) {
         self.check_recording_alive();
         self.collect_finished_jobs();
         let status = self.snapshot();
         self.refresh_menu(&status);
-        *self.shared_status.lock().unwrap() = status;
+        self.shared_status.set(status);
     }
 
     /// Notice when ffmpeg exits on its own (bad args, X error, disk full, ...).

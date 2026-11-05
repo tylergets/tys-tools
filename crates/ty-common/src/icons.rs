@@ -18,15 +18,23 @@ pub enum Tool {
     Capture,
     Shot,
     Speak,
+    Light,
+    Gesture,
+    Port,
+    Ci,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 5] = [
+    pub const ALL: [Tool; 9] = [
         Tool::Board,
         Tool::Key,
         Tool::Capture,
         Tool::Shot,
         Tool::Speak,
+        Tool::Light,
+        Tool::Gesture,
+        Tool::Port,
+        Tool::Ci,
     ];
 
     pub fn name(self) -> &'static str {
@@ -36,6 +44,10 @@ impl Tool {
             Tool::Capture => "tycapture",
             Tool::Shot => "tyshot",
             Tool::Speak => "tyspeak",
+            Tool::Light => "tylight",
+            Tool::Gesture => "tygesture",
+            Tool::Port => "typort",
+            Tool::Ci => "tyci",
         }
     }
 
@@ -47,6 +59,10 @@ impl Tool {
             Tool::Capture => include_str!("../icons/tycapture.svg"),
             Tool::Shot => include_str!("../icons/tyshot.svg"),
             Tool::Speak => include_str!("../icons/tyspeak.svg"),
+            Tool::Light => include_str!("../icons/tylight.svg"),
+            Tool::Gesture => include_str!("../icons/tygesture.svg"),
+            Tool::Port => include_str!("../icons/typort.svg"),
+            Tool::Ci => include_str!("../icons/tyci.svg"),
         }
     }
 
@@ -58,6 +74,10 @@ impl Tool {
             Tool::Capture => "media-record",
             Tool::Shot => "camera-photo",
             Tool::Speak => "audio-input-microphone",
+            Tool::Light => "weather-clear-night",
+            Tool::Gesture => "input-touchpad",
+            Tool::Port => "network-server",
+            Tool::Ci => "emblem-synchronizing",
         }
     }
 

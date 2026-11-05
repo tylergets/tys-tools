@@ -39,7 +39,9 @@
         libxkbcommon
         libx11
         libxi
+        libinput
         libxtst
+        udev
         xdotool
       ]);
     TRANSCRIBE_CMAKE_ARGS = transcribeCmakeArgs;
@@ -126,5 +128,28 @@ in {
     name = "tyspeak";
     description = "Speech-to-text dictation tray daemon";
     runtimeDeps = waylandDeps ++ (with pkgs; [pulseaudio xdotool wtype]);
+  };
+
+  tylight = mkTool {
+    name = "tylight";
+    description = "Screen color temperature and monitor brightness daemon (X11 and wlroots)";
+    runtimeDeps = [pkgs.ddcutil];
+  };
+
+  tygesture = mkTool {
+    name = "tygesture";
+    description = "Touchpad gesture daemon (libinput)";
+    runtimeDeps = with pkgs; [xdotool wtype];
+  };
+
+  typort = mkTool {
+    name = "typort";
+    description = "Tray applet for your listening ports: open them in the browser or stop them";
+  };
+
+  tyci = mkTool {
+    name = "tyci";
+    description = "Open GitHub PRs and running CI in your tray (via the gh CLI)";
+    runtimeDeps = [pkgs.gh];
   };
 }

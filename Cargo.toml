@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.7.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/tylergets/tys-tools"
@@ -12,6 +12,7 @@ repository = "https://github.com/tylergets/tys-tools"
 ty-common = { path = "crates/ty-common" }
 anyhow = "1"
 base64 = "0.22"
+async-channel = "2"
 chrono = "0.4"
 clap = { version = "4", features = ["derive"] }
 dbus = "0.9"
@@ -22,15 +23,19 @@ evdev = "0.13"
 gtk = "0.18.2"
 gtk-layer-shell = { version = "0.8", features = ["v0_6"] }
 hound = "3.5"
+input = "0.10"
 libappindicator = "0.9.0"
 libc = "0.2"
 rdev = "0.5"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
+signal-hook = "0.3"
 sha2 = "0.10"
 transcribe-cpp = { version = "=0.4.1", default-features = false }
 ureq = { version = "3", default-features = false }
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 x11rb = "0.13"
 xkbcommon = { version = "0.7", default-features = false }
 

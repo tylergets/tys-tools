@@ -6,11 +6,11 @@ use anyhow::{Context, Result};
 const PAUSE_FILE_SUFFIX: &str = "paused";
 
 pub fn is_capture_paused() -> Result<bool> {
-    Ok(default_pause_path().exists())
+    Ok(pause_path().exists())
 }
 
 pub fn set_capture_paused(paused: bool) -> Result<()> {
-    set_capture_paused_at_path(&default_pause_path(), paused)
+    set_capture_paused_at_path(&pause_path(), paused)
 }
 
 fn set_capture_paused_at_path(path: &Path, paused: bool) -> Result<()> {
@@ -35,7 +35,8 @@ fn set_capture_paused_at_path(path: &Path, paused: bool) -> Result<()> {
     Ok(())
 }
 
-fn default_pause_path() -> PathBuf {
+/// The marker file that exists while capture is paused.
+pub fn pause_path() -> PathBuf {
     ty_common::runtime_dir().join(format!(
         "tyboard-{}-{PAUSE_FILE_SUFFIX}",
         ty_common::user_hint()

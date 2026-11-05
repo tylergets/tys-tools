@@ -43,6 +43,7 @@ fn main() -> Result<()> {
             dbus::call("SetModel", Some((id,).to_variant()))?;
             Ok(())
         }
+        Commands::Retry => call("Retry"),
         Commands::Transcribe { file, model } => transcribe(cli.config, &file, model),
         Commands::ValidateConfig => validate_config(cli.config),
     }

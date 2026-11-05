@@ -24,6 +24,11 @@ const tool = computed(() => findTool(props.name));
     </ul>
     <p class="muted">The Nix package puts runtime tools on <code>PATH</code> for you.</p>
 
+    <template v-if="tool.wayland">
+      <h2>On Wayland</h2>
+      <p>{{ tool.wayland }}</p>
+    </template>
+
     <h2>Usage</h2>
     <pre><code>{{ tool.usage }}</code></pre>
 

@@ -224,7 +224,8 @@ pub struct ClipboardWatcher {
 }
 
 impl ClipboardWatcher {
-    pub fn start() -> Result<Self> {
+    /// `waker` fires (from the watcher thread) each time the clipboard changes.
+    pub fn start(waker: crate::wake::Waker) -> Result<Self> {
         let mut command = Command::new("wl-paste");
         // SAFETY: prctl is async-signal-safe. Ends the watcher if we die without dropping it.
         unsafe {
@@ -243,11 +244,13 @@ impl ClipboardWatcher {
         let stdout = child.stdout.take().context("no stdout for wl-paste")?;
         // Start "changed" so the first poll reads whatever is already there.
         let changed = Arc::new(AtomicBool::new(true));
+        waker.wake();
         {
             let changed = changed.clone();
             thread::spawn(move || {
                 for _ in BufReader::new(stdout).lines().map_while(Result::ok) {
                     changed.store(true, Ordering::Relaxed);
+                    waker.wake();
                 }
             });
         }

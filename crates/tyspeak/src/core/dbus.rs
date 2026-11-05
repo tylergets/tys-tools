@@ -41,6 +41,8 @@ pub const INTROSPECTION: &str = r#"<node>
     <method name="SetModel">
       <arg name="id" type="s" direction="in"/>
     </method>
+    <!-- Download (or load) the selected model again, e.g. after a failed download. -->
+    <method name="Retry"/>
     <!-- Emitted whenever the status changes (JSON, as returned by Status). -->
     <signal name="StatusChanged">
       <arg name="status" type="s"/>
@@ -61,6 +63,7 @@ pub enum Request {
     Status,
     ListModels,
     SetModel(String),
+    Retry,
 }
 
 impl Request {
@@ -73,6 +76,7 @@ impl Request {
             "Status" => Self::Status,
             "ListModels" => Self::ListModels,
             "SetModel" => Self::SetModel(parameters.get::<(String,)>()?.0),
+            "Retry" => Self::Retry,
             _ => return None,
         })
     }
@@ -315,6 +319,7 @@ mod tests {
             Some(Request::SetModel("parakeet-v2".into()))
         );
         assert_eq!(Request::parse("SetModel", &none), None);
+        assert_eq!(Request::parse("Retry", &none), Some(Request::Retry));
         assert_eq!(Request::parse("Explode", &none), None);
     }
 

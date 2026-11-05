@@ -12,6 +12,10 @@ Rust, packaged with Nix, MIT licensed.
 | [tycapture](crates/tycapture) | Screen recording of the screen, a region or one window, with zoom on clicks. |
 | [tyshot](crates/tyshot) | Screenshots you can mark up with arrows, text and blur. |
 | [tyspeak](crates/tyspeak) | Dictation that stays on your machine. |
+| [tylight](crates/tylight) | Warmer screen colors at night, plus monitor brightness. X11 and wlroots. |
+| [tygesture](crates/tygesture) | Touchpad gestures (swipe, pinch, rotate, hold) mapped to commands, read straight from libinput. X11 and Wayland. |
+| [typort](crates/typort) | Your running dev servers in the tray: open them in the browser or stop them. |
+| [tyci](crates/tyci) | Running CI and recently opened PRs from GitHub, in your tray. |
 
 Each tool's README has the full details.
 
@@ -36,6 +40,9 @@ most of it; GNOME does not offer these protocols.
 | tycapture | Records with `wf-recorder`, one monitor at a time. Window recording uses sway like i3; zoom needs Hyprland. |
 | tyshot | Screenshots with `grim`; the overlay covers every monitor. Window snapping on sway and Hyprland. |
 | tyspeak | Types with `wtype`, copies with `wl-copy`. |
+| tylight | Sets gamma with `wlr-gamma-control` (sway, Hyprland, river, niri, labwc). Brightness over DDC works anywhere. Not on GNOME or KDE. |
+| tygesture | Unchanged: it reads libinput directly. Bind gestures to `wtype` and `swaymsg`/`hyprctl` instead of `xdotool` and `i3-msg`. |
+| typort, tyci | Unchanged: tray icon and `xdg-open` only. |
 
 The Nix packages put the Wayland helpers on `PATH`.
 
@@ -94,13 +101,22 @@ tykey also has typed options (`expansions`, `snippets`, `matchBehavior`, `bounda
 
 ```nix
 nixpkgs.overlays = [inputs.tys-tools.overlays.default];
-# adds pkgs.tyboard, pkgs.tykey, pkgs.tycapture, pkgs.tyshot, pkgs.tyspeak
+# adds pkgs.tyboard, pkgs.tykey, pkgs.tycapture, pkgs.tyshot, pkgs.tyspeak, pkgs.tylight, pkgs.tygesture, pkgs.typort, pkgs.tyci
 ```
 
 ## Configuration
 
 Each tool reads its config from `./<tool>.yaml`, then `~/.config/<tool>/config.yaml`, or from
 the path given with `--config`.
+
+Every tool's config can also have an `env:` section: environment variables set for the tool
+and the programs it runs. A value is a string, or `{ file: <path> }` to read it from a file,
+which keeps secrets out of the config (and out of the Nix store):
+
+```yaml
+env:
+  GH_TOKEN: { file: /run/secrets/github }
+```
 
 ## Development
 

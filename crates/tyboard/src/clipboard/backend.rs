@@ -67,9 +67,13 @@ pub struct WlClipboardBackend {
 
 #[cfg(target_os = "linux")]
 impl WlClipboardBackend {
-    pub fn new(active_window_provider: Box<dyn ActiveWindowProvider>) -> anyhow::Result<Self> {
+    /// `waker` fires whenever the clipboard changes; call `read_entry` then.
+    pub fn new(
+        active_window_provider: Box<dyn ActiveWindowProvider>,
+        waker: ty_common::wake::Waker,
+    ) -> anyhow::Result<Self> {
         Ok(Self {
-            watcher: ty_common::clipboard::ClipboardWatcher::start()?,
+            watcher: ty_common::clipboard::ClipboardWatcher::start(waker)?,
             active_window_provider,
         })
     }

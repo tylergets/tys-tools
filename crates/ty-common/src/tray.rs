@@ -2,14 +2,18 @@
 //! described by a plain [`TraySpec`], bundled SVG icons, and running blocking work off the
 //! GTK thread.
 //!
-//! Menu clicks are delivered as values of the app's action type `A` on an mpsc channel; the
-//! app drains it from the GTK main loop (see [`drain_actions`]).
+//! Menu clicks are delivered as values of the app's action type `A` on a [`channel`]; the
+//! app handles them on the GTK thread (see [`drain_actions`]).
+//!
+//! Nothing here polls: the GTK thread sleeps until a click, a message or a [`Waker`] wakes it.
 
+use std::cell::RefCell;
 use std::env;
 use std::ffi::CString;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::rc::Rc;
+use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -18,8 +22,9 @@ use gtk::glib::{self, ControlFlow};
 use gtk::prelude::*;
 
 pub use crate::tray_sni::keep_registered;
+pub use crate::wake::{Waker, Wakeups};
+pub use async_channel::{Receiver, Sender};
 
-const BACKGROUND_POLL_INTERVAL: Duration = Duration::from_millis(50);
 /// `APP_INDICATOR_CATEGORY_APPLICATION_STATUS`.
 const CATEGORY_APPLICATION_STATUS: u32 = 0;
 /// `APP_INDICATOR_STATUS_ACTIVE`.
@@ -104,20 +109,110 @@ struct Slot {
     children: Vec<Slot>,
 }
 
+/// The tray icon and its menu. Updates are held while the menu is open, because tray hosts
+/// (e.g. eww) don't resize an open menu when its items change; they apply when it closes.
 pub struct Applet<A: Clone + Send + 'static> {
-    indicator: *mut libappindicator::_AppIndicator,
-    actions: Sender<A>,
-    spec: TraySpec<A>,
-    menu: gtk::Menu,
-    /// Widgets for `spec.menu`, index for index.
-    slots: Vec<Slot>,
-    icons: IconNames,
+    inner: Rc<RefCell<Inner<A>>>,
 }
+
+/// How long an open menu holds back updates, in case the host never says it closed.
+const MAX_OPEN: Duration = Duration::from_secs(60);
 
 impl<A: Clone + Send + PartialEq + 'static> Applet<A> {
     /// Create the indicator and keep it registered with the tray host. GTK must already be
     /// initialized, and this must run on the GTK thread.
     pub fn new(id: &str, icons: &Icons, spec: TraySpec<A>, actions: Sender<A>) -> Result<Self> {
+        let inner = Rc::new(RefCell::new(Inner::new(id, icons, spec, actions)?));
+        watch_open(&inner);
+        Ok(Self { inner })
+    }
+
+    /// The latest spec, shown or waiting for the menu to close.
+    pub fn spec(&self) -> TraySpec<A> {
+        let inner = self.inner.borrow();
+        inner.pending.clone().unwrap_or_else(|| inner.spec.clone())
+    }
+
+    pub fn update(&mut self, spec: TraySpec<A>) {
+        let mut inner = self.inner.borrow_mut();
+        if inner.open {
+            inner.pending = Some(spec);
+        } else {
+            inner.update(spec);
+        }
+    }
+}
+
+/// Follow the host's `opened` / `closed` events on the menu's root item.
+fn watch_open<A: Clone + Send + PartialEq + 'static>(inner: &Rc<RefCell<Inner<A>>>) {
+    let indicator: glib::Object = unsafe {
+        glib::translate::from_glib_none(inner.borrow().indicator as *mut glib::gobject_ffi::GObject)
+    };
+    let Some(root) = menu_root(&indicator) else {
+        return;
+    };
+    let weak = Rc::downgrade(inner);
+    root.connect_local("event", false, move |args| {
+        let name = args.get(1).and_then(|value| value.get::<String>().ok());
+        if let Some(inner) = weak.upgrade() {
+            match name.as_deref() {
+                Some("opened") => set_open(&inner, true),
+                Some("closed") => set_open(&inner, false),
+                _ => {}
+            }
+        }
+        // Not handled: let libdbusmenu carry on as usual.
+        Some(false.to_value())
+    });
+}
+
+/// libappindicator's dbusmenu server, and the root item the host's events arrive on.
+fn menu_root(indicator: &glib::Object) -> Option<glib::Object> {
+    indicator.find_property("dbus-menu-server")?;
+    let server = indicator.property::<Option<glib::Object>>("dbus-menu-server")?;
+    server.find_property("root-node")?;
+    server.property::<Option<glib::Object>>("root-node")
+}
+
+fn set_open<A: Clone + Send + PartialEq + 'static>(inner: &Rc<RefCell<Inner<A>>>, open: bool) {
+    let Ok(mut state) = inner.try_borrow_mut() else {
+        return;
+    };
+    state.open = open;
+    state.opened += 1;
+    if open {
+        let (weak, opened) = (Rc::downgrade(inner), state.opened);
+        glib::timeout_add_local_once(MAX_OPEN, move || {
+            if let Some(inner) = weak.upgrade() {
+                if inner.borrow().opened == opened {
+                    set_open(&inner, false);
+                }
+            }
+        });
+    } else if let Some(spec) = state.pending.take() {
+        state.update(spec);
+    }
+}
+
+struct Inner<A: Clone + Send + 'static> {
+    indicator: *mut libappindicator::_AppIndicator,
+    actions: Sender<A>,
+    /// The spec shown.
+    spec: TraySpec<A>,
+    menu: gtk::Menu,
+    /// Widgets for `spec.menu`, index for index.
+    slots: Vec<Slot>,
+    icons: IconNames,
+    /// The host has the menu open.
+    open: bool,
+    /// Counts opens and closes, so a stale [`MAX_OPEN`] timer does nothing.
+    opened: u64,
+    /// The latest update while open.
+    pending: Option<TraySpec<A>>,
+}
+
+impl<A: Clone + Send + PartialEq + 'static> Inner<A> {
+    fn new(id: &str, icons: &Icons, spec: TraySpec<A>, actions: Sender<A>) -> Result<Self> {
         if env::var_os("DBUS_SESSION_BUS_ADDRESS").is_none() {
             eprintln!("warning: DBus session is not set; appindicator may not be visible");
         }
@@ -166,6 +261,9 @@ impl<A: Clone + Send + PartialEq + 'static> Applet<A> {
             menu,
             slots: Vec::new(),
             icons: names,
+            open: false,
+            opened: 0,
+            pending: None,
         };
         applet.rebuild_menu();
         unsafe {
@@ -176,20 +274,14 @@ impl<A: Clone + Send + PartialEq + 'static> Applet<A> {
         Ok(applet)
     }
 
-    /// The spec currently shown.
-    pub fn spec(&self) -> &TraySpec<A> {
-        &self.spec
-    }
-
-    pub fn update(&mut self, spec: TraySpec<A>) {
+    fn update(&mut self, spec: TraySpec<A>) {
         if spec == self.spec {
             return;
         }
         let same_shape = same_shape(&spec.menu, &self.spec.menu);
         self.spec = spec;
 
-        // Update in place when only labels/sensitivity changed, so an open menu doesn't
-        // flicker or close.
+        // Update in place when only labels/sensitivity changed, so the menu doesn't flicker.
         if same_shape {
             update_in_place(&self.spec.menu, &self.slots);
         } else {
@@ -267,7 +359,7 @@ fn build_entries<A: Clone + Send + 'static>(
                     let actions = actions.clone();
                     let action = action.clone();
                     item.connect_activate(move |_| {
-                        let _ = actions.send(action.clone());
+                        let _ = actions.try_send(action.clone());
                     });
                     item
                 }
@@ -348,28 +440,35 @@ pub fn install_icons(icons: &[&BundledIcon]) -> Option<PathBuf> {
     Some(dir)
 }
 
-/// Deliver queued menu actions to `handle` from the GTK main loop. Stops when `handle`
-/// returns [`ControlFlow::Break`] or the sender is dropped.
+/// An unbounded channel whose receiver can be handed to [`drain_actions`]. The sender works
+/// from any thread (`send_blocking` never blocks, as the channel is unbounded).
+pub fn channel<A>() -> (Sender<A>, Receiver<A>) {
+    async_channel::unbounded()
+}
+
+/// Handle messages from `actions` on the GTK thread as they arrive. Stops when `handle`
+/// returns [`ControlFlow::Break`] or every sender is dropped. Must be called on the GTK thread.
 ///
 /// Note: GTK calls such as `gtk::Clipboard::wait_for_*` and `store()` run a nested main loop,
-/// so this (and other timers) can run inside them. Don't hold a `RefCell` borrow shared with
-/// those timers across such calls.
+/// so this (and timers) can run inside them. Don't hold a `RefCell` borrow shared with
+/// those handlers across such calls.
 pub fn drain_actions<A: 'static>(
     actions: Receiver<A>,
-    interval: Duration,
     mut handle: impl FnMut(A) -> ControlFlow + 'static,
 ) {
-    glib::timeout_add_local(interval, move || loop {
-        match actions.try_recv() {
-            Ok(action) => {
-                if handle(action) == ControlFlow::Break {
-                    return ControlFlow::Break;
-                }
+    glib::MainContext::default().spawn_local(async move {
+        while let Ok(action) = actions.recv().await {
+            if handle(action) == ControlFlow::Break {
+                break;
             }
-            Err(TryRecvError::Empty) => return ControlFlow::Continue,
-            Err(TryRecvError::Disconnected) => return ControlFlow::Break,
         }
     });
+}
+
+/// Run `handle` on the GTK thread after each [`Waker::wake`] (several wakes in a row may run
+/// it once). Stops like [`drain_actions`].
+pub fn on_wake(wakeups: Wakeups, mut handle: impl FnMut() -> ControlFlow + 'static) {
+    drain_actions(wakeups.0, move |()| handle());
 }
 
 /// A tray running on its own GTK thread (for apps whose main thread is busy, e.g. with a key
@@ -433,21 +532,14 @@ where
     W: FnOnce() -> T + Send + 'static,
     D: FnOnce(T) + 'static,
 {
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = async_channel::bounded(1);
     thread::spawn(move || {
-        let _ = tx.send(work());
+        let _ = tx.send_blocking(work());
     });
-
-    let mut done = Some(done);
-    glib::timeout_add_local(BACKGROUND_POLL_INTERVAL, move || match rx.try_recv() {
-        Ok(value) => {
-            if let Some(done) = done.take() {
-                done(value);
-            }
-            ControlFlow::Break
+    glib::MainContext::default().spawn_local(async move {
+        if let Ok(value) = rx.recv().await {
+            done(value);
         }
-        Err(TryRecvError::Empty) => ControlFlow::Continue,
-        Err(TryRecvError::Disconnected) => ControlFlow::Break,
     });
 }
 

@@ -16,9 +16,9 @@ Hugging Face revisions and checksums. Like Hex, it runs them with
 - **Model picker in the tray.** Choosing a model downloads it, with progress in the menu, then
   loads it. The previous model keeps working until the new one is ready. The choice is
   remembered (`${XDG_STATE_HOME:-~/.local/state}/tyspeak/state.json`).
-- Resumable, SHA-256-verified downloads.
-- Text is typed into the focused window (xdotool on X11, wtype on Wayland), put on the
-  clipboard, or both.
+- Resumable, SHA-256-verified downloads. If one fails, **Retry Download** in the tray (or
+  `tyspeak retry`) picks up where it stopped.
+- Text is typed into the focused window (xdotool on X11, wtype on Wayland), put on the clipboard, or both.
 - A small D-Bus API on the session bus for i3 bindings, scripts and bars.
 - `status --follow` for polybar, eww and other bars.
 
@@ -85,6 +85,7 @@ tyspeak start | stop | toggle | cancel
 tyspeak status [--format plain|json|polybar] [--follow]
 tyspeak models               # list models (* loaded, > selected)
 tyspeak model <id>           # select a model; downloads it if needed
+tyspeak retry                # retry a failed download (resumes) or model load
 tyspeak transcribe FILE.wav [--model <id>]   # offline, without the daemon
 tyspeak validate-config
 ```
@@ -118,6 +119,7 @@ and the interface is `io.github.tylergets.Tyspeak`.
 | `Status() → s`                 | Status as JSON (see below)                                    |
 | `ListModels() → s`             | JSON array of `{id, name, summary, size_bytes, downloaded, selected, active}` |
 | `SetModel(s id)`               | Select a model; it is downloaded if needed, then loaded       |
+| `Retry()`                      | Download (resuming) or load the selected model again          |
 | signal `StatusChanged(s json)` | Emitted on every status change                                |
 | signal `Transcribed(s text)`   | Emitted with each finished transcription                      |
 

@@ -1,5 +1,5 @@
 //! Reading keyboards and mice straight from `/dev/input`, for Wayland, where clients can't
-//! see each other's input. Devices plugged in later are picked up by a periodic rescan.
+//! see each other's input. Devices plugged in later are picked up through inotify.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -17,7 +17,9 @@ use super::{single_char, InputKey, KeyInput};
 use crate::wm::buttons;
 
 const INPUT_DIR: &str = "/dev/input";
-const RESCAN_INTERVAL: Duration = Duration::from_secs(2);
+/// Wait after a `/dev/input` change before rescanning, so udev can finish setting up the
+/// node (permissions arrive just after creation).
+const RESCAN_SETTLE: Duration = Duration::from_millis(500);
 /// Key codes from here on are mouse/joystick buttons, not keys.
 const FIRST_BUTTON: u16 = 0x100;
 
@@ -43,15 +45,77 @@ access to the input devices (e.g. add your user to the `input` group and log in 
         }
         bail!("no {what} found in {INPUT_DIR}");
     }
+    let watch = match DirWatch::new(INPUT_DIR) {
+        Ok(watch) => watch,
+        Err(err) => {
+            eprintln!("warning: devices plugged in later won't be seen: {err:#}");
+            return Ok(());
+        }
+    };
     thread::spawn(move || {
-        while !stop.load(Ordering::Relaxed) {
-            thread::sleep(RESCAN_INTERVAL);
+        // Sleeps until something in /dev/input is created or changes permissions.
+        while watch.wait() && !stop.load(Ordering::Relaxed) {
+            thread::sleep(RESCAN_SETTLE);
+            watch.drain();
             if scan(filter, &tx, &opened, &stop).is_err() {
                 return;
             }
         }
     });
     Ok(())
+}
+
+/// An inotify watch for new or re-permissioned entries in a directory.
+struct DirWatch(std::os::fd::OwnedFd);
+
+impl DirWatch {
+    fn new(dir: &str) -> Result<Self> {
+        use std::os::fd::FromRawFd;
+        // SAFETY: plain syscalls; the fd is owned by the returned value.
+        let fd = unsafe { libc::inotify_init1(libc::IN_CLOEXEC) };
+        if fd < 0 {
+            return Err(std::io::Error::last_os_error()).context("inotify_init1 failed");
+        }
+        let fd = unsafe { std::os::fd::OwnedFd::from_raw_fd(fd) };
+        let path = std::ffi::CString::new(dir)?;
+        let mask = libc::IN_CREATE | libc::IN_ATTRIB | libc::IN_MOVED_TO;
+        // SAFETY: valid fd and NUL-terminated path.
+        if unsafe { libc::inotify_add_watch(raw(&fd), path.as_ptr(), mask) } < 0 {
+            return Err(std::io::Error::last_os_error())
+                .with_context(|| format!("cannot watch {dir}"));
+        }
+        Ok(Self(fd))
+    }
+
+    /// Block until at least one event arrives. False if the watch broke.
+    fn wait(&self) -> bool {
+        let mut buf = [0u8; 4096];
+        loop {
+            // SAFETY: reading into a local buffer of the given size.
+            let n = unsafe { libc::read(raw(&self.0), buf.as_mut_ptr().cast(), buf.len()) };
+            if n > 0 {
+                return true;
+            }
+            if n < 0 && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return false;
+        }
+    }
+
+    /// Discard events that piled up while settling, without blocking.
+    fn drain(&self) {
+        let mut pending: libc::c_int = 0;
+        // SAFETY: FIONREAD writes the number of readable bytes into `pending`.
+        if unsafe { libc::ioctl(raw(&self.0), libc::FIONREAD, &mut pending) } == 0 && pending > 0 {
+            self.wait();
+        }
+    }
+}
+
+fn raw(fd: &std::os::fd::OwnedFd) -> std::os::fd::RawFd {
+    use std::os::fd::AsRawFd;
+    fd.as_raw_fd()
 }
 
 /// Open devices not already open. Returns whether any device was unreadable.
