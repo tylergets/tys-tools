@@ -3,6 +3,7 @@ mod config;
 mod core;
 mod io;
 mod platform;
+mod report;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -19,6 +20,7 @@ use crate::core::engine::Engine;
 use crate::platform::app_indicator;
 use crate::platform::keyboard::KeyboardBackend;
 use crate::platform::notify;
+use crate::report::DaemonStatus;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -26,12 +28,18 @@ fn main() -> Result<()> {
     match cli.command.unwrap_or(Commands::Run) {
         Commands::Run => run(cli.config, cli.debug),
         Commands::ValidateConfig => validate_config(cli.config),
+        Commands::Status(args) => {
+            args.run(Duration::from_secs(1), || {
+                ty_common::status::request::<DaemonStatus>(APP_NAME).unwrap_or_default()
+            });
+            Ok(())
+        }
     }
 }
 
 fn run(config_path_override: Option<std::path::PathBuf>, debug: bool) -> Result<()> {
     println!("tykey v{}", env!("CARGO_PKG_VERSION"));
-    let _instance_lock = InstanceLock::acquire(APP_NAME)?;
+    let instance_lock = InstanceLock::acquire(APP_NAME)?;
 
     let loaded = AppConfig::load(config_path_override)?;
     let config_path = loaded.path.clone();
@@ -54,6 +62,11 @@ fn run(config_path_override: Option<std::path::PathBuf>, debug: bool) -> Result<
     let mut engine = Engine::new(config);
     engine.set_debug(debug);
     engine.set_output(backend.clone());
+    let activity = engine.activity();
+    ty_common::lock::serve(instance_lock.listener(), move |line| match line {
+        "status" => ty_common::status::to_reply(&DaemonStatus::of(&activity.lock().unwrap())),
+        _ => "unknown command".into(),
+    })?;
     let engine = Arc::new(Mutex::new(engine));
 
     if watch {

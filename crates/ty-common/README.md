@@ -83,7 +83,23 @@ Needs `notify-send` on `PATH` at runtime.
 Add `StatusArgs` (clap `Args`) to a `status` subcommand and implement `Report` for the
 tool's status type (`format_plain`, `format_polybar`; JSON comes from `Serialize`).
 `report.print(format)` writes one line and flushes, so `--follow` output works in bar
-modules. The polybar format prints an empty line when idle.
+modules. The polybar format prints an empty line when idle. `--json` is short for
+`--format json`.
+
+For a daemon, answer `status` on the instance socket and let the CLI poll it:
+
+```rust
+// daemon
+ty_common::lock::serve(lock.listener(), move |line| match line {
+    "status" => ty_common::status::to_reply(&current_status()),
+    _ => "unknown command".into(),
+})?;
+
+// `tool status`
+args.run(Duration::from_secs(1), || {
+    ty_common::status::request::<Status>(APP).unwrap_or_default()
+});
+```
 
 ## tray
 

@@ -3,22 +3,24 @@
 mod config;
 mod gesture;
 mod gui;
+mod report;
 mod state;
 mod touchpad;
 mod tray;
 
-use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 
 use config::Config;
 use gesture::{Gesture, Output, Raw, Recognizer};
+use report::DaemonStatus;
 use touchpad::Item;
+use ty_common::status::StatusArgs;
 use ty_common::wake::Waker;
 
 const APP: &str = "tygesture";
@@ -51,10 +53,18 @@ enum Cmd {
     Check,
     /// Open the gesture window of the running daemon.
     Show,
+    /// Print the daemon's status (for bar modules).
+    Status(StatusArgs),
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    if let Some(Cmd::Status(args)) = &cli.command {
+        args.run(Duration::from_secs(1), || {
+            ty_common::status::request::<DaemonStatus>(APP).unwrap_or_default()
+        });
+        return Ok(());
+    }
     let loaded = ty_common::config::load::<Config>(APP, cli.config)?;
     let cfg = loaded.config;
     match cli.command.unwrap_or(Cmd::Run) {
@@ -75,6 +85,7 @@ fn main() -> Result<()> {
         }
         Cmd::Run => run(&cfg),
         Cmd::Show => show(),
+        Cmd::Status(_) => unreachable!("handled above"),
         Cmd::Debug { updates } => {
             println!("make some gestures (ctrl+c to quit)");
             listen_debug(&cfg, updates)
@@ -94,7 +105,7 @@ fn run(cfg: &Config) -> Result<()> {
         .tray
         .then(|| tray::start(status.clone(), wakeups))
         .flatten();
-    serve(lock.listener().try_clone()?, status.clone(), waker.clone());
+    serve(lock.listener(), status.clone(), waker.clone())?;
 
     let mut recognizer = Recognizer::default();
     touchpad::run(|item| match item {
@@ -156,35 +167,27 @@ fn listen_debug(cfg: &Config, updates: bool) -> Result<()> {
 }
 
 /// Answer `tygesture show` on the instance socket.
-fn serve(listener: UnixListener, status: state::Shared, waker: Waker) {
-    std::thread::spawn(move || {
-        for stream in listener.incoming().flatten() {
-            let mut line = String::new();
-            let mut reader = BufReader::new(&stream);
-            if reader.read_line(&mut line).is_err() {
-                continue;
-            }
-            let reply = match line.trim() {
-                "show" => {
-                    status.lock().unwrap().show_window = true;
-                    waker.wake();
-                    "ok"
-                }
-                _ => "unknown command",
-            };
-            let _ = writeln!(&stream, "{reply}");
+/// Answer `show` and `status` on the instance socket.
+fn serve(
+    listener: &std::os::unix::net::UnixListener,
+    status: state::Shared,
+    waker: Waker,
+) -> Result<()> {
+    ty_common::lock::serve(listener, move |line| match line {
+        "show" => {
+            status.lock().unwrap().show_window = true;
+            waker.wake();
+            "ok".into()
         }
-    });
+        "status" => ty_common::status::to_reply(&DaemonStatus::of(&status.lock().unwrap())),
+        _ => "unknown command".into(),
+    })
 }
 
 fn show() -> Result<()> {
-    let path = ty_common::lock::socket_path(APP);
-    let mut stream = UnixStream::connect(&path).with_context(|| format!("{APP} isn't running"))?;
-    writeln!(stream, "show")?;
-    let mut reply = String::new();
-    BufReader::new(stream).read_line(&mut reply)?;
-    if reply.trim() != "ok" {
-        bail!("{APP}: {}", reply.trim());
+    let reply = ty_common::lock::request(APP, "show")?;
+    if reply != "ok" {
+        bail!("{APP}: {reply}");
     }
     Ok(())
 }

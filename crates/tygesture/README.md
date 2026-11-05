@@ -22,7 +22,12 @@ tygesture debug            # print gestures as you make them (nothing is run)
 tygesture debug --updates  # ...including every motion update
 tygesture check            # validate the config and list bindings
 tygesture run              # the daemon (default)
+tygesture show             # open the running daemon's gesture window
+tygesture status [--follow] [--format plain|json|polybar]   # or --json
 ```
+
+`status` reports whether gestures are paused, the touchpad in use, how many gestures have
+fired and the last one. With `--follow` it prints a line on every change, for bar modules.
 
 Use `debug` to tune thresholds: each gesture prints its total motion when it ends.
 

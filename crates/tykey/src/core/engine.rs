@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 
@@ -8,8 +8,18 @@ use crate::io::events::{KeyEvent, KeyEventKind, SpecialInputKey};
 use crate::io::output::{OutputSink, SpecialKey};
 use crate::platform::notify;
 
+/// Counters for `tykey status`, behind their own lock so a status request never waits for
+/// an expansion to finish typing.
+#[derive(Debug, Default)]
+pub struct Activity {
+    pub expansions: usize,
+    pub expanded: usize,
+    pub last_trigger: Option<String>,
+}
+
 pub struct Engine {
     config: AppConfig,
+    activity: Arc<Mutex<Activity>>,
     output: Option<Arc<dyn OutputSink>>,
     typed_buffer: String,
     max_trigger_chars: usize,
@@ -28,6 +38,10 @@ impl Engine {
             .unwrap_or(0);
 
         Self {
+            activity: Arc::new(Mutex::new(Activity {
+                expansions: config.expansions.len(),
+                ..Activity::default()
+            })),
             config,
             output: None,
             typed_buffer: String::new(),
@@ -46,7 +60,12 @@ impl Engine {
         self.output = Some(output);
     }
 
+    pub fn activity(&self) -> Arc<Mutex<Activity>> {
+        self.activity.clone()
+    }
+
     pub fn reload_config(&mut self, config: AppConfig) {
+        self.activity.lock().unwrap().expansions = config.expansions.len();
         self.max_trigger_chars = config
             .expansions
             .iter()
@@ -275,6 +294,12 @@ impl Engine {
         if let Some(output) = &self.output {
             output.send_backspaces(backspaces)?;
             output.send_actions(actions)?;
+        }
+
+        {
+            let mut activity = self.activity.lock().unwrap();
+            activity.expanded += 1;
+            activity.last_trigger = notification_body.map(str::to_string);
         }
 
         if self.config.notifications.on_expansion {

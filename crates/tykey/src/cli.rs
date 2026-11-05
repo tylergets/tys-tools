@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use ty_common::status::StatusArgs;
 
 #[derive(Debug, Parser)]
 #[command(name = "tykey", version, about = "Minimal text expansion CLI")]
@@ -23,4 +24,6 @@ pub enum Commands {
     Run,
     /// Load and validate config, then exit.
     ValidateConfig,
+    /// Print the daemon's status (for bar modules).
+    Status(StatusArgs),
 }

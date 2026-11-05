@@ -66,6 +66,9 @@ Commands:
 
 - `run` (default when omitted)
 - `validate-config`
+- `status [--follow] [--format plain|json|polybar]` (or `--json`): the running daemon's
+  expansion count, how many have fired, and the last trigger. `--follow` prints a line on
+  every change, for bar modules.
 
 Options:
 
@@ -76,6 +79,7 @@ Examples:
 ```bash
 tykey run
 tykey validate-config
+tykey status --follow --json
 tykey --config /path/to/config.yaml run
 tykey -c /path/to/config.yaml validate-config
 ```
