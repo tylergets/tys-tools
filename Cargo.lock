@@ -1999,7 +1999,7 @@ dependencies = [
 
 [[package]]
 name = "ty-common"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2013,7 +2013,7 @@ dependencies = [
 
 [[package]]
 name = "tyboard"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2026,7 +2026,7 @@ dependencies = [
 
 [[package]]
 name = "tycapture"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2040,7 +2040,7 @@ dependencies = [
 
 [[package]]
 name = "tyci"
-version = "0.5.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2053,7 +2053,7 @@ dependencies = [
 
 [[package]]
 name = "tygesture"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2066,7 +2066,7 @@ dependencies = [
 
 [[package]]
 name = "tykey"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2081,7 +2081,7 @@ dependencies = [
 
 [[package]]
 name = "tylight"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2106,7 +2106,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "typort"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2119,7 +2119,7 @@ dependencies = [
 
 [[package]]
 name = "tyshot"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2136,7 +2136,7 @@ dependencies = [
 
 [[package]]
 name = "tyspeak"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
