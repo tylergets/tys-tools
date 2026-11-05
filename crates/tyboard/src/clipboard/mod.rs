@@ -1,5 +1,6 @@
 pub mod backend;
 pub mod poller;
+pub mod secrets;
 pub mod state;
 pub mod storage;
 

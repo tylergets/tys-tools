@@ -11,6 +11,7 @@ It watches clipboard changes, stores recent entries on disk, and lets you restor
 - `rofi` picker binary for quick keyboard-driven restore
 - Persistent history cache across restarts
 - Optional active-window metadata capture
+- Secret redaction: API keys, tokens and private keys are kept out of history
 - Single-instance lock to avoid duplicate daemons
 
 ## Requirements
@@ -72,6 +73,29 @@ window matches a blocked value.
   app ids exactly (case-insensitive).
 - If app id is unavailable, values are matched as case-insensitive substrings
   against the focused window title.
+
+### Secret Redaction
+
+Copied text that looks like a secret is never added to history (in memory or on
+disk). It stays on the clipboard, so pasting it still works.
+
+Built-in patterns cover PEM private keys, AWS access key ids, GitHub / GitLab /
+Slack / npm tokens, OpenAI / Anthropic (`sk-...`) and Stripe keys, Google API keys,
+JWTs, and credentials embedded in URLs (`postgres://user:pass@host`).
+
+```yaml
+clipboard:
+  secrets:
+    enabled: true            # default: true
+    builtin_patterns: true   # default: true
+    patterns:                # extra regexes (Rust `regex` syntax)
+      - '^hunter\d+$'
+      - 'MYCO-[A-Z0-9]{32}'
+```
+
+`tyboard validate-config` reports invalid patterns.
+
+### Active Window Command Backend
 
 Command example:
 
