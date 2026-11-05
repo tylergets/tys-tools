@@ -3,6 +3,8 @@
 import deps from "virtual:cargo-deps";
 
 const crate = (name) => `https://crates.io/crates/${name}`;
+// Most crates are dual-licensed ("MIT OR Apache-2.0"); show MIT and keep the full text on hover.
+const shortLicense = (license) => (license?.includes("MIT") ? "MIT" : license ?? "—");
 </script>
 
 <template>
@@ -12,7 +14,7 @@ const crate = (name) => `https://crates.io/crates/${name}`;
   </p>
   <p class="muted">
     v{{ deps.version }} · {{ deps.external.length }} direct dependencies ·
-    {{ deps.lockedPackages }} packages in the full lock file. Updated on every site deploy.
+    {{ deps.lockedPackages }} packages in the full lock file.
   </p>
 
   <div class="table">
@@ -25,7 +27,7 @@ const crate = (name) => `https://crates.io/crates/${name}`;
           <td><a :href="crate(d.name)">{{ d.name }}</a></td>
           <td>{{ d.versions.join(", ") || "—" }}</td>
           <td class="muted">{{ d.req ?? "—" }}</td>
-          <td>{{ d.license ?? "—" }}</td>
+          <td :title="d.license ?? undefined">{{ shortLicense(d.license) }}</td>
           <td>{{ d.usedBy.length === deps.crates.length ? "all" : d.usedBy.join(" ") }}</td>
         </tr>
       </tbody>

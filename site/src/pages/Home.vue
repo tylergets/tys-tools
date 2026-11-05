@@ -15,29 +15,17 @@ import ToolIcon from "../ToolIcon.vue";
 
   <h2>Why use them</h2>
   <ul class="plain">
+    <li><strong>Private.</strong> No telemetry, no accounts, no cloud. Works offline.</li>
+    <li><strong>Plain config.</strong> One YAML file per tool, ready for your dotfiles.</li>
+    <li><strong>Scriptable.</strong> A CLI for everything, made for bars and keybindings.</li>
+    <li><strong>Small and fast.</strong> Native Rust, no Electron.</li>
+    <li><strong>Zero idle cost.</strong> No polling. When you're not using them, they sleep.</li>
+    <li><strong>Quiet.</strong> No setup wizards, no pop-ups, no nagging.</li>
+    <li><strong>No ads.</strong> No upsells, no "pro" version.</li>
+    <li><strong>Reproducible.</strong> One Nix flake, Home Manager modules included.</li>
     <li>
-      <strong>No telemetry. Private by design.</strong> Nothing phones home. No analytics, no
-      accounts, no cloud. Your data stays on your machine.
-    </li>
-    <li><strong>Works offline.</strong> Everything runs locally.</li>
-    <li>
-      <strong>Plain config.</strong> One YAML file per tool, easy to keep in your dotfiles.
-    </li>
-    <li><strong>Scriptable.</strong> Every tool has a CLI and plays well with your bar and keybindings.</li>
-    <li><strong>Small and fast.</strong> Native Rust. No Electron.</li>
-    <li>
-      <strong>Basically zero idle cost.</strong> When you're not using them, they sleep. No
-      polling loops, no background busywork, no battery drain.
-    </li>
-    <li>
-      <strong>Out of your way.</strong> No setup wizards, no pop-ups, no nagging. A
-      notification only when something you started finishes or needs you.
-    </li>
-    <li><strong>Never any ads.</strong> No upsells, no "pro" version, no sponsored anything.</li>
-    <li><strong>Reproducible.</strong> One Nix flake, with Home Manager modules for each tool.</li>
-    <li>
-      <strong>Minimal, auditable dependencies.</strong> A short list of well-known crates.
-      <RouterLink to="/deps">See every one</RouterLink>, with its version and license.
+      <strong>Minimal, auditable dependencies.</strong>
+      <RouterLink to="/deps">See the list</RouterLink>.
     </li>
     <li><strong>Open source.</strong> <a :href="license">MIT licensed</a>.</li>
   </ul>
