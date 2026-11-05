@@ -13,9 +13,9 @@ clap.workspace = true
 dbus.workspace = true
 dirs.workspace = true
 gtk.workspace = true
+libc.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-signal-hook.workspace = true
 wayland-client.workspace = true
 wayland-protocols-wlr.workspace = true
 x11rb = { workspace = true, features = ["randr"] }

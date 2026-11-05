@@ -1,9 +1,9 @@
 //! Keyboard input and output: typing into the focused window, and listening to every key
 //! press system-wide.
 //!
-//! - Typing: XTest via `enigo` on X11; `wtype` (the virtual-keyboard protocol, supported by
+//! - Typing: XTest on X11; `wtype` (the virtual-keyboard protocol, supported by
 //!   wlroots compositors such as sway and Hyprland) on Wayland.
-//! - Listening: XRecord via `rdev` on X11. Wayland doesn't let one client see another's
+//! - Listening: XRecord on X11. Wayland doesn't let one client see another's
 //!   keys, so there we read the keyboards in `/dev/input` directly (this needs read access to
 //!   them, usually by being in the `input` group) and translate keys with xkbcommon, using
 //!   the `XKB_DEFAULT_*` environment variables for the layout.
@@ -13,10 +13,8 @@ mod x11;
 
 use std::process::Command;
 use std::sync::Mutex;
-use std::time::Duration;
 
-use anyhow::{anyhow, bail, Context, Result};
-use enigo::{Direction, Enigo, Key as EnigoKey, Keyboard as _, Settings};
+use anyhow::{bail, Context, Result};
 
 pub use evdev::PointerButtons;
 
@@ -44,38 +42,6 @@ pub enum Key {
 }
 
 impl Key {
-    fn enigo(self) -> Result<EnigoKey> {
-        Ok(match self {
-            Key::Enter => EnigoKey::Return,
-            Key::Tab => EnigoKey::Tab,
-            Key::Escape => EnigoKey::Escape,
-            Key::Backspace => EnigoKey::Backspace,
-            Key::Space => EnigoKey::Space,
-            Key::Left => EnigoKey::LeftArrow,
-            Key::Right => EnigoKey::RightArrow,
-            Key::Up => EnigoKey::UpArrow,
-            Key::Down => EnigoKey::DownArrow,
-            Key::Home => EnigoKey::Home,
-            Key::End => EnigoKey::End,
-            Key::Delete => EnigoKey::Delete,
-            Key::PageUp => EnigoKey::PageUp,
-            Key::PageDown => EnigoKey::PageDown,
-            Key::F(1) => EnigoKey::F1,
-            Key::F(2) => EnigoKey::F2,
-            Key::F(3) => EnigoKey::F3,
-            Key::F(4) => EnigoKey::F4,
-            Key::F(5) => EnigoKey::F5,
-            Key::F(6) => EnigoKey::F6,
-            Key::F(7) => EnigoKey::F7,
-            Key::F(8) => EnigoKey::F8,
-            Key::F(9) => EnigoKey::F9,
-            Key::F(10) => EnigoKey::F10,
-            Key::F(11) => EnigoKey::F11,
-            Key::F(12) => EnigoKey::F12,
-            Key::F(n) => bail!("no such key: F{n}"),
-        })
-    }
-
     /// The X keysym name, as `wtype -k` takes it.
     fn keysym_name(self) -> Result<String> {
         Ok(match self {
@@ -105,7 +71,7 @@ pub struct Keyboard {
 }
 
 enum Backend {
-    X11(Mutex<Enigo>),
+    X11(Mutex<x11::Typer>),
     Wayland { delay_ms: u32 },
 }
 
@@ -117,13 +83,8 @@ impl Keyboard {
                 delay_ms: delay_ms.unwrap_or(0),
             }
         } else {
-            let mut settings = Settings::default();
-            if let Some(delay) = delay_ms {
-                settings.linux_delay = delay;
-            }
-            let enigo = Enigo::new(&settings)
-                .map_err(|err| anyhow!("failed to set up keyboard input: {err}"))?;
-            Backend::X11(Mutex::new(enigo))
+            // 12 ms between key events by default: fast, but slow enough for most apps.
+            Backend::X11(Mutex::new(x11::Typer::new(delay_ms.unwrap_or(12))?))
         };
         Ok(Self { backend })
     }
@@ -134,13 +95,7 @@ impl Keyboard {
             return Ok(());
         }
         match &self.backend {
-            Backend::X11(enigo) => {
-                lock(enigo)
-                    .text(text)
-                    .map_err(|err| anyhow!("typing failed: {err}"))?;
-                std::thread::sleep(Duration::from_millis(1));
-                Ok(())
-            }
+            Backend::X11(typer) => lock(typer).type_text(text),
             Backend::Wayland { delay_ms } => wtype(*delay_ms, ["--".to_string(), text.to_string()]),
         }
     }
@@ -151,19 +106,7 @@ impl Keyboard {
             return Ok(());
         }
         match &self.backend {
-            Backend::X11(enigo) => {
-                let key = key.enigo()?;
-                let mut enigo = lock(enigo);
-                for _ in 0..count {
-                    for direction in [Direction::Press, Direction::Release] {
-                        enigo
-                            .key(key, direction)
-                            .map_err(|err| anyhow!("key simulation failed: {err}"))?;
-                        std::thread::sleep(Duration::from_millis(1));
-                    }
-                }
-                Ok(())
-            }
+            Backend::X11(typer) => lock(typer).tap(key, count),
             Backend::Wayland { delay_ms } => {
                 let name = key.keysym_name()?;
                 let args = (0..count).flat_map(|_| ["-k".to_string(), name.clone()]);
@@ -197,8 +140,8 @@ pub fn type_text(text: &str, delay_ms: u32) -> Result<()> {
     Ok(())
 }
 
-fn lock(enigo: &Mutex<Enigo>) -> std::sync::MutexGuard<'_, Enigo> {
-    enigo
+fn lock(typer: &Mutex<x11::Typer>) -> std::sync::MutexGuard<'_, x11::Typer> {
+    typer
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }

@@ -193,8 +193,8 @@ on). tykey also has typed `expansions`, `snippets`, `matchBehavior`, `boundaryCh
 - `src/core/engine.rs`: trigger matching and expansion execution
 - `src/core/expansion.rs`: macro parsing
 - `src/io/`: input/output interfaces
-- `src/platform/keyboard.rs`: keyboard backend on top of `ty_common::input` (X11: `rdev`
-  listener + `enigo` output; Wayland: `/dev/input` + xkbcommon listener, `wtype` output)
+- `src/platform/keyboard.rs`: keyboard backend on top of `ty_common::input` (X11: XRecord
+  listener + XTest output; Wayland: `/dev/input` + xkbcommon listener, `wtype` output)
 - `../../nix/modules/tykey.nix`: Home Manager module
 
 ## License

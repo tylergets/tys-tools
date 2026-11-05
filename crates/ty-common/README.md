@@ -18,7 +18,7 @@ its own. If two tools need the same thing, it belongs here.
 | `wm`     | Windows, the focused window, staging a window for recording, the pointer (X11/i3, sway, Hyprland) |
 | `overlay` | Full-screen input overlay for picking regions and windows (layer-shell on Wayland) |
 | `clipboard` | Read, write and watch the clipboard (GTK on X11, wl-clipboard on Wayland) |
-| `input`  | Type text and keys (enigo / `wtype`) and listen to every key press (XRecord / `/dev/input`) |
+| `input`  | Type text and keys (XTest / `wtype`) and listen to every key press (XRecord / `/dev/input`) |
 
 The display modules (`session` to `input`) pick the X11 or Wayland backend at runtime, so
 the tools don't talk to X11 directly. On Wayland they lean on the wlroots protocols and

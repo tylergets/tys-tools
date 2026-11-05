@@ -1,5 +1,5 @@
 //! The keyboard backend: global key listening and typed output, from ty-common's input layer
-//! (rdev/enigo on X11; `/dev/input` and wtype on Wayland).
+//! (XRecord/XTest on X11; `/dev/input` and wtype on Wayland).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

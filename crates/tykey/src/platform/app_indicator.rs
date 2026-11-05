@@ -1,4 +1,4 @@
-//! Tray icon on its own GTK thread (the main thread runs the rdev key listener). The menu
+//! Tray icon on its own GTK thread (the main thread runs the key listener). The menu
 //! lists the configured snippets; clicking one copies it to the clipboard.
 
 use std::collections::HashMap;

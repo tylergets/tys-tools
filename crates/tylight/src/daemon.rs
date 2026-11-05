@@ -1,14 +1,16 @@
 //! The daemon: one loop that owns the gamma backend and reacts to commands, location fixes
 //! and the clock.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::fs::File;
+use std::io::Read as _;
+use std::os::fd::FromRawFd as _;
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Result};
-use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
 use ty_common::lock::InstanceLock;
 use ty_common::wake::{self, Waker, Wakeups};
 
@@ -271,10 +273,34 @@ pub fn run(config: AppConfig) -> Result<()> {
     result
 }
 
+/// Write end of the pipe the signal handler pokes; -1 until `watch_signals` runs.
+static SIGNAL_PIPE: AtomicI32 = AtomicI32::new(-1);
+
+extern "C" fn on_signal(_: libc::c_int) {
+    // Only async-signal-safe calls here: write one byte for the watcher thread.
+    let byte = 1u8;
+    unsafe { libc::write(SIGNAL_PIPE.load(Ordering::Relaxed), (&raw const byte).cast(), 1) };
+}
+
+/// Quit cleanly (restoring gamma) on SIGTERM, SIGINT or SIGHUP.
 fn watch_signals(tx: Sender<Msg>) -> Result<()> {
-    let mut signals = signal_hook::iterator::Signals::new([SIGTERM, SIGINT, SIGHUP])?;
+    let mut fds = [0; 2];
+    if unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) } != 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    SIGNAL_PIPE.store(fds[1], Ordering::Relaxed);
+    for signal in [libc::SIGTERM, libc::SIGINT, libc::SIGHUP] {
+        let mut action: libc::sigaction = unsafe { std::mem::zeroed() };
+        action.sa_sigaction = on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t;
+        action.sa_flags = libc::SA_RESTART;
+        if unsafe { libc::sigaction(signal, &action, std::ptr::null_mut()) } != 0 {
+            return Err(std::io::Error::last_os_error().into());
+        }
+    }
+    // SAFETY: fds[0] is the pipe's read end, owned by nothing else.
+    let mut pipe = unsafe { File::from_raw_fd(fds[0]) };
     thread::spawn(move || {
-        if signals.forever().next().is_some() {
+        if pipe.read(&mut [0]).is_ok() {
             let _ = tx.send(Msg::Quit);
         }
     });

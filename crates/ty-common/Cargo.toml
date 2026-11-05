@@ -15,12 +15,10 @@ serde_json.workspace = true
 serde_yaml_ng.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
-enigo.workspace = true
 evdev.workspace = true
 gtk.workspace = true
 gtk-layer-shell.workspace = true
 libappindicator.workspace = true
 libc.workspace = true
-rdev.workspace = true
-x11rb.workspace = true
+x11rb = { workspace = true, features = ["record", "xtest"] }
 xkbcommon.workspace = true
