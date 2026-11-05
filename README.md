@@ -1,22 +1,40 @@
-# tys-tools
+# ty's tools
 
-Small Linux/X11 desktop tools that live in the system tray. Built for i3, packaged with Nix.
+Small desktop tools for Linux. Each one does one job, most sit in the system tray, and all of
+them can be scripted from the command line. Built for X11 and used daily on i3. Written in
+Rust, packaged with Nix, MIT licensed.
 
-| Tool | What it does | Was |
-| --- | --- | --- |
-| [tyboard](crates/tyboard) | Clipboard history daemon (+ `tyboard-rofi` picker) | slyboard |
-| [tykey](crates/tykey) | Text expander with tray snippets | slykey |
-| [tycapture](crates/tycapture) | Screen recorder with region/window capture and zoom | slycapture |
-| [tyshot](crates/tyshot) | Screenshot + annotation overlay | slyshot |
-| [tyspeak](crates/tyspeak) | Offline speech-to-text dictation | slyspeak |
+| Tool | What it does |
+| --- | --- |
+| [tyboard](crates/tyboard) | Clipboard history in your tray, with a rofi picker. |
+| [tykey](crates/tykey) | Text expansion in every app. |
+| [tycapture](crates/tycapture) | Screen recording of the screen, a region or one window, with zoom on clicks. |
+| [tyshot](crates/tyshot) | Screenshots you can mark up with arrows, text and blur. |
+| [tyspeak](crates/tyspeak) | Dictation that stays on your machine. |
 
-Shared code (tray applet, single-instance lock, config discovery, notifications, `status`
-output) lives in [`crates/ty-common`](crates/ty-common).
+Each tool's README has the full details.
 
-Every tool reads its config from `./<tool>.yaml`, then `~/.config/<tool>/config.yaml`, or from
-`--config PATH`.
+## Why use them
 
-## Nix
+- **Private.** No telemetry, no accounts, no cloud. Your data stays on your machine.
+- **Works offline.** Everything runs locally, including tyspeak's speech models.
+- **Plain config.** One YAML file per tool, easy to keep in your dotfiles.
+- **Scriptable.** Every tool has a CLI and works with your bar and keybindings.
+- **Small and fast.** Native Rust. No Electron.
+
+## Try it
+
+```sh
+# run one
+nix run github:tylergets/tys-tools#tyshot
+
+# install all of them
+nix profile install github:tylergets/tys-tools
+```
+
+## Install with Home Manager
+
+Add the flake:
 
 ```nix
 {
@@ -26,15 +44,7 @@ Every tool reads its config from `./<tool>.yaml`, then `~/.config/<tool>/config.
 }
 ```
 
-### Overlay
-
-```nix
-nixpkgs.overlays = [inputs.tys-tools.overlays.default];
-# adds pkgs.tyboard, pkgs.tykey, pkgs.tycapture, pkgs.tyshot, pkgs.tyspeak
-# (and pkgs.tys-tools: the unwrapped workspace build)
-```
-
-### Home Manager
+Then turn on the tools you want:
 
 ```nix
 {inputs, ...}: {
@@ -57,32 +67,36 @@ Every module has the same options:
 - `enable`
 - `package` — defaults to `pkgs.<tool>` when the overlay is applied, otherwise this flake's package
 - `settings` — free-form YAML, written to `~/.config/<tool>/config.yaml`
-- `service.enable` (default `true`) — systemd user service in `graphical-session.target`,
+- `service.enable` (default `true`) — a systemd user service in `graphical-session.target`,
   restarted when the config changes
 
-tykey also keeps typed options (`expansions`, `snippets`, `matchBehavior`, `boundaryChars`,
-`globals`, `notifications.*`), which are merged under `settings`.
+tykey also has typed options (`expansions`, `snippets`, `matchBehavior`, `boundaryChars`,
+`globals`, `notifications.*`), which are merged into `settings`.
 
-### Packages
+### Overlay
 
-```sh
-nix run github:tylergets/tys-tools#tyshot
-nix build .#tyspeak
-nix build            # all tools
+```nix
+nixpkgs.overlays = [inputs.tys-tools.overlays.default];
+# adds pkgs.tyboard, pkgs.tykey, pkgs.tycapture, pkgs.tyshot, pkgs.tyspeak
 ```
+
+## Configuration
+
+Each tool reads its config from `./<tool>.yaml`, then `~/.config/<tool>/config.yaml`, or from
+the path given with `--config`.
 
 ## Development
 
 ```sh
 nix develop
 cargo test --workspace
-cargo run -p tycapture -- status
-nix flake check      # build all tools + tests + clippy + rustfmt
+cargo run -p tyboard -- run
+nix flake check      # build all tools, run tests, clippy and rustfmt
 ```
 
-The workspace is built once with [crane](https://github.com/ipetkov/crane). All tools share
-one dependency build, and each tool package is a small wrapper over the workspace binaries
-that adds its runtime PATH and GTK environment. Evaluation uses no IFD.
+Shared code (tray applet, single-instance lock, config loading, notifications, `status`
+output) lives in [`crates/ty-common`](crates/ty-common). The project website is in
+[`site/`](site).
 
 ## License
 
