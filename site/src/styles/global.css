@@ -223,3 +223,32 @@ footer {
     padding: 6px 8px;
   }
 }
+
+/* Dependency tables */
+.table {
+  overflow-x: auto;
+  margin: 0 0 16px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+th,
+td {
+  text-align: left;
+  vertical-align: top;
+  padding: 4px 12px 4px 0;
+  border-bottom: 1px solid var(--muted);
+}
+
+th {
+  border-bottom: var(--rule);
+  text-transform: uppercase;
+}
+
+td:first-child {
+  white-space: nowrap;
+}

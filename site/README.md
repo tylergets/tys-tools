@@ -5,6 +5,7 @@ The project website. Vue 3 + Vite + vue-router.
 ```
 site/
   index.html            # Vite entry
+  cargo-deps.js         # Vite plugin: reads Cargo.toml/Cargo.lock for the /deps page
   src/
     main.js
     App.vue             # header, nav, footer
@@ -12,6 +13,7 @@ site/
     tools.js            # all tool content: cards, nav and tool pages
     pages/Home.vue
     pages/Tool.vue      # template for every /<tool> page
+    pages/Deps.vue      # /deps: every crate's Rust dependencies and locked versions
     styles/global.css   # all styles
 ```
 
@@ -27,6 +29,13 @@ npm run preview   # serve dist/
 ## Adding a tool
 
 Add an entry to `src/tools.js`. The card, nav link and `/<tool>` page appear automatically.
+
+## Dependencies page
+
+`/deps` is built from the workspace `Cargo.toml`, each `crates/*/Cargo.toml` and
+`Cargo.lock` at build time (`import deps from "virtual:cargo-deps"`). Nothing is committed;
+the Pages workflow also runs when those files change, so the page stays current. The site
+version on the home page comes from the same place.
 
 ## Adding docs
 

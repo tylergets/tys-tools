@@ -26,6 +26,7 @@ import { tools, repo } from "./tools.js";
   </main>
 
   <footer>
-    MIT licensed. <a :href="repo">github.com/tylergets/tys-tools</a>
+    MIT licensed. <a :href="repo">github.com/tylergets/tys-tools</a> ·
+    <RouterLink to="/deps">Dependencies</RouterLink>
   </footer>
 </template>

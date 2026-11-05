@@ -1,7 +1,6 @@
 // Every tool on the site. The home page, nav and tool pages are all built from this list.
 // Keep text short; full details live in each crate's README.
 
-export const version = "0.7.0";
 export const repo = "https://github.com/tylergets/tys-tools";
 
 export const tools = [

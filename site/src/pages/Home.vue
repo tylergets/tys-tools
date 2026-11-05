@@ -1,5 +1,6 @@
 <script setup>
-import { tools, version } from "../tools.js";
+import { tools } from "../tools.js";
+import deps from "virtual:cargo-deps";
 import ToolIcon from "../ToolIcon.vue";
 </script>
 
@@ -10,7 +11,7 @@ import ToolIcon from "../ToolIcon.vue";
     all of them can be scripted from the command line. Built for X11 and used daily on i3;
     they run on Wayland too. Written in Rust, packaged with Nix, MIT licensed.
   </p>
-  <p class="muted">v{{ version }}</p>
+  <p class="muted">v{{ deps.version }} · <RouterLink to="/deps">dependencies</RouterLink></p>
 
   <h2>Why use them</h2>
   <ul class="plain">
