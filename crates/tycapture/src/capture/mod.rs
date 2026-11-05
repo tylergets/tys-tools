@@ -6,5 +6,5 @@ pub mod region;
 pub mod transcode;
 
 pub use options::{RecordingOptions, Target};
-pub use recorder::Recording;
+pub use recorder::{Recording, VideoSource};
 pub use region::Region;

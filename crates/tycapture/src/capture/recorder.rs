@@ -1,6 +1,8 @@
 use std::collections::VecDeque;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
+use std::os::fd::{AsRawFd, OwnedFd};
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::{Arc, Mutex};
@@ -17,11 +19,41 @@ use crate::capture::Region;
 const STOP_TIMEOUT: Duration = Duration::from_secs(5);
 const STDERR_TAIL_LINES: usize = 5;
 const INPUT_QUEUE_SIZE: &str = "1024";
+/// The file descriptor ffmpeg reads wf-recorder's frames from (`pipe:3`).
+const WAYLAND_VIDEO_FD: i32 = 3;
 
-/// An in-progress ffmpeg x11grab recording. Always written as Matroska, which stays playable
-/// if tycapture or ffmpeg dies mid-recording; `capture::transcode` produces the final file.
+/// Where the video comes from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VideoSource {
+    /// ffmpeg's x11grab on this X display.
+    X11 { display: String },
+    /// `wf-recorder` (wlroots screencopy), piped into ffmpeg as raw frames. `origin` is the
+    /// layout position of the screen's top-left corner (regions are relative to it).
+    Wayland { origin: (i32, i32) },
+}
+
+impl VideoSource {
+    /// The source for the current session. On Wayland this must run on the GTK thread.
+    pub fn current() -> Result<Self> {
+        if ty_common::session::is_wayland() {
+            let bounds = ty_common::screen::bounds()?;
+            Ok(Self::Wayland {
+                origin: (bounds.x, bounds.y),
+            })
+        } else {
+            let display = std::env::var("DISPLAY").context("DISPLAY is not set")?;
+            Ok(Self::X11 { display })
+        }
+    }
+}
+
+/// An in-progress recording: ffmpeg grabbing the screen (x11grab) or reading frames from
+/// wf-recorder. Always written as Matroska, which stays playable if tycapture or ffmpeg dies
+/// mid-recording; `capture::transcode` produces the final file.
 pub struct Recording {
     child: Child,
+    /// wf-recorder, on Wayland.
+    grabber: Option<Child>,
     output: PathBuf,
     region: Region,
     started: Instant,
@@ -39,7 +71,7 @@ struct AudioInputs {
 impl Recording {
     pub fn start(
         ffmpeg: &str,
-        display: &str,
+        source: &VideoSource,
         region: Region,
         options: &RecordingOptions,
         encoder: &VideoEncoder,
@@ -57,9 +89,37 @@ impl Recording {
         };
         let metered = inputs.microphone.is_some();
 
-        let mut child = Command::new(ffmpeg)
+        // On Wayland, wf-recorder grabs the frames and ffmpeg reads them on fd 3.
+        let mut command = Command::new(ffmpeg);
+        let (mut grabber, frames) = match source {
+            VideoSource::Wayland { origin } => {
+                let (child, frames) = start_wf_recorder(region, *origin, options.framerate)?;
+                let fd = frames.as_raw_fd();
+                // SAFETY: dup2 is async-signal-safe, and `frames` stays open until after the
+                // spawn below.
+                unsafe {
+                    command.pre_exec(move || {
+                        let result = if fd == WAYLAND_VIDEO_FD {
+                            // dup2 onto itself would keep close-on-exec set.
+                            let flags = libc::fcntl(fd, libc::F_GETFD);
+                            libc::fcntl(fd, libc::F_SETFD, flags & !libc::FD_CLOEXEC)
+                        } else {
+                            libc::dup2(fd, WAYLAND_VIDEO_FD)
+                        };
+                        if result < 0 {
+                            return Err(std::io::Error::last_os_error());
+                        }
+                        Ok(())
+                    });
+                }
+                (Some(child), Some(frames))
+            }
+            VideoSource::X11 { .. } => (None, None),
+        };
+
+        let spawned = command
             .args(ffmpeg_args(
-                display, region, options, encoder, &inputs, &output,
+                source, region, options, encoder, &inputs, &output,
             ))
             .stdin(Stdio::piped())
             .stdout(if metered {
@@ -69,7 +129,19 @@ impl Recording {
             })
             .stderr(Stdio::piped())
             .spawn()
-            .with_context(|| format!("failed to launch {ffmpeg}"))?;
+            .with_context(|| format!("failed to launch {ffmpeg}"));
+        // ffmpeg has its own copy now; only it should hold the pipe.
+        drop(frames);
+        let mut child = match spawned {
+            Ok(child) => child,
+            Err(err) => {
+                if let Some(grabber) = grabber.as_mut() {
+                    let _ = grabber.kill();
+                    let _ = grabber.wait();
+                }
+                return Err(err);
+            }
+        };
 
         let mic_level = child.stdout.take().map(audio::spawn_level_reader);
         let stderr_tail = Arc::new(Mutex::new(VecDeque::new()));
@@ -89,6 +161,7 @@ impl Recording {
 
         Ok(Self {
             child,
+            grabber,
             output,
             region,
             started: Instant::now(),
@@ -114,9 +187,15 @@ impl Recording {
         self.mic_level.clone()
     }
 
-    /// Returns the exit status if ffmpeg has already exited (for example, on error).
+    /// Returns the exit status if ffmpeg (or wf-recorder) has already exited, for example on
+    /// error.
     pub fn try_exit_status(&mut self) -> Option<ExitStatus> {
-        self.child.try_wait().ok().flatten()
+        if let Some(status) = self.child.try_wait().ok().flatten() {
+            return Some(status);
+        }
+        self.grabber
+            .as_mut()
+            .and_then(|grabber| grabber.try_wait().ok().flatten())
     }
 
     /// The last few lines ffmpeg wrote to stderr, for error messages.
@@ -127,7 +206,13 @@ impl Recording {
 
     /// Ask ffmpeg to finish the file cleanly, killing it if it does not exit in time.
     pub fn stop(mut self) -> Result<PathBuf> {
-        if let Some(mut stdin) = self.child.stdin.take() {
+        if self.grabber.is_some() {
+            // Reading frames from a pipe, ffmpeg ignores `q`; SIGINT finalizes the file too.
+            // SAFETY: plain kill(2) on our own child.
+            unsafe {
+                libc::kill(self.child.id() as libc::pid_t, libc::SIGINT);
+            }
+        } else if let Some(mut stdin) = self.child.stdin.take() {
             // `q` on stdin makes ffmpeg flush and finalize the container.
             let _ = stdin.write_all(b"q");
         }
@@ -144,6 +229,22 @@ impl Recording {
             }
             thread::sleep(Duration::from_millis(50));
         };
+        if let Some(mut grabber) = self.grabber.take() {
+            // Without a reader it would block on the pipe; SIGINT lets it exit cleanly.
+            // SAFETY: plain kill(2) on our own child.
+            unsafe {
+                libc::kill(grabber.id() as libc::pid_t, libc::SIGINT);
+            }
+            let deadline = Instant::now() + STOP_TIMEOUT;
+            while grabber.try_wait()?.is_none() {
+                if Instant::now() >= deadline {
+                    let _ = grabber.kill();
+                    let _ = grabber.wait();
+                    break;
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+        }
 
         if !self.output.exists() {
             let details = self.error_output();
@@ -156,8 +257,48 @@ impl Recording {
     }
 }
 
+/// Start wf-recorder writing raw frames of `region` to a pipe. Returns the child and the
+/// pipe's read end. `-D -r` gives a constant frame rate, like x11grab.
+fn start_wf_recorder(
+    region: Region,
+    (x0, y0): (i32, i32),
+    framerate: u32,
+) -> Result<(Child, OwnedFd)> {
+    let mut child = Command::new("wf-recorder")
+        .args(wf_recorder_args(region, (x0, y0), framerate))
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .context("failed to run wf-recorder (needed to record on Wayland)")?;
+    let frames = child.stdout.take().context("no stdout from wf-recorder")?;
+    Ok((child, OwnedFd::from(frames)))
+}
+
+fn wf_recorder_args(region: Region, (x0, y0): (i32, i32), framerate: u32) -> Vec<String> {
+    vec![
+        "-g".into(),
+        format!(
+            "{},{} {}x{}",
+            region.x + x0,
+            region.y + y0,
+            region.width,
+            region.height
+        ),
+        "-r".into(),
+        framerate.to_string(),
+        "-D".into(),
+        "-c".into(),
+        "rawvideo".into(),
+        "-m".into(),
+        "nut".into(),
+        "-f".into(),
+        "pipe:1".into(),
+    ]
+}
+
 fn ffmpeg_args(
-    display: &str,
+    source: &VideoSource,
     region: Region,
     options: &RecordingOptions,
     encoder: &VideoEncoder,
@@ -180,20 +321,27 @@ fn ffmpeg_args(
         "-y".into(),
     ];
     args.extend(video.global);
-    args.extend([
-        "-thread_queue_size".into(),
-        INPUT_QUEUE_SIZE.into(),
-        "-f".into(),
-        "x11grab".into(),
-        "-framerate".into(),
-        options.framerate.to_string(),
-        "-draw_mouse".into(),
-        u8::from(options.draw_mouse).to_string(),
-        "-video_size".into(),
-        format!("{}x{}", region.width, region.height),
-        "-i".into(),
-        format!("{display}+{},{}", region.x, region.y),
-    ]);
+    args.extend(["-thread_queue_size".into(), INPUT_QUEUE_SIZE.into()]);
+    match source {
+        VideoSource::X11 { display } => args.extend([
+            "-f".into(),
+            "x11grab".into(),
+            "-framerate".into(),
+            options.framerate.to_string(),
+            "-draw_mouse".into(),
+            u8::from(options.draw_mouse).to_string(),
+            "-video_size".into(),
+            format!("{}x{}", region.width, region.height),
+            "-i".into(),
+            format!("{display}+{},{}", region.x, region.y),
+        ]),
+        VideoSource::Wayland { .. } => args.extend([
+            "-f".into(),
+            "nut".into(),
+            "-i".into(),
+            format!("pipe:{WAYLAND_VIDEO_FD}"),
+        ]),
+    }
 
     // Input 0 is video; audio inputs follow in this order.
     let audio_sources: Vec<&String> = [&inputs.microphone, &inputs.system]
@@ -223,8 +371,16 @@ fn ffmpeg_args(
         args.extend(["-map".into(), "1:a".into()]);
     }
 
-    if let Some(filter) = video.filter {
-        args.extend(["-vf".into(), filter.into()]);
+    // wf-recorder captures at the monitor's scale; keep the video at the region's size (in
+    // layout pixels), which the zoom renderer and cursor log rely on.
+    let scale = matches!(source, VideoSource::Wayland { .. })
+        .then(|| format!("scale={}:{}", region.width, region.height));
+    let filters: Vec<String> = scale
+        .into_iter()
+        .chain(video.filter.map(str::to_string))
+        .collect();
+    if !filters.is_empty() {
+        args.extend(["-vf".into(), filters.join(",")]);
     }
     args.extend(video.codec);
     if !audio_sources.is_empty() {
@@ -265,7 +421,7 @@ fn audio_graph(inputs: &AudioInputs, mic_cleanup: bool) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ffmpeg_args, AudioInputs};
+    use super::{ffmpeg_args, wf_recorder_args, AudioInputs, VideoSource};
     use crate::capture::encoder::VideoEncoder;
     use crate::capture::options::{Format, Quality, RecordingOptions};
     use crate::capture::Region;
@@ -292,9 +448,15 @@ mod tests {
         }
     }
 
+    fn x11() -> VideoSource {
+        VideoSource::X11 {
+            display: ":0".into(),
+        }
+    }
+
     fn args(inputs: AudioInputs) -> String {
         ffmpeg_args(
-            ":0",
+            &x11(),
             Region::new(100, 50, 1920, 1080),
             &options(),
             &VideoEncoder::Software,
@@ -332,7 +494,7 @@ mod tests {
         let mut options = options();
         options.compress = true;
         let args = ffmpeg_args(
-            ":0",
+            &x11(),
             Region::new(0, 0, 640, 480),
             &options,
             &VideoEncoder::Software,
@@ -368,7 +530,7 @@ mod tests {
             system: Some("sink.monitor".into()),
         };
         let args = ffmpeg_args(
-            ":0",
+            &x11(),
             Region::new(0, 0, 640, 480),
             &options,
             &VideoEncoder::Software,
@@ -385,7 +547,7 @@ mod tests {
     #[test]
     fn hardware_encoder_uploads_frames() {
         let args = ffmpeg_args(
-            ":0",
+            &x11(),
             Region::new(0, 0, 640, 480),
             &options(),
             &VideoEncoder::Vaapi {
@@ -400,5 +562,35 @@ mod tests {
         .join(" ");
         assert!(args.starts_with("-hide_banner -loglevel error -nostats -y -vaapi_device"));
         assert!(args.contains("-map 0:v -vf format=nv12,hwupload -c:v h264_vaapi"));
+    }
+
+    #[test]
+    fn wayland_reads_frames_from_wf_recorder() {
+        let args = ffmpeg_args(
+            &VideoSource::Wayland { origin: (0, 0) },
+            Region::new(10, 20, 640, 480),
+            &options(),
+            &VideoEncoder::Vaapi {
+                device: "/dev/dri/renderD128".into(),
+            },
+            &AudioInputs {
+                microphone: None,
+                system: None,
+            },
+            Path::new("/tmp/out.mkv"),
+        )
+        .join(" ");
+        assert!(args.contains("-thread_queue_size 1024 -f nut -i pipe:3"));
+        assert!(!args.contains("x11grab"));
+        assert!(args.contains("-vf scale=640:480,format=nv12,hwupload"));
+    }
+
+    #[test]
+    fn wf_recorder_geometry_is_absolute() {
+        let args = wf_recorder_args(Region::new(10, 20, 640, 480), (-1920, 0), 30).join(" ");
+        assert_eq!(
+            args,
+            "-g -1910,20 640x480 -r 30 -D -c rawvideo -m nut -f pipe:1"
+        );
     }
 }

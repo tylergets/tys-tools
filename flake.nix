@@ -77,6 +77,10 @@
           pulseaudio
           xdotool
           libnotify
+          grim
+          wf-recorder
+          wl-clipboard
+          wtype
         ];
         inherit (built.commonArgs) TRANSCRIBE_CMAKE_ARGS;
         shellHook = ''

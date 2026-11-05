@@ -1,15 +1,30 @@
 //! Shared plumbing for the ty* desktop tools (tyboard, tycapture, tykey, tyshot, tyspeak).
 
+//!
+//! The display layer (`session`, `screen`, `wm`, `overlay`, `clipboard`, `input`) hides the
+//! difference between X11 and Wayland, so the tools themselves don't need to care.
+
+#[cfg(target_os = "linux")]
+pub mod clipboard;
 pub mod config;
 #[cfg(target_os = "linux")]
 pub mod icons;
+#[cfg(target_os = "linux")]
+pub mod input;
 pub mod lock;
 pub mod notify;
+#[cfg(target_os = "linux")]
+pub mod overlay;
+#[cfg(target_os = "linux")]
+pub mod screen;
+pub mod session;
 pub mod status;
 #[cfg(target_os = "linux")]
 pub mod tray;
 #[cfg(target_os = "linux")]
 mod tray_sni;
+#[cfg(target_os = "linux")]
+pub mod wm;
 
 /// `$USER`, or `"user"` if unset. Used to keep per-user runtime files apart.
 pub fn user_hint() -> String {

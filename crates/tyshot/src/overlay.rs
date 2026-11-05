@@ -4,19 +4,19 @@
 //! and blur from the toolbar beside it, optionally put it in a browser/phone/window frame,
 //! then copy or save it.
 //!
-//! The snapshot is shown in a borderless popup over every monitor, so the overlay behaves the
-//! same with or without a compositor.
+//! The snapshot is shown in a `ty_common::overlay::Overlay` covering every monitor (one popup
+//! on X11, layer-shell surfaces on Wayland), so it behaves the same with or without a
+//! compositor.
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::time::Duration;
 
 use anyhow::Result;
 use gtk::cairo;
 use gtk::gdk;
 use gtk::gdk_pixbuf::Pixbuf;
-use gtk::glib;
-use gtk::prelude::*;
+use ty_common::overlay::Overlay;
+use ty_common::screen::{self, ScreenRect};
 
 use crate::annotate::{self, Annotation, Canvas, Style};
 use crate::config::AppConfig;
@@ -24,7 +24,6 @@ use crate::frame::Frame;
 use crate::opencode::{self, Target};
 use crate::selection::{self, Edges, Hit, Rect};
 use crate::toolbar::{self, Button};
-use crate::x11::WindowRect;
 
 /// How close (logical px) to an edge a press grabs it for resizing.
 const HIT_SLOP: f64 = 8.0;
@@ -34,8 +33,6 @@ const MID_HANDLES_MIN: f64 = 40.0;
 /// A drag smaller than this is a click: it selects the window under the pointer (or clears
 /// the selection) instead.
 const MIN_DRAG: f64 = 3.0;
-const GRAB_ATTEMPTS: u32 = 20;
-const GRAB_RETRY: Duration = Duration::from_millis(50);
 const HINT: &str =
     "Click a window or drag to select   ·   Enter / Ctrl+C copy   ·   Ctrl+S save   ·   Esc cancel";
 /// Pen and highlighter points closer than this (logical px) to the previous one are skipped.
@@ -147,7 +144,7 @@ enum Drag {
 
 struct State {
     canvas: Canvas,
-    /// Device pixels per logical pixel.
+    /// Snapshot pixels per logical pixel.
     scale: f64,
     /// Overlay size in logical pixels.
     width: f64,
@@ -274,29 +271,27 @@ impl State {
     }
 }
 
-/// Show the overlay over `snapshot` (the whole screen in device pixels). `windows` (device
-/// pixels, topmost first) are the windows a click can select. `on_done` gets the
+/// Show the overlay over `snapshot` (the whole screen, see `ty_common::screen`). `windows`
+/// (screen pixels, topmost first) are the windows a click can select. `on_done` gets the
 /// annotated selection, or `None` if the user cancelled (Escape, right-click or Close). Must
 /// be called from the GTK main loop's thread; the result arrives from inside the loop.
 pub fn select(
     snapshot: Pixbuf,
-    windows: Vec<WindowRect>,
+    windows: Vec<ScreenRect>,
     config: &AppConfig,
     on_done: impl FnOnce(Option<Capture>) + 'static,
 ) -> Result<()> {
-    let display = gdk::Display::default();
-    let scale = display
-        .as_ref()
-        .and_then(|display| display.monitor(0))
-        .map(|monitor| monitor.scale_factor())
-        .unwrap_or(1)
-        .max(1);
-    let (width, height) = (snapshot.width() / scale, snapshot.height() / scale);
-    let blur_radius = config.annotation.blur_radius as usize * scale as usize;
+    let overlay = Overlay::new("tyshot")?;
+    let (width, height) = overlay.size();
+    // The snapshot can be larger than the overlay (HiDPI): one logical pixel covers this many
+    // snapshot pixels.
+    let scale = (f64::from(snapshot.width()) / width).max(1.0);
+    let blur_radius = (f64::from(config.annotation.blur_radius) * scale).round() as usize;
+    let screen_scale = screen::logical_scale();
     let windows = windows
         .into_iter()
         .map(|window| {
-            let logical = |value: i64| value as f64 / f64::from(scale);
+            let logical = |value: i64| value as f64 / screen_scale;
             Rect::from_corners(
                 (logical(window.x.into()), logical(window.y.into())),
                 (
@@ -304,22 +299,16 @@ pub fn select(
                     logical(i64::from(window.y) + i64::from(window.height)),
                 ),
             )
-            .clamp_to(f64::from(width), f64::from(height))
+            .clamp_to(width, height)
         })
         .filter(|rect| rect.width() >= MIN_DRAG && rect.height() >= MIN_DRAG)
         .collect();
 
-    let window = gtk::Window::new(gtk::WindowType::Popup);
-    window.set_app_paintable(true);
-    window.move_(0, 0);
-    window.set_default_size(width, height);
-    window.set_size_request(width, height);
-
     let state = Rc::new(RefCell::new(State {
-        canvas: Canvas::new(snapshot, f64::from(scale), blur_radius)?,
-        scale: f64::from(scale),
-        width: f64::from(width),
-        height: f64::from(height),
+        canvas: Canvas::new(snapshot, scale, blur_radius)?,
+        scale,
+        width,
+        height,
         selection: None,
         drag: None,
         tool: Tool::Select,
@@ -331,10 +320,7 @@ pub fn select(
         hover_window: None,
         hover: None,
         cursor: gdk::CursorType::Crosshair,
-        hint_center: display
-            .as_ref()
-            .and_then(pointer_monitor_center)
-            .unwrap_or((f64::from(width) / 2.0, f64::from(height) / 2.0)),
+        hint_center: overlay.pointer_monitor_center(),
         color: config.overlay.rgb().unwrap_or((0.9, 0.28, 0.3)),
         dim: config.overlay.dim,
         style: Style {
@@ -356,63 +342,51 @@ pub fn select(
 
     {
         let state = state.clone();
-        window.connect_draw(move |_, cr| {
-            draw(cr, &mut state.borrow_mut());
-            glib::Propagation::Stop
-        });
+        overlay.connect_draw(move |cr| draw(cr, &mut state.borrow_mut()));
     }
-
-    window.add_events(
-        gdk::EventMask::BUTTON_PRESS_MASK
-            | gdk::EventMask::BUTTON_RELEASE_MASK
-            | gdk::EventMask::POINTER_MOTION_MASK
-            | gdk::EventMask::KEY_PRESS_MASK,
-    );
-
     {
         let state = state.clone();
-        window.connect_button_press_event(move |window, event| {
-            on_press(window, &state, event);
-            glib::Propagation::Stop
+        overlay.connect_button_press(move |overlay, event, position| {
+            on_press(overlay, &state, event, position);
         });
     }
     {
         let state = state.clone();
-        window.connect_motion_notify_event(move |window, event| {
-            on_motion(window, &mut state.borrow_mut(), event.position());
-            glib::Propagation::Stop
+        overlay.connect_motion(move |overlay, position| {
+            on_motion(overlay, &mut state.borrow_mut(), position);
         });
     }
     {
         let state = state.clone();
-        window.connect_button_release_event(move |window, event| {
+        overlay.connect_button_release(move |overlay, event, position| {
             if event.button() == 1 {
                 let mut s = state.borrow_mut();
-                on_motion(window, &mut s, event.position());
-                on_release(window, &mut s);
+                on_motion(overlay, &mut s, position);
+                on_release(overlay, &mut s);
                 // Refresh hover/cursor now that the toolbar may be back.
-                on_motion(window, &mut s, event.position());
+                on_motion(overlay, &mut s, position);
             }
-            glib::Propagation::Stop
         });
     }
     {
         let state = state.clone();
-        window.connect_key_press_event(move |window, event| {
-            on_key(window, &state, event);
-            glib::Propagation::Stop
-        });
+        overlay.connect_key_press(move |overlay, event| on_key(overlay, &state, event));
     }
 
-    window.show_all();
-    set_cursor(&window, gdk::CursorType::Crosshair);
-    // From inside the main loop, so even an immediate failure finishes from within it.
-    glib::idle_add_local_once(move || grab_input(window, state, GRAB_ATTEMPTS));
+    let on_grab_failed = {
+        let (overlay, state) = (overlay.clone(), state.clone());
+        move || finish(&overlay, &state, None)
+    };
+    overlay.show(gdk::CursorType::Crosshair, on_grab_failed);
     Ok(())
 }
 
-fn on_press(window: &gtk::Window, state: &Rc<RefCell<State>>, event: &gdk::EventButton) {
-    let position = event.position();
+fn on_press(
+    window: &Overlay,
+    state: &Rc<RefCell<State>>,
+    event: &gdk::EventButton,
+    position: (f64, f64),
+) {
     if event.button() == 3 {
         finish(window, state, None);
         return;
@@ -489,7 +463,7 @@ fn on_press(window: &gtk::Window, state: &Rc<RefCell<State>>, event: &gdk::Event
     window.queue_draw();
 }
 
-fn press_button(window: &gtk::Window, state: &Rc<RefCell<State>>, button: Button) {
+fn press_button(window: &Overlay, state: &Rc<RefCell<State>>, button: Button) {
     let mut s = state.borrow_mut();
     match button {
         Button::Select => s.set_tool(Tool::Select),
@@ -524,7 +498,7 @@ fn press_button(window: &gtk::Window, state: &Rc<RefCell<State>>, button: Button
 
 /// Open the opencode session picker, or say why it can't be opened. Asks the local opencode
 /// service for its sessions (a quick local request).
-fn send_to_agent(window: &gtk::Window, state: &Rc<RefCell<State>>) {
+fn send_to_agent(window: &Overlay, state: &Rc<RefCell<State>>) {
     let mut s = state.borrow_mut();
     match opencode::Service::discover().and_then(|service| service.sessions(PICKER_SESSIONS)) {
         Ok(sessions) => {
@@ -540,7 +514,7 @@ fn send_to_agent(window: &gtk::Window, state: &Rc<RefCell<State>>) {
 }
 
 /// Keys while the session picker is open: 1–9 or arrows + Enter pick, Escape closes it.
-fn picker_key(window: &gtk::Window, state: &Rc<RefCell<State>>, keyval: gdk::keys::Key) {
+fn picker_key(window: &Overlay, state: &Rc<RefCell<State>>, keyval: gdk::keys::Key) {
     use gdk::keys::constants as key;
 
     let mut s = state.borrow_mut();
@@ -579,7 +553,7 @@ fn picker_key(window: &gtk::Window, state: &Rc<RefCell<State>>, keyval: gdk::key
     window.queue_draw();
 }
 
-fn on_motion(window: &gtk::Window, s: &mut State, (x, y): (f64, f64)) {
+fn on_motion(window: &Overlay, s: &mut State, (x, y): (f64, f64)) {
     if let Some(picker) = s.picker.as_mut() {
         if let Some(index) = picker.hit((x, y)).filter(|&index| index != picker.selected) {
             picker.selected = index;
@@ -646,7 +620,7 @@ fn on_motion(window: &gtk::Window, s: &mut State, (x, y): (f64, f64)) {
     window.queue_draw();
 }
 
-fn on_release(window: &gtk::Window, s: &mut State) {
+fn on_release(window: &Overlay, s: &mut State) {
     let Some(drag) = s.drag.take() else {
         return;
     };
@@ -669,7 +643,7 @@ fn on_release(window: &gtk::Window, s: &mut State) {
     window.queue_draw();
 }
 
-fn on_key(window: &gtk::Window, state: &Rc<RefCell<State>>, event: &gdk::EventKey) {
+fn on_key(window: &Overlay, state: &Rc<RefCell<State>>, event: &gdk::EventKey) {
     use gdk::keys::constants as key;
 
     let modifiers = event.state();
@@ -779,7 +753,7 @@ fn on_key(window: &gtk::Window, state: &Rc<RefCell<State>>, event: &gdk::EventKe
 /// Typing into the text being edited. Returns whether the key was used: Ctrl shortcuts
 /// commit the text and are then handled as usual.
 fn edit_text(
-    window: &gtk::Window,
+    window: &Overlay,
     s: &mut State,
     event: &gdk::EventKey,
     ctrl: bool,
@@ -835,21 +809,8 @@ fn cursor_for(hit: Hit) -> gdk::CursorType {
     }
 }
 
-fn set_cursor(window: &gtk::Window, cursor: gdk::CursorType) {
-    if let Some(gdk_window) = window.window() {
-        let cursor = gdk::Cursor::for_display(&window.display(), cursor);
-        gdk_window.set_cursor(cursor.as_ref());
-    }
-}
-
-fn pointer_monitor_center(display: &gdk::Display) -> Option<(f64, f64)> {
-    let pointer = display.default_seat()?.pointer()?;
-    let (_, x, y) = pointer.position();
-    let area = display.monitor_at_point(x, y)?.geometry();
-    Some((
-        f64::from(area.x()) + f64::from(area.width()) / 2.0,
-        f64::from(area.y()) + f64::from(area.height()) / 2.0,
-    ))
+fn set_cursor(window: &Overlay, cursor: gdk::CursorType) {
+    window.set_cursor(cursor);
 }
 
 fn draw(cr: &cairo::Context, s: &mut State) {
@@ -1182,40 +1143,9 @@ fn snap(rect: &Rect, scale: f64) -> Rect {
     }
 }
 
-/// Grab pointer and keyboard so all input lands on the overlay. Retries while a hotkey
-/// daemon or menu still holds its own grab.
-fn grab_input(window: gtk::Window, state: Rc<RefCell<State>>, attempts_left: u32) {
-    let display = window.display();
-    let (Some(seat), Some(gdk_window)) = (display.default_seat(), window.window()) else {
-        eprintln!("error: no input seat for the selection overlay");
-        finish(&window, &state, None);
-        return;
-    };
-    // No grab cursor, so the window's cursor (which follows the hover target) is shown.
-    let status = seat.grab(
-        &gdk_window,
-        gdk::SeatCapabilities::ALL,
-        true,
-        None,
-        None,
-        None,
-    );
-    if status == gdk::GrabStatus::Success {
-        return;
-    }
-    if attempts_left == 0 {
-        eprintln!("error: could not grab input for the selection overlay ({status:?})");
-        finish(&window, &state, None);
-        return;
-    }
-    glib::timeout_add_local_once(GRAB_RETRY, move || {
-        grab_input(window, state, attempts_left - 1)
-    });
-}
-
 /// Close the overlay and report the result. With no selection, `action` applies to the whole
 /// screen.
-fn finish(window: &gtk::Window, state: &Rc<RefCell<State>>, action: Option<Action>) {
+fn finish(window: &Overlay, state: &Rc<RefCell<State>>, action: Option<Action>) {
     let mut s = state.borrow_mut();
     let Some(done) = s.done.take() else {
         return;
@@ -1254,9 +1184,6 @@ fn finish(window: &gtk::Window, state: &Rc<RefCell<State>>, action: Option<Actio
     });
     drop(s);
 
-    if let Some(seat) = window.display().default_seat() {
-        seat.ungrab();
-    }
     window.close();
     done(capture);
 }

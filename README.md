@@ -1,7 +1,8 @@
 # ty's tools
 
 Small desktop tools for Linux. Each one does one job, most sit in the system tray, and all of
-them can be scripted from the command line. Built for X11 and used daily on i3. Written in
+them can be scripted from the command line. Built for X11 and used daily on i3; Wayland works
+too on wlroots compositors such as sway and Hyprland (see [Wayland](#wayland)). Written in
 Rust, packaged with Nix, MIT licensed.
 
 | Tool | What it does |
@@ -21,6 +22,22 @@ Each tool's README has the full details.
 - **Plain config.** One YAML file per tool, easy to keep in your dotfiles.
 - **Scriptable.** Every tool has a CLI and works with your bar and keybindings.
 - **Small and fast.** Native Rust. No Electron.
+
+## Wayland
+
+Every tool runs on Wayland compositors that support the wlroots protocols (layer-shell,
+screencopy, data-control and virtual-keyboard): sway, Hyprland, river and similar. KDE covers
+most of it; GNOME does not offer these protocols.
+
+| Tool | On Wayland |
+| --- | --- |
+| tyboard | Watches the clipboard with `wl-paste`; active-window info from sway or Hyprland. |
+| tykey | Reads keyboards from `/dev/input` (you need to be in the `input` group) and types with `wtype`. |
+| tycapture | Records with `wf-recorder`, one monitor at a time. Window recording uses sway like i3; zoom needs Hyprland. |
+| tyshot | Screenshots with `grim`; the overlay covers every monitor. Window snapping on sway and Hyprland. |
+| tyspeak | Types with `wtype`, copies with `wl-copy`. |
+
+The Nix packages put the Wayland helpers on `PATH`.
 
 ## Try it
 

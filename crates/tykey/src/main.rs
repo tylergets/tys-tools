@@ -17,8 +17,8 @@ use crate::config::{AppConfig, APP_NAME};
 use crate::core::engine::Engine;
 #[cfg(target_os = "linux")]
 use crate::platform::app_indicator;
+use crate::platform::keyboard::KeyboardBackend;
 use crate::platform::notify;
-use crate::platform::x11_rdev::X11RdevBackend;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -40,7 +40,8 @@ fn run(config_path_override: Option<std::path::PathBuf>, debug: bool) -> Result<
     config.validate()?;
 
     println!("Loaded config from {}", config_path.display());
-    println!("Listening on X11 backend (rdev)...");
+    let session = ty_common::session::require("tykey")?;
+    println!("Listening for keys ({session:?})...");
 
     #[cfg(target_os = "linux")]
     let _app_indicator = app_indicator::start(
@@ -49,7 +50,7 @@ fn run(config_path_override: Option<std::path::PathBuf>, debug: bool) -> Result<
         config.notifications.clone(),
     );
 
-    let backend = Arc::new(X11RdevBackend::new()?);
+    let backend = Arc::new(KeyboardBackend::new()?);
     let mut engine = Engine::new(config);
     engine.set_debug(debug);
     engine.set_output(backend.clone());

@@ -71,7 +71,7 @@ impl Default for AudioConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum OutputMode {
-    /// Type the text into the focused window (xdotool).
+    /// Type the text into the focused window (xdotool on X11, wtype on Wayland).
     #[default]
     Type,
     /// Put the text on the clipboard.

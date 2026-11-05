@@ -1,8 +1,8 @@
 # tyshot
 
-`tyshot` is a Flameshot-style screenshot tool for X11: freeze the screen, drag out a region,
-and copy it to the clipboard (or save it as PNG). It has an optional tray icon and works
-well bound to a hotkey in i3.
+`tyshot` is a Flameshot-style screenshot tool for X11 and Wayland: freeze the screen, drag
+out a region, and copy it to the clipboard (or save it as PNG). It has an optional tray icon
+and works well bound to a hotkey in i3 or sway.
 
 ## Features
 
@@ -58,7 +58,9 @@ tool). While typing text, keys go to the text; Ctrl shortcuts finish it first.
 
 ## Requirements
 
-- X11 session
+- X11 session, or a Wayland compositor with layer-shell and screencopy (sway, Hyprland, …).
+  On Wayland: `grim` (screenshots) and `wl-copy` (clipboard); window snapping needs sway or
+  Hyprland
 - `notify-send` for notifications, `xdg-open` for "Open Screenshots Folder"
 - For the tray: an AppIndicator/StatusNotifierItem tray host (eww `systray`, waybar, KDE, …)
 
@@ -120,6 +122,8 @@ hands the PNG to a small detached `tyshot serve-clipboard` process and returns i
   the image is handed to it and the helper exits.
 - Otherwise the helper keeps serving the image until another program takes the clipboard,
   then exits.
+
+On Wayland, `wl-copy` does the same job on its own.
 
 ## Configuration
 

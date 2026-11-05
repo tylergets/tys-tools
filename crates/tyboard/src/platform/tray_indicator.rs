@@ -11,7 +11,9 @@ use gtk::glib::{self, ControlFlow};
 use ty_common::icons::Tool;
 use ty_common::tray::{drain_actions, Applet, IconState, MenuEntry, TraySpec};
 
-use crate::clipboard::backend::{menu_label, set_clipboard_value, GtkClipboardBackend};
+use crate::clipboard::backend::{
+    menu_label, set_clipboard_value, GtkClipboardBackend, WlClipboardBackend,
+};
 use crate::clipboard::poller::ClipboardPoller;
 use crate::clipboard::{ClipboardEntry, SharedClipboardState};
 use crate::config::{ClipboardBackend, ClipboardConfig};
@@ -40,16 +42,18 @@ pub fn start(
     clipboard_config: ClipboardConfig,
 ) -> Option<TrayIndicator> {
     ty_common::tray::spawn_gtk_thread(move || {
-        let clipboard = gtk::Clipboard::get(&gtk::gdk::SELECTION_CLIPBOARD);
-        let mut poller = match clipboard_config.backend {
-            ClipboardBackend::Gtk => ClipboardPoller::new(
-                GtkClipboardBackend::new(
-                    &clipboard,
-                    provider_from_config(&clipboard_config.active_window.backend),
-                ),
-                clipboard_config.active_window.blacklist.clone(),
-            ),
-        };
+        let provider = provider_from_config(&clipboard_config.active_window.backend);
+        let backend: Box<dyn crate::clipboard::backend::ClipboardBackend> =
+            match clipboard_config.backend {
+                ClipboardBackend::Gtk => Box::new(gtk_backend(provider)),
+                ClipboardBackend::WlClipboard => Box::new(WlClipboardBackend::new(provider)?),
+                ClipboardBackend::Auto if ty_common::session::is_wayland() => {
+                    Box::new(WlClipboardBackend::new(provider)?)
+                }
+                ClipboardBackend::Auto => Box::new(gtk_backend(provider)),
+            };
+        let mut poller =
+            ClipboardPoller::new(backend, clipboard_config.active_window.blacklist.clone());
         if let Some(entry) = poller.poll_once() {
             if let Err(err) = shared_state.record_entry(entry) {
                 eprintln!("failed to seed clipboard history: {err}");
@@ -66,7 +70,6 @@ pub fn start(
         let tray = Rc::new(RefCell::new(Tray {
             applet,
             state: shared_state,
-            clipboard,
             paused,
         }));
 
@@ -156,12 +159,18 @@ pub fn tray_spec(paused: bool, history: &[ClipboardEntry]) -> TraySpec<TrayActio
     }
 }
 
+fn gtk_backend(
+    provider: Box<dyn crate::core::active_window::ActiveWindowProvider>,
+) -> GtkClipboardBackend {
+    let clipboard = gtk::Clipboard::get(&gtk::gdk::SELECTION_CLIPBOARD);
+    GtkClipboardBackend::new(&clipboard, provider)
+}
+
 /// GTK-thread state. Never borrowed across a call that can spin a nested main loop
 /// (clipboard reads and `store()`), since the poll timer and action handler share it.
 struct Tray {
     applet: Applet<TrayAction>,
     state: SharedClipboardState,
-    clipboard: gtk::Clipboard,
     paused: bool,
 }
 
@@ -192,16 +201,12 @@ fn handle_action(tray: &RefCell<Tray>, action: TrayAction) {
             tray.refresh();
         }
         TrayAction::CopyEntry(index) => {
-            let (clipboard, entry) = {
-                let tray = tray.borrow();
-                (
-                    tray.clipboard.clone(),
-                    tray.state.history_snapshot().get(index).cloned(),
-                )
-            };
+            let entry = tray.borrow().state.history_snapshot().get(index).cloned();
             // The next poll picks the new value up and moves it to the top of the history.
             if let Some(entry) = entry {
-                set_clipboard_value(&clipboard, &entry);
+                if let Err(err) = set_clipboard_value(&entry) {
+                    eprintln!("failed to set the clipboard: {err:#}");
+                }
             }
         }
         TrayAction::ClearHistory => {
