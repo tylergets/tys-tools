@@ -16,6 +16,7 @@ use tyspeak::speech::audio;
 use tyspeak::speech::download::{self, Progress};
 use tyspeak::speech::engine::Engine;
 use tyspeak::speech::models::{self, human_size, MODELS};
+use tyspeak::speech::wav;
 
 use ty_common::status::{Report, StatusArgs};
 
@@ -157,20 +158,8 @@ fn transcribe(config_path: Option<PathBuf>, file: &Path, model: Option<String>) 
             .map_err(|_| anyhow::anyhow!("download thread panicked"))??;
     }
 
-    let mut reader = hound::WavReader::open(file)
-        .with_context(|| format!("failed to open {}", file.display()))?;
-    let spec = reader.spec();
-    let samples: Vec<f32> = match spec.sample_format {
-        hound::SampleFormat::Float => reader.samples::<f32>().collect::<Result<_, _>>()?,
-        hound::SampleFormat::Int => {
-            let scale = (1i64 << (spec.bits_per_sample - 1)) as f32;
-            reader
-                .samples::<i32>()
-                .map(|sample| sample.map(|value| value as f32 / scale))
-                .collect::<Result<_, _>>()?
-        }
-    };
-    let pcm = audio::to_model_input(&samples, usize::from(spec.channels), spec.sample_rate);
+    let wav = wav::read(file)?;
+    let pcm = audio::to_model_input(&wav.samples, usize::from(wav.channels), wav.sample_rate);
 
     let engine = Engine::default();
     let started = Instant::now();
