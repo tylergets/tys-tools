@@ -1,7 +1,7 @@
 # tyshot
 
 `tyshot` is a Flameshot-style screenshot tool for X11 and Wayland: freeze the screen, drag
-out a region, and copy it to the clipboard (or save it as PNG). It has an optional tray icon
+out a region, and copy it to the clipboard (or save it as PNG, or pin it on screen). It has an optional tray icon
 and works well bound to a hotkey in i3 or sway.
 
 ## Features
@@ -13,12 +13,14 @@ and works well bound to a hotkey in i3 or sway.
 - Move the selection by dragging inside it; resize it from any edge or corner handle
 - **Toolbar** beside the selection (button size configurable): select, **box**, **arrow**,
   **pen**, **highlighter**, **text**, **numbered steps**, **blur**, **frame**, undo, redo,
-  **send to opencode**, **copy**, **save**, close
+  **send to opencode**, **pin**, **copy**, **save**, close
 - **Frames**: put the screenshot in a browser window, phone or app window frame. The frame is
   shown on screen and added *around* the selection, so the copied/saved image grows to
   include it and nothing is cropped (rounded corners are transparent)
 - **Send to opencode**: attach the screenshot to an [opencode](https://opencode.ai) session,
   picked by title, or start a new one in a kitty window (see [Sending to opencode](#sending-to-opencode))
+- **Pin**: keep the capture on screen in a borderless, always-on-top window right where it
+  was taken (see [Pins](#pins))
 - **Copy to clipboard** as `image/png`. Copied images stay pasteable after `tyshot` exits
   (see [Clipboard](#clipboard))
 - **Save** to `~/Pictures/tyshot/tyshot-<YYYY-MM-DD_HH-MM-SS>.png` (configurable)
@@ -48,6 +50,7 @@ and works well bound to a hotkey in i3 or sway.
 | Ctrl+A | Select the whole screen |
 | Enter, Ctrl+C, double-click | Copy to the clipboard and close (double-click: select tool only) |
 | Ctrl+S | Save to the output directory and close |
+| Ctrl+P | Pin it on screen and close the overlay |
 | Ctrl+Enter | Send to an opencode session (pick it with 1–9, or the arrows + Enter) |
 | Esc, right-click | Cancel |
 
@@ -77,6 +80,7 @@ nix run .#tyshot -- gui
 ```bash
 tyshot [gui] [--delay SECONDS] [--raw]          # select a region (default command)
 tyshot full [--delay SECONDS] [--save | --raw]  # whole screen; copies unless --save/--raw
+tyshot pin FILE [--at X Y]              # pin an image file (default: centered)
 tyshot tray                             # run the tray applet
 tyshot sessions                         # list recent opencode sessions (id, time, dir, title)
 tyshot validate-config
@@ -92,6 +96,25 @@ i3:
 bindsym Print exec --no-startup-id tyshot
 bindsym Shift+Print exec --no-startup-id tyshot full
 ```
+
+## Pins
+
+A pin is the capture (with its annotations and frame) in its own floating window, like
+Flameshot's pin, for keeping a reference in view while you work. Each pin is its own
+`tyshot` process, which exits when the pin is closed.
+
+| Input | Action |
+| --- | --- |
+| Drag | Move |
+| Scroll | Zoom, around the pointer |
+| Ctrl + scroll | Fade (needs a compositor on X11) |
+| Right-click | Menu: copy, save, original size, close |
+| Double-click, middle-click | Close |
+| Esc / Ctrl+C / Ctrl+S / 0 / + / − | Close / copy / save / original size / zoom (Wayland only) |
+
+On X11 the pin is an override-redirect window, so tiling window managers such as i3 leave it
+floating where it is, but it can't take keyboard focus: use the menu there. On Wayland it is
+a layer-shell surface that takes focus when clicked.
 
 ## Sending to opencode
 

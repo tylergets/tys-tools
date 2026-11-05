@@ -23,6 +23,8 @@ pub enum Commands {
     Gui(GuiArgs),
     /// Capture the whole screen without the overlay.
     Full(FullArgs),
+    /// Pin an image file on screen, like a pinned capture.
+    Pin(PinArgs),
     /// Run the tray applet.
     Tray,
     /// List recent opencode sessions screenshots can be sent to, newest first.
@@ -43,6 +45,15 @@ pub struct GuiArgs {
     /// overlay finishes the capture).
     #[arg(short, long)]
     pub raw: bool,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct PinArgs {
+    /// PNG (or any image GdkPixbuf reads) to pin.
+    pub file: PathBuf,
+    /// Where its top-left corner goes, in logical pixels (default: centered on the screen).
+    #[arg(long, num_args = 2, value_names = ["X", "Y"])]
+    pub at: Option<Vec<f64>>,
 }
 
 #[derive(Debug, Clone, Args)]

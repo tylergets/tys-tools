@@ -2,7 +2,7 @@
 //! out a rectangle (or click a window to select it), move it or resize it by its edges and
 //! handles, annotate it with boxes, arrows, pen and highlighter strokes, text, numbered steps
 //! and blur from the toolbar beside it, optionally put it in a browser/phone/window frame,
-//! then copy or save it.
+//! then copy, save or pin it.
 //!
 //! The snapshot is shown in a `ty_common::overlay::Overlay` covering every monitor (one popup
 //! on X11, layer-shell surfaces on Wayland), so it behaves the same with or without a
@@ -42,6 +42,8 @@ const STROKE_STEP: f64 = 1.0;
 pub enum Action {
     Copy,
     Save,
+    /// Keep it on screen in a floating window (see [`crate::pin`]).
+    Pin,
     /// Attach to an opencode session (possibly a new one).
     SendToOpencode(Target),
 }
@@ -50,6 +52,10 @@ pub enum Action {
 pub struct Capture {
     pub action: Action,
     pub image: Pixbuf,
+    /// Where the image's top-left corner was on the overlay canvas (logical px).
+    pub origin: (f64, f64),
+    /// Image pixels per logical pixel.
+    pub scale: f64,
 }
 
 type Done = Box<dyn FnOnce(Option<Capture>)>;
@@ -482,9 +488,10 @@ fn press_button(window: &Overlay, state: &Rc<RefCell<State>>, button: Button) {
             send_to_agent(window, state);
             return;
         }
-        Button::Copy | Button::Save | Button::Close => {
+        Button::Pin | Button::Copy | Button::Save | Button::Close => {
             drop(s);
             let action = match button {
+                Button::Pin => Some(Action::Pin),
                 Button::Copy => Some(Action::Copy),
                 Button::Save => Some(Action::Save),
                 _ => None,
@@ -666,6 +673,7 @@ fn on_key(window: &Overlay, state: &Rc<RefCell<State>>, event: &gdk::EventKey) {
         key::Return | key::KP_Enter => Some(Action::Copy),
         key::c if ctrl => Some(Action::Copy),
         key::s if ctrl => Some(Action::Save),
+        key::p if ctrl => Some(Action::Pin),
         _ => None,
     };
     if action.is_some() {
@@ -1167,15 +1175,28 @@ fn finish(window: &Overlay, state: &Rc<RefCell<State>>, action: Option<Action>) 
             frame,
             ..
         } = &mut *s;
-        let rendered = match *frame {
-            Frame::None => annotate::render(canvas, annotations, style, crop),
+        let (rendered, origin) = match *frame {
+            Frame::None => (
+                annotate::render(canvas, annotations, style, crop),
+                (f64::from(crop.x) / scale, f64::from(crop.y) / scale),
+            ),
             // The frame goes around the whole selection; the image grows to fit it.
             frame => {
-                annotate::render_framed(canvas, annotations, style, &snap(&rect, scale), frame)
+                let content = snap(&rect, scale);
+                let outer = frame.outer(&content);
+                (
+                    annotate::render_framed(canvas, annotations, style, &content, frame),
+                    (outer.x0, outer.y0),
+                )
             }
         };
         match rendered {
-            Ok(image) => Some(Capture { action, image }),
+            Ok(image) => Some(Capture {
+                action,
+                image,
+                origin,
+                scale,
+            }),
             Err(err) => {
                 eprintln!("error: {err:#}");
                 None

@@ -16,7 +16,7 @@ use tyshot::config::AppConfig;
 use tyshot::overlay::{self, Action, Capture};
 use tyshot::{opencode, output};
 
-use crate::cli::{Cli, Commands, FullArgs, GuiArgs};
+use crate::cli::{Cli, Commands, FullArgs, GuiArgs, PinArgs};
 
 /// Exit status when the user cancels the selection.
 const CANCELLED: u8 = 1;
@@ -35,6 +35,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
     match cli.command.unwrap_or(Commands::Gui(GuiArgs::default())) {
         Commands::Gui(args) => gui(cli.config, args),
         Commands::Full(args) => full(cli.config, args),
+        Commands::Pin(args) => pin_file(cli.config, args),
         Commands::Tray => {
             let config = load_config(cli.config.clone())?;
             tyshot::tray::run(config, cli.config).map(|()| ExitCode::SUCCESS)
@@ -72,10 +73,65 @@ fn gui(config_path: Option<std::path::PathBuf>, args: GuiArgs) -> Result<ExitCod
     };
     if args.raw {
         write_raw(&capture.image)?;
+    } else if capture.action == Action::Pin {
+        pin(config, capture);
     } else {
         deliver(&config, capture)?;
     }
     Ok(ExitCode::SUCCESS)
+}
+
+fn pin_file(config_path: Option<std::path::PathBuf>, args: PinArgs) -> Result<ExitCode> {
+    let config = load_config(config_path)?;
+    gtk::init().context("failed to initialize GTK")?;
+    let image = Pixbuf::from_file(&args.file)
+        .with_context(|| format!("failed to read {}", args.file.display()))?;
+    // A file's pixels are taken as device pixels, like a capture's.
+    let scale = ty_common::screen::logical_scale();
+    let origin = match args.at.as_deref() {
+        Some(&[x, y]) => (x, y),
+        _ => {
+            let bounds = ty_common::screen::bounds()?;
+            (
+                ((f64::from(bounds.width) - f64::from(image.width())) / 2.0 / scale).max(0.0),
+                ((f64::from(bounds.height) - f64::from(image.height())) / 2.0 / scale).max(0.0),
+            )
+        }
+    };
+    pin(
+        config,
+        Capture {
+            action: Action::Pin,
+            image,
+            origin,
+            scale,
+        },
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Keep the capture on screen until its pin is closed. Copy and Save from the pin are
+/// delivered like the overlay's (with notifications); failures are only reported.
+fn pin(config: AppConfig, capture: Capture) {
+    let accent = config.overlay.rgb().unwrap_or((0.9, 0.28, 0.3));
+    let (origin, scale) = (capture.origin, capture.scale);
+    tyshot::pin::show(
+        capture,
+        accent,
+        move |action, image| {
+            let capture = Capture {
+                action,
+                image: image.clone(),
+                origin,
+                scale,
+            };
+            if let Err(err) = deliver(&config, capture) {
+                eprintln!("error: {err:#}");
+            }
+        },
+        gtk::main_quit,
+    );
+    gtk::main();
 }
 
 fn full(config_path: Option<std::path::PathBuf>, args: FullArgs) -> Result<ExitCode> {
@@ -90,7 +146,15 @@ fn full(config_path: Option<std::path::PathBuf>, args: FullArgs) -> Result<ExitC
     } else {
         Action::Copy
     };
-    deliver(&config, Capture { action, image })?;
+    deliver(
+        &config,
+        Capture {
+            action,
+            image,
+            origin: (0.0, 0.0),
+            scale: ty_common::screen::logical_scale(),
+        },
+    )?;
     Ok(ExitCode::SUCCESS)
 }
 
@@ -193,6 +257,7 @@ fn encode_and_deliver(config: &AppConfig, capture: Capture) -> Result<Delivered>
     match capture.action {
         Action::Copy => clipboard::copy_png_detached(&png).map(|()| Delivered::Copied),
         Action::Save => output::save_png(&png, &config.save).map(Delivered::Saved),
+        Action::Pin => bail!("pinned captures are shown, not delivered"),
         Action::SendToOpencode(target) => {
             let timestamp = glib::DateTime::now_local()
                 .and_then(|now| now.format("%Y-%m-%d_%H-%M-%S"))

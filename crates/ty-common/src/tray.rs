@@ -27,6 +27,8 @@ pub use async_channel::{Receiver, Sender};
 
 /// `APP_INDICATOR_CATEGORY_APPLICATION_STATUS`.
 const CATEGORY_APPLICATION_STATUS: u32 = 0;
+/// `APP_INDICATOR_STATUS_PASSIVE`: tray hosts hide the icon.
+const STATUS_PASSIVE: u32 = 0;
 /// `APP_INDICATOR_STATUS_ACTIVE`.
 const STATUS_ACTIVE: u32 = 1;
 
@@ -131,6 +133,14 @@ impl<A: Clone + Send + PartialEq + 'static> Applet<A> {
     pub fn spec(&self) -> TraySpec<A> {
         let inner = self.inner.borrow();
         inner.pending.clone().unwrap_or_else(|| inner.spec.clone())
+    }
+
+    /// Show or hide the icon. Hidden icons are marked passive, which tray hosts don't show.
+    pub fn set_visible(&mut self, visible: bool) {
+        let status = if visible { STATUS_ACTIVE } else { STATUS_PASSIVE };
+        unsafe {
+            libappindicator::app_indicator_set_status(self.inner.borrow().indicator, status);
+        }
     }
 
     pub fn update(&mut self, spec: TraySpec<A>) {

@@ -1,5 +1,5 @@
 //! The toolbar shown next to the selection: annotation tools, frames, undo/redo, send to an
-//! opencode session, copy, save and close. Drawn with cairo (no widgets), so it looks the same in the overlay on any setup.
+//! opencode session, pin, copy, save and close. Drawn with cairo (no widgets), so it looks the same in the overlay on any setup.
 
 use std::f64::consts::{FRAC_PI_2, PI, TAU};
 
@@ -21,6 +21,7 @@ pub enum Button {
     Undo,
     Redo,
     Agent,
+    Pin,
     Copy,
     Save,
     Close,
@@ -41,6 +42,7 @@ impl Button {
             Self::Undo => "Undo (Ctrl+Z)",
             Self::Redo => "Redo (Ctrl+Shift+Z / Ctrl+Y)",
             Self::Agent => "Send to an opencode session (Ctrl+Enter)",
+            Self::Pin => "Pin to the screen (Ctrl+P)",
             Self::Copy => "Copy to clipboard (Enter / Ctrl+C)",
             Self::Save => "Save to file (Ctrl+S)",
             Self::Close => "Close (Esc)",
@@ -61,7 +63,13 @@ const GROUPS: [&[Button]; 3] = [
         Button::Blur,
     ],
     &[Button::Frame, Button::Undo, Button::Redo],
-    &[Button::Agent, Button::Copy, Button::Save, Button::Close],
+    &[
+        Button::Agent,
+        Button::Pin,
+        Button::Copy,
+        Button::Save,
+        Button::Close,
+    ],
 ];
 /// The size the proportions below (and the icons) are designed at.
 const BASE_BUTTON: f64 = 32.0;
@@ -311,6 +319,23 @@ fn draw_icon(cr: &cairo::Context, button: Button) {
             cr.line_to(4.5, 3.0);
             let _ = cr.stroke();
         }
+        Button::Pin => {
+            // A pushpin, tilted: round head, collar, needle to the bottom left.
+            cr.save().ok();
+            cr.rotate(PI / 4.0);
+            cr.arc(0.0, -5.0, 3.0, 0.0, TAU);
+            let _ = cr.stroke();
+            cr.move_to(-2.0, -2.0);
+            cr.line_to(-3.5, 2.0);
+            cr.line_to(3.5, 2.0);
+            cr.line_to(2.0, -2.0);
+            cr.close_path();
+            let _ = cr.stroke();
+            cr.move_to(0.0, 2.0);
+            cr.line_to(0.0, 8.0);
+            let _ = cr.stroke();
+            cr.restore().ok();
+        }
         Button::Copy => {
             rounded_rect(cr, &Rect::from_corners((-7.0, -7.0), (3.0, 3.0)), 1.5);
             let _ = cr.stroke();
@@ -398,7 +423,7 @@ mod tests {
     #[test]
     fn hits_buttons_in_order() {
         let bar = layout(&sel(400.0, 100.0, 800.0, 300.0), 1920.0, 1080.0, 44.0);
-        assert_eq!(bar.buttons.len(), 15);
+        assert_eq!(bar.buttons.len(), 16);
         let center = |rect: &Rect| ((rect.x0 + rect.x1) / 2.0, (rect.y0 + rect.y1) / 2.0);
         for (button, rect) in &bar.buttons {
             assert_eq!(bar.hit(center(rect)), Some(*button));

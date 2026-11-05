@@ -374,7 +374,7 @@ fn wayland_surfaces(namespace: &str) -> Result<(Vec<Surface>, (f64, f64))> {
 /// An always-on-top window that doesn't take focus, covering the given rectangle (logical
 /// pixels on the overlay canvas, see the module docs). Not shown yet.
 pub fn floating_window(namespace: &str, x: i32, y: i32, width: i32, height: i32) -> gtk::Window {
-    let wayland = session::is_wayland() && gtk_layer_shell::is_supported();
+    let wayland = floating_is_layer();
     let window = gtk::Window::new(if wayland {
         gtk::WindowType::Toplevel
     } else {
@@ -382,20 +382,40 @@ pub fn floating_window(namespace: &str, x: i32, y: i32, width: i32, height: i32)
     });
     window.set_app_paintable(true);
     window.set_accept_focus(false);
+    if wayland {
+        window.init_layer_shell();
+        window.set_namespace(namespace);
+        window.set_layer(Layer::Overlay);
+        window.set_keyboard_mode(KeyboardMode::None);
+        window.set_exclusive_zone(-1);
+        window.set_anchor(Edge::Left, true);
+        window.set_anchor(Edge::Top, true);
+    }
+    place_floating(&window, x, y, width, height);
+    window
+}
+
+/// Let a [`floating_window`] take keyboard focus when clicked. Only possible on Wayland: on
+/// X11 it is an override-redirect window, which the window manager never focuses.
+pub fn set_floating_focusable(window: &gtk::Window) {
+    if floating_is_layer() {
+        window.set_accept_focus(true);
+        window.set_keyboard_mode(KeyboardMode::OnDemand);
+    }
+}
+
+/// Move and resize a [`floating_window`] (same coordinates as when creating it). It can move
+/// to another monitor.
+pub fn place_floating(window: &gtk::Window, x: i32, y: i32, width: i32, height: i32) {
     window.set_default_size(width, height);
     window.set_size_request(width, height);
-    if !wayland {
+    if !floating_is_layer() {
+        window.resize(width, height);
         window.move_(x, y);
-        return window;
+        return;
     }
-
-    window.init_layer_shell();
-    window.set_namespace(namespace);
-    window.set_layer(Layer::Overlay);
-    window.set_keyboard_mode(KeyboardMode::None);
-    window.set_exclusive_zone(-1);
     let Some(display) = gdk::Display::default() else {
-        return window;
+        return;
     };
     let (x0, y0) = screen::bounds()
         .map(|bounds| (bounds.x, bounds.y))
@@ -407,11 +427,15 @@ pub fn floating_window(namespace: &str, x: i32, y: i32, width: i32, height: i32)
         .or_else(|| display.monitor_at_point(gx, gy));
     if let Some(monitor) = monitor {
         let area = monitor.geometry();
-        window.set_monitor(&monitor);
-        window.set_anchor(Edge::Left, true);
-        window.set_anchor(Edge::Top, true);
+        if LayerShell::monitor(window).as_ref() != Some(&monitor) {
+            window.set_monitor(&monitor);
+        }
         window.set_layer_shell_margin(Edge::Left, gx - area.x());
         window.set_layer_shell_margin(Edge::Top, gy - area.y());
     }
-    window
+}
+
+/// Floating windows are layer-shell surfaces (on Wayland, where supported), else X11 popups.
+fn floating_is_layer() -> bool {
+    session::is_wayland() && gtk_layer_shell::is_supported()
 }
