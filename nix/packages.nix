@@ -64,14 +64,39 @@
   # Programs the shared display layer (ty-common) runs on Wayland; tools add their own on top.
   waylandDeps = with pkgs; [wl-clipboard];
 
+  # A launcher entry (for rofi/dmenu/app menus) with the tool's icon. `exec` is run as-is.
+  desktopItem = tool: {
+    name ? tool,
+    desktopName,
+    exec,
+    comment,
+  }:
+    pkgs.makeDesktopItem {
+      inherit name desktopName exec comment;
+      icon = tool;
+      categories = ["Utility"];
+      terminal = false;
+    };
+
   # Wrap `bins` from the workspace build with GTK env (icons, GSettings schemas),
   # LD_LIBRARY_PATH for the dlopen'd appindicator, and `runtimeDeps` on PATH.
+  # Installs one desktop entry running the tool's default command, plus `desktopEntries`.
   mkTool = {
     name,
     description,
     bins ? [name],
     runtimeDeps ? [],
-  }:
+    desktopEntries ? [],
+  }: let
+    items = map (desktopItem name) ([
+        {
+          desktopName = name;
+          exec = name;
+          comment = description;
+        }
+      ]
+      ++ desktopEntries);
+  in
     pkgs.stdenv.mkDerivation {
       pname = name;
       inherit (workspace) version;
@@ -80,7 +105,12 @@
       nativeBuildInputs = with pkgs; [makeWrapper wrapGAppsHook3];
       buildInputs = guiLibs ++ [pkgs.gsettings-desktop-schemas];
       dontWrapGApps = true;
-      installPhase = "mkdir -p $out/bin";
+      installPhase = ''
+        mkdir -p $out/bin $out/share/applications
+        install -Dm644 ${../crates/ty-common/icons + "/${name}.svg"} \
+          $out/share/icons/hicolor/scalable/apps/${name}.svg
+        ${lib.concatMapStrings (item: "ln -s ${item}/share/applications/* $out/share/applications/\n") items}
+      '';
       postFixup = lib.concatMapStrings (bin: ''
         makeWrapper ${workspace}/bin/${bin} $out/bin/${bin} \
           "''${gappsWrapperArgs[@]}" \
@@ -122,6 +152,20 @@ in {
     name = "tyshot";
     description = "Screenshot and annotation tool (X11 and Wayland)";
     runtimeDeps = waylandDeps ++ [pkgs.grim];
+    desktopEntries = [
+      {
+        name = "tyshot-full";
+        desktopName = "tyshot full";
+        exec = "tyshot full";
+        comment = "Copy a screenshot of the whole screen";
+      }
+      {
+        name = "tyshot-delay";
+        desktopName = "tyshot delayed";
+        exec = "tyshot gui --delay 5";
+        comment = "Select a screen region after 5 seconds";
+      }
+    ];
   };
 
   tyspeak = mkTool {

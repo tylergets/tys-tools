@@ -17,11 +17,15 @@ use crate::config::AppConfig;
 const ID: &str = "tyshot";
 /// Gives the tray menu time to disappear from the screen before the snapshot is taken.
 const MENU_CLOSE_DELAY: &str = "0.25";
+/// Choices in the "Capture Region After" submenu, in seconds.
+const REGION_DELAYS: [u32; 3] = [3, 5, 10];
 
 /// Tray menu and click actions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TrayAction {
     CaptureRegion,
+    /// Freeze the screen after this many seconds, then select a region.
+    CaptureRegionAfter(u32),
     CaptureScreen,
     OpenFolder,
     Quit,
@@ -39,6 +43,13 @@ fn spec() -> TraySpec<TrayAction> {
         title: ID.to_string(),
         menu: vec![
             action("Capture Region", TrayAction::CaptureRegion),
+            MenuEntry::Submenu {
+                label: "Capture Region After".to_string(),
+                entries: REGION_DELAYS
+                    .iter()
+                    .map(|&secs| action(&format!("{secs} s"), TrayAction::CaptureRegionAfter(secs)))
+                    .collect(),
+            },
             action("Capture Screen", TrayAction::CaptureScreen),
             MenuEntry::Separator,
             action("Open Screenshots Folder", TrayAction::OpenFolder),
@@ -63,6 +74,9 @@ pub fn run(config: AppConfig, config_path: Option<PathBuf>) -> Result<()> {
     drain_actions(rx, move |action| {
         match action {
             TrayAction::CaptureRegion => launcher.spawn(&["gui", "--delay", MENU_CLOSE_DELAY]),
+            TrayAction::CaptureRegionAfter(secs) => {
+                launcher.spawn(&["gui", "--delay", &secs.to_string()])
+            }
             TrayAction::CaptureScreen => launcher.spawn(&["full", "--delay", MENU_CLOSE_DELAY]),
             TrayAction::OpenFolder => match save.resolved_output_dir() {
                 Ok(dir) => open_folder(&dir),

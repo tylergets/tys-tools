@@ -26,7 +26,8 @@ and works well bound to a hotkey in i3 or sway.
 - **Save** to `~/Pictures/tyshot/tyshot-<YYYY-MM-DD_HH-MM-SS>.png` (configurable)
 - Full-screen capture without the overlay, optional delay
 - Tray applet (libappindicator): Capture Region (also on middle-click, if your tray host
-  forwards it), Capture Screen, Open Screenshots Folder. The icon re-registers if the tray
+  forwards it), Capture Region After 3 / 5 / 10 s (to open a menu or hover state first),
+  Capture Screen, Open Screenshots Folder. The icon re-registers if the tray
   host (bar) starts after tyshot or restarts
 - Desktop notification after copying or saving
 - HiDPI aware: crops are exact device pixels
@@ -85,6 +86,12 @@ tyshot tray                             # run the tray applet
 tyshot sessions                         # list recent opencode sessions (id, time, dir, title)
 tyshot validate-config
 ```
+
+`--delay` waits before freezing the screen, so you can open a menu or tooltip first:
+`tyshot gui --delay 5`.
+
+The Nix package installs launcher (`.desktop`) entries for rofi/dmenu/app menus:
+**tyshot** (region), **tyshot full** and **tyshot delayed** (region after 5 s).
 
 `--raw` writes the PNG to stdout instead of copying or saving it (no notification), for
 scripts: `tyshot gui --raw > shot.png`. Saving prints the written path to stdout. The exit status is `0` on success, `1` if the
