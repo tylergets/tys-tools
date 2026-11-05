@@ -232,6 +232,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -2035,6 +2036,19 @@ dependencies = [
  "serde_json",
  "ty-common",
  "x11rb",
+]
+
+[[package]]
+name = "tyci"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "gtk",
+ "serde",
+ "serde_json",
+ "ty-common",
 ]
 
 [[package]]

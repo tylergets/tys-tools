@@ -1,5 +1,5 @@
 {
-  description = "ty* desktop tools: tyboard, tykey, tycapture, tyshot, tyspeak, tylight, tygesture, typort";
+  description = "ty* desktop tools: tyboard, tykey, tycapture, tyshot, tyspeak, tylight, tygesture, typort, tyci";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -15,7 +15,7 @@
     systems = ["x86_64-linux" "aarch64-linux"];
     forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
 
-    tools = ["tyboard" "tykey" "tycapture" "tyshot" "tyspeak" "tylight" "tygesture" "typort"];
+    tools = ["tyboard" "tykey" "tycapture" "tyshot" "tyspeak" "tylight" "tygesture" "typort" "tyci"];
 
     # Called directly on legacyPackages (no nixpkgs re-instantiation) for fast evaluation.
     mkPackages = pkgs:

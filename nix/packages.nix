@@ -138,4 +138,10 @@ in {
     name = "typort";
     description = "Tray applet for your listening ports: open them in the browser or stop them";
   };
+
+  tyci = mkTool {
+    name = "tyci";
+    description = "Open GitHub PRs and running CI in your tray (via the gh CLI)";
+    runtimeDeps = [pkgs.gh];
+  };
 }

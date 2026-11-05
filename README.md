@@ -14,6 +14,7 @@ Rust, packaged with Nix, MIT licensed.
 | [tylight](crates/tylight) | Warmer screen colors at night, plus monitor brightness. X11 and wlroots. |
 | [tygesture](crates/tygesture) | Touchpad gestures (swipe, pinch, rotate, hold) mapped to commands, read straight from libinput. X11 and Wayland. |
 | [typort](crates/typort) | Your running dev servers in the tray: open them in the browser or stop them. |
+| [tyci](crates/tyci) | Running CI and recently opened PRs from GitHub, in your tray. |
 
 Each tool's README has the full details.
 
@@ -80,7 +81,7 @@ tykey also has typed options (`expansions`, `snippets`, `matchBehavior`, `bounda
 
 ```nix
 nixpkgs.overlays = [inputs.tys-tools.overlays.default];
-# adds pkgs.tyboard, pkgs.tykey, pkgs.tycapture, pkgs.tyshot, pkgs.tyspeak, pkgs.tylight, pkgs.tygesture, pkgs.typort
+# adds pkgs.tyboard, pkgs.tykey, pkgs.tycapture, pkgs.tyshot, pkgs.tyspeak, pkgs.tylight, pkgs.tygesture, pkgs.typort, pkgs.tyci
 ```
 
 ## Configuration

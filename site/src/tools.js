@@ -293,6 +293,38 @@ ignore_processes: [kdeconnectd]
 https_ports: [8443]
 browser: [firefox, --new-tab]   # default xdg-open`,
   },
+  {
+    name: "tyci",
+    tagline: "Your CI and PRs, in the tray.",
+    summary:
+      "Shows the GitHub Actions runs going right now, the ones that just finished, and " +
+      "recently opened pull requests. Click one to open it. Uses the gh CLI you're already logged in to.",
+    features: [
+      "Running and recently finished CI runs across your repos",
+      "Recently opened PRs from any GitHub search (involves:@me by default)",
+      "Icon turns yellow while CI runs and red when a run fails",
+      "Notification when a run finishes, click to open it",
+      "Whitelist and blacklist repos, with owner and * globs",
+      "Live status output for polybar, eww and other bars",
+    ],
+    requirements: [
+      "gh, logged in",
+      "notify-send, xdg-open",
+      "A system tray (eww, waybar, KDE, …)",
+    ],
+    usage: `tyci run                                # tray applet
+tyci list [--json]                      # fetch once and print
+tyci status --follow --format polybar   # for bars`,
+    config: `poll_seconds: 60
+repos:
+  include: [tylergets, my-org/api-*]   # whitelist (empty: all)
+  exclude: [tylergets/old-thing]       # blacklist
+pull_requests:
+  query: "involves:@me"
+  max_age_days: 14
+notifications:
+  on_finish: true`,
+  },
 ];
 
 export const findTool = (name) => tools.find((t) => t.name === name);
