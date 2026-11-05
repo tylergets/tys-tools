@@ -23,10 +23,7 @@ import ToolIcon from "../ToolIcon.vue";
     <li><strong>Quiet.</strong> No setup wizards, no pop-ups, no nagging.</li>
     <li><strong>No ads.</strong> No upsells, no "pro" version.</li>
     <li><strong>Reproducible.</strong> One Nix flake, Home Manager modules included.</li>
-    <li>
-      <strong>Minimal, auditable dependencies.</strong>
-      <RouterLink to="/deps">See the list</RouterLink>.
-    </li>
+    <li><strong>Minimal, auditable dependencies.</strong> <RouterLink to="/deps">See the list</RouterLink>.</li>
     <li><strong>Open source.</strong> <a :href="license">MIT licensed</a>.</li>
   </ul>
 
