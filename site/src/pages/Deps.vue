@@ -20,13 +20,12 @@ const shortLicense = (license) => (license?.includes("MIT") ? "MIT" : license ??
   <div class="table">
     <table>
       <thead>
-        <tr><th>Crate</th><th>Version</th><th>Required</th><th>License</th><th>Used by</th></tr>
+        <tr><th>Crate</th><th>Version</th><th>License</th><th>Used by</th></tr>
       </thead>
       <tbody>
         <tr v-for="d in deps.external" :key="d.name">
           <td><a :href="crate(d.name)">{{ d.name }}</a></td>
           <td>{{ d.versions.join(", ") || "—" }}</td>
-          <td class="muted">{{ d.req ?? "—" }}</td>
           <td :title="d.license ?? undefined">{{ shortLicense(d.license) }}</td>
           <td>{{ d.usedBy.length === deps.crates.length ? "all" : d.usedBy.join(" ") }}</td>
         </tr>

@@ -24,6 +24,8 @@ Monorepo for the ty* X11 desktop tools. One Cargo workspace, one Nix flake.
   `nix/modules/<tool>.nix`.
 - Shared dependencies are declared once in the root `Cargo.toml` `[workspace.dependencies]`;
   crates use `dep.workspace = true`.
+- Those versions are pinned exactly (`"=1.2.3"`), so `cargo update` won't move them. To
+  upgrade a dependency, change its pin in the root `Cargo.toml`.
 
 ## Validation
 Builds are slow and CPU-heavy, so run them sparingly.
