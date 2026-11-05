@@ -7,6 +7,9 @@
 pub mod clipboard;
 pub mod config;
 #[cfg(target_os = "linux")]
+pub mod frame;
+pub mod geometry;
+#[cfg(target_os = "linux")]
 pub mod icons;
 #[cfg(target_os = "linux")]
 pub mod input;

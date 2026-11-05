@@ -4,7 +4,6 @@
 pub mod annotate;
 pub mod blur;
 pub mod config;
-pub mod frame;
 pub mod opencode;
 pub mod output;
 pub mod overlay;

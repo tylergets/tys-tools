@@ -17,9 +17,12 @@ also working on Wayland (sway, Hyprland and other wlroots compositors).
   recording (never part of the video; hidden for full-screen recordings)
 - Per-recording setup dialog: file name, frame rate, format (mkv/mp4), quality, cursor,
   countdown, microphone (with source picker, live level meter and optional voice cleanup),
-  system audio, intro card. The last choices are remembered across restarts
+  system audio, intro card, frame. The last choices are remembered across restarts
   (`${XDG_STATE_HOME:-~/.local/state}/tycapture/last-options.json`) and take precedence over
   the config defaults; delete that file to go back to them
+- Frames: put the video in a browser window, phone or app window frame (the same frames as
+  tyshot). The frame goes around the video (and the intro), so nothing is covered except the
+  rounded corners, and the output grows to fit it. Adding a frame re-encodes the recording
 - Hardware encoding: NVENC or VAAPI is detected automatically and used for capture,
   compression and zoom renders, with libx264 as fallback
 - "Recording saved" notification with actions: Open, Open Zoomed, Show in Folder, Copy (as a
@@ -91,7 +94,7 @@ For eww, use `deflisten` with `--format json`; the JSON has `state`
 
 Config is YAML. Discovery order: `./tycapture.yaml`, then
 `~/.config/tycapture/config.yaml`; override with `--config PATH`. All keys are optional.
-`recording`, `audio`, `intro` and `zoom.enabled` values are the defaults pre-filled in the setup
+`recording`, `audio`, `intro`, `zoom.enabled` and `frame.style` values are the defaults pre-filled in the setup
 dialog the first time; after that the dialog starts from your last recording's choices.
 
 ```yaml
@@ -124,6 +127,10 @@ intro:
   logo: null                # image path, supports ~/
   duration: 3.0             # seconds, 1–10
   font: Sans
+frame:                      # frame around the video, added when post-processing
+  style: none               # none | browser | mobile | window
+  background: "#ffffff"     # shown outside the frame's rounded corners
+  scale: 1.0                # 0.5–4.0; size of the bars and borders (2.0 for HiDPI)
 marker:                     # border around the recorded area while recording
   enabled: true
   color: "#e5484d"

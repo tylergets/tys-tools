@@ -1,5 +1,6 @@
-//! Post-processing of a finished `.capture.mkv` into the final file (intro, compression and
-//! remux in a single ffmpeg run), plus an optional zoomed copy next to it (see [`crate::zoom`]).
+//! Post-processing of a finished `.capture.mkv` into the final file (intro, frame, compression
+//! and remux in a single ffmpeg run), plus an optional zoomed copy next to it (see
+//! [`crate::zoom`]).
 
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -9,6 +10,7 @@ use std::thread;
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
+use ty_common::frame::Frame;
 
 use crate::capture::encoder::{Speed, VideoEncoder};
 use crate::capture::options::{Format, Quality};
@@ -45,6 +47,31 @@ pub struct TranscodeSettings {
     pub intro: Option<IntroSettings>,
     /// Zoom on clicks using the capture's cursor log. Forces a re-encode.
     pub zoom: Option<ZoomSettings>,
+    /// Decorative frame around the video (and intro). Forces a re-encode.
+    pub frame: Option<FrameSettings>,
+}
+
+/// A browser/phone/window frame drawn around the video; the output grows to fit it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FrameSettings {
+    pub frame: Frame,
+    /// Multiplier for the frame's bars and borders.
+    pub scale: f64,
+    /// RGB (0.0..=1.0) outside the frame's rounded corners.
+    pub background: (f64, f64, f64),
+    /// Size of the capture the frame goes around.
+    pub width: u32,
+    pub height: u32,
+}
+
+/// A rendered frame image on disk, used as an ffmpeg input.
+#[derive(Debug, Clone, PartialEq)]
+struct FrameInput {
+    path: PathBuf,
+    width: u32,
+    height: u32,
+    left: u32,
+    top: u32,
 }
 
 /// A black title card with an optional logo and title that fades in and out.
@@ -248,8 +275,63 @@ fn run_ffmpeg(
         }
         duration += intro.duration;
     }
+    let frame = settings
+        .frame
+        .as_ref()
+        .map(|frame| write_frame_image(frame, output))
+        .transpose()?;
+    let result = run_transcode(
+        ffmpeg,
+        capture,
+        output,
+        duration,
+        settings,
+        frame.as_ref(),
+        state,
+        (start, end),
+    );
+    if let Some(frame) = &frame {
+        let _ = std::fs::remove_file(&frame.path);
+    }
+    result
+}
+
+/// Render the frame as raw RGBA next to `output`, for ffmpeg to overlay.
+fn write_frame_image(settings: &FrameSettings, output: &Path) -> Result<FrameInput> {
+    let overlay = settings.frame.overlay(
+        settings.width,
+        settings.height,
+        settings.scale,
+        settings.background,
+        2,
+    )?;
+    let mut path = output.as_os_str().to_owned();
+    path.push(".frame.rgba");
+    let path = PathBuf::from(path);
+    std::fs::write(&path, &overlay.rgba)
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(FrameInput {
+        path,
+        width: overlay.width,
+        height: overlay.height,
+        left: overlay.left,
+        top: overlay.top,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_transcode(
+    ffmpeg: &str,
+    capture: &Path,
+    output: &Path,
+    duration: Duration,
+    settings: &TranscodeSettings,
+    frame: Option<&FrameInput>,
+    state: &Mutex<JobState>,
+    (start, end): (f32, f32),
+) -> Result<()> {
     let mut child = Command::new(ffmpeg)
-        .args(transcode_args(capture, output, settings))
+        .args(transcode_args(capture, output, settings, frame))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -283,9 +365,14 @@ fn run_ffmpeg(
     Ok(())
 }
 
-fn transcode_args(capture: &Path, output: &Path, settings: &TranscodeSettings) -> Vec<String> {
-    // The intro has to be encoded, so it implies compression.
-    let video = (settings.compress || settings.intro.is_some())
+fn transcode_args(
+    capture: &Path,
+    output: &Path,
+    settings: &TranscodeSettings,
+    frame: Option<&FrameInput>,
+) -> Vec<String> {
+    // The intro and frame have to be encoded, so they imply compression.
+    let video = (settings.compress || settings.intro.is_some() || frame.is_some())
         .then(|| settings.encoder.args(settings.quality, Speed::Thorough));
 
     let mut args: Vec<String> = vec![
@@ -302,14 +389,13 @@ fn transcode_args(capture: &Path, output: &Path, settings: &TranscodeSettings) -
     }
     args.extend(["-i".into(), capture.display().to_string()]);
     let filter = video.as_ref().and_then(|video| video.filter);
-    match &settings.intro {
-        Some(intro) => args.extend(intro_args(intro, filter)),
-        None => {
-            args.extend(["-map".into(), "0".into()]);
-            if let Some(filter) = filter {
-                args.extend(["-vf".into(), filter.into()]);
-            }
+    if settings.intro.is_none() && frame.is_none() {
+        args.extend(["-map".into(), "0".into()]);
+        if let Some(filter) = filter {
+            args.extend(["-vf".into(), filter.into()]);
         }
+    } else {
+        args.extend(filter_graph_args(settings.intro.as_ref(), frame, filter));
     }
 
     match video {
@@ -327,9 +413,69 @@ fn transcode_args(capture: &Path, output: &Path, settings: &TranscodeSettings) -
     args
 }
 
-/// Inputs, filter graph and maps that put `intro` in front of input 0. `encoder_filter` is
-/// appended to the joined video (hardware upload).
-fn intro_args(intro: &IntroSettings, encoder_filter: Option<&str>) -> Vec<String> {
+/// Inputs, filter graph and maps for an intro and/or frame applied to input 0, in that order
+/// (so the frame goes around the intro too). `encoder_filter` is appended last (hardware
+/// upload).
+fn filter_graph_args(
+    intro: Option<&IntroSettings>,
+    frame: Option<&FrameInput>,
+    encoder_filter: Option<&str>,
+) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut graph = Vec::new();
+    let mut video = "0:v".to_string();
+    let mut next_input = 1;
+    // Each stage writes `[cv]` when only the encoder filter follows, `[v]` when nothing does.
+    let last = if encoder_filter.is_some() { "cv" } else { "v" };
+
+    if let Some(intro) = intro {
+        let out = if frame.is_some() { "intro" } else { last };
+        let (inputs, chain) = intro_graph(intro, out);
+        args.extend(inputs);
+        graph.push(chain);
+        next_input += usize::from(intro.logo.is_some());
+        video = out.to_string();
+    }
+    if let Some(frame) = frame {
+        args.extend([
+            "-f".into(),
+            "rawvideo".into(),
+            "-pix_fmt".into(),
+            "rgba".into(),
+            "-video_size".into(),
+            format!("{}x{}", frame.width, frame.height),
+            "-i".into(),
+            frame.path.display().to_string(),
+        ]);
+        // Pad to the frame's size, then lay the frame (transparent where the video shows)
+        // over it; the single frame image repeats for the whole video.
+        graph.push(format!(
+            "[{video}]pad={}:{}:{}:{}[padded];[padded][{next_input}:v]overlay=0:0:format=auto[{last}]",
+            frame.width, frame.height, frame.left, frame.top
+        ));
+        video = last.to_string();
+    }
+    if let Some(filter) = encoder_filter {
+        graph.push(format!("[{video}]{filter}[v]"));
+    }
+
+    args.extend([
+        "-filter_complex".into(),
+        graph.join(";"),
+        "-map".into(),
+        "[v]".into(),
+    ]);
+    match intro {
+        Some(intro) if intro.audio => args.extend(["-map".into(), "[a]".into()]),
+        Some(_) => {}
+        None => args.extend(["-map".into(), "0:a?".into()]),
+    }
+    args
+}
+
+/// Inputs and filter chain that put `intro` in front of input 0, writing the joined video to
+/// `[out]` and, with audio, the joined audio to `[a]`.
+fn intro_graph(intro: &IntroSettings, out: &str) -> (Vec<String>, String) {
     let IntroSettings {
         width,
         height,
@@ -377,11 +523,7 @@ fn intro_args(intro: &IntroSettings, encoder_filter: Option<&str>) -> Vec<String
         ",fade=t=in:st=0:d={INTRO_FADE_IN_SECS},fade=t=out:st={fade_out_start}:d={INTRO_FADE_OUT_SECS}\
          ,setsar=1,format=yuv420p[iv];[0:v]setsar=1,format=yuv420p[mv];"
     ));
-    let joined = if encoder_filter.is_some() {
-        "[cv]"
-    } else {
-        "[v]"
-    };
+    let joined = format!("[{out}]");
     if intro.audio {
         chain.push_str(&format!(
             "anullsrc=r={INTRO_SAMPLE_RATE}:cl=stereo:d={secs}[ia];\
@@ -391,15 +533,7 @@ fn intro_args(intro: &IntroSettings, encoder_filter: Option<&str>) -> Vec<String
     } else {
         chain.push_str(&format!("[iv][mv]concat=n=2:v=1:a=0{joined}"));
     }
-    if let Some(filter) = encoder_filter {
-        chain.push_str(&format!(";[cv]{filter}[v]"));
-    }
-
-    args.extend(["-filter_complex".into(), chain, "-map".into(), "[v]".into()]);
-    if intro.audio {
-        args.extend(["-map".into(), "[a]".into()]);
-    }
-    args
+    (args, chain)
 }
 
 /// Round down to an even number of pixels, as yuv420p needs.
@@ -436,7 +570,8 @@ fn parse_progress(line: &str, duration: Duration) -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use super::{
-        escape_filter_value, parse_progress, transcode_args, IntroSettings, TranscodeSettings,
+        escape_filter_value, parse_progress, transcode_args, FrameInput, IntroSettings,
+        TranscodeSettings,
     };
     use crate::capture::encoder::VideoEncoder;
     use crate::capture::options::{Format, Quality};
@@ -452,6 +587,7 @@ mod tests {
             encoder: VideoEncoder::Software,
             intro: None,
             zoom: None,
+            frame: None,
         }
     }
 
@@ -483,6 +619,7 @@ mod tests {
             Path::new("a.capture.mkv"),
             Path::new("a.mp4"),
             &settings(true, Quality::Medium),
+            None,
         )
         .join(" ");
         assert!(args.contains("-preset slow -crf 23"));
@@ -495,6 +632,7 @@ mod tests {
             Path::new("a.capture.mkv"),
             Path::new("a.mp4"),
             &settings(true, Quality::Lossless),
+            None,
         )
         .join(" ");
         assert!(args.contains("-qp 0"));
@@ -506,6 +644,7 @@ mod tests {
             Path::new("a.capture.mkv"),
             Path::new("a.mp4"),
             &settings(false, Quality::High),
+            None,
         )
         .join(" ");
         assert!(args.contains("-c copy"));
@@ -524,7 +663,12 @@ mod tests {
     fn intro_forces_encode_and_concats() {
         let mut settings = settings(false, Quality::High);
         settings.intro = Some(intro(Some("/logo.png"), true));
-        let args = transcode_args(Path::new("a.capture.mkv"), Path::new("a.mp4"), &settings);
+        let args = transcode_args(
+            Path::new("a.capture.mkv"),
+            Path::new("a.mp4"),
+            &settings,
+            None,
+        );
         let joined = args.join(" ");
         assert!(joined.contains("-loop 1 -framerate 30 -t 3 -i /logo.png"));
         assert!(joined.contains("libx264"));
@@ -540,7 +684,12 @@ mod tests {
     fn intro_without_audio_or_logo() {
         let mut settings = settings(true, Quality::High);
         settings.intro = Some(intro(None, false));
-        let args = transcode_args(Path::new("a.capture.mkv"), Path::new("a.mp4"), &settings);
+        let args = transcode_args(
+            Path::new("a.capture.mkv"),
+            Path::new("a.mp4"),
+            &settings,
+            None,
+        );
         let joined = args.join(" ");
         assert!(!joined.contains("-loop"));
         assert!(!joined.contains("[a]"));
@@ -554,7 +703,12 @@ mod tests {
             device: PathBuf::from("/dev/dri/renderD128"),
         };
         settings.intro = Some(intro(None, true));
-        let args = transcode_args(Path::new("a.capture.mkv"), Path::new("a.mp4"), &settings);
+        let args = transcode_args(
+            Path::new("a.capture.mkv"),
+            Path::new("a.mp4"),
+            &settings,
+            None,
+        );
         let joined = args.join(" ");
         assert!(joined.contains("-y -vaapi_device /dev/dri/renderD128 -i a.capture.mkv"));
         assert!(joined.contains("h264_vaapi"));
@@ -569,17 +723,83 @@ mod tests {
         settings.encoder = VideoEncoder::Vaapi {
             device: PathBuf::from("/dev/dri/renderD128"),
         };
-        let joined =
-            transcode_args(Path::new("a.capture.mkv"), Path::new("a.mp4"), &settings).join(" ");
+        let joined = transcode_args(
+            Path::new("a.capture.mkv"),
+            Path::new("a.mp4"),
+            &settings,
+            None,
+        )
+        .join(" ");
         assert!(joined.contains("-map 0 -vf format=nv12,hwupload -c:v h264_vaapi"));
+    }
+
+    fn frame_input() -> FrameInput {
+        FrameInput {
+            path: PathBuf::from("/v/a.mp4.frame.rgba"),
+            width: 1922,
+            height: 1126,
+            left: 1,
+            top: 44,
+        }
+    }
+
+    #[test]
+    fn frame_pads_and_overlays() {
+        let settings = settings(false, Quality::High);
+        let frame = frame_input();
+        let args = transcode_args(
+            Path::new("a.capture.mkv"),
+            Path::new("a.mp4"),
+            &settings,
+            Some(&frame),
+        );
+        let joined = args.join(" ");
+        assert!(joined
+            .contains("-f rawvideo -pix_fmt rgba -video_size 1922x1126 -i /v/a.mp4.frame.rgba"));
+        assert!(joined.contains("libx264"), "a frame forces an encode");
+        assert!(joined.contains("-map [v] -map 0:a?"));
+        let graph = &args[args.iter().position(|a| a == "-filter_complex").unwrap() + 1];
+        assert_eq!(
+            graph,
+            "[0:v]pad=1922:1126:1:44[padded];[padded][1:v]overlay=0:0:format=auto[v]"
+        );
+    }
+
+    #[test]
+    fn frame_goes_around_intro_and_before_upload() {
+        let mut settings = settings(true, Quality::High);
+        settings.encoder = VideoEncoder::Vaapi {
+            device: PathBuf::from("/dev/dri/renderD128"),
+        };
+        settings.intro = Some(intro(Some("/logo.png"), true));
+        let frame = frame_input();
+        let args = transcode_args(
+            Path::new("a.capture.mkv"),
+            Path::new("a.mp4"),
+            &settings,
+            Some(&frame),
+        );
+        let joined = args.join(" ");
+        assert!(joined.contains("-map [v] -map [a]"));
+        let graph = &args[args.iter().position(|a| a == "-filter_complex").unwrap() + 1];
+        assert!(graph.contains("concat=n=2:v=1:a=1[intro][a];[intro]pad="));
+        // The logo is input 1, so the frame image is input 2.
+        assert!(
+            graph.contains("[padded][2:v]overlay=0:0:format=auto[cv];[cv]format=nv12,hwupload[v]")
+        );
     }
 
     #[test]
     fn remux_ignores_hardware_encoder() {
         let mut settings = settings(false, Quality::High);
         settings.encoder = VideoEncoder::Nvenc;
-        let joined =
-            transcode_args(Path::new("a.capture.mkv"), Path::new("a.mp4"), &settings).join(" ");
+        let joined = transcode_args(
+            Path::new("a.capture.mkv"),
+            Path::new("a.mp4"),
+            &settings,
+            None,
+        )
+        .join(" ");
         assert!(joined.contains("-c copy"));
         assert!(!joined.contains("nvenc"));
     }

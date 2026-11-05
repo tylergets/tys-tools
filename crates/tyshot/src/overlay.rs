@@ -20,10 +20,10 @@ use ty_common::screen::{self, ScreenRect};
 
 use crate::annotate::{self, Annotation, Canvas, Style};
 use crate::config::AppConfig;
-use crate::frame::Frame;
 use crate::opencode::{self, Target};
 use crate::selection::{self, Edges, Hit, Rect};
 use crate::toolbar::{self, Button};
+use ty_common::frame::Frame;
 
 /// How close (logical px) to an edge a press grabs it for resizing.
 const HIT_SLOP: f64 = 8.0;

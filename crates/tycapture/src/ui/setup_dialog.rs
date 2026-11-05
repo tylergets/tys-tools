@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use gtk::glib::{self, ControlFlow};
 use gtk::prelude::*;
+use ty_common::frame::Frame;
 
 use crate::capture::audio::{self, AudioMeter};
 use crate::capture::options::{sanitize_base_name, Format, Quality, RecordingOptions};
@@ -184,6 +185,16 @@ pub fn run(context: &SetupContext, initial: &RecordingOptions) -> Option<Recordi
         "Log the pointer while recording, then render a zoomed version (re-encodes the recording)",
     ));
     add_row("Zoom", zoom.upcast_ref());
+
+    let frame = gtk::ComboBoxText::new();
+    for value in Frame::ALL {
+        frame.append(Some(value.id()), value.name());
+    }
+    frame.set_active_id(Some(initial.frame.id()));
+    frame.set_tooltip_text(Some(
+        "Put the video in a browser, phone or app window frame (re-encodes the recording)",
+    ));
+    add_row("Frame", frame.upcast_ref());
 
     // Intro title card.
     let intro = gtk::CheckButton::with_label("Add title card intro");
@@ -382,6 +393,10 @@ pub fn run(context: &SetupContext, initial: &RecordingOptions) -> Option<Recordi
         intro_title: intro_title.text().trim().to_string(),
         intro_logo: intro_logo.filename(),
         zoom: zoom.is_active(),
+        frame: frame
+            .active_id()
+            .and_then(|id| Frame::from_id(&id))
+            .unwrap_or_default(),
     });
 
     dialog.close();

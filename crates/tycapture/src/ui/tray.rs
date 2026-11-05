@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use gtk::glib::{self, ControlFlow, SourceId};
+use ty_common::frame::Frame;
 use ty_common::icons::Tool;
 use ty_common::screen;
 use ty_common::tray::{self, Applet, IconState, MenuEntry, Receiver, TraySpec};
@@ -15,7 +16,9 @@ use ty_common::wm::{self, WindowId, WindowPlacement};
 
 use crate::capture::encoder::{self, VideoEncoder};
 use crate::capture::options::{sanitize_base_name, Format};
-use crate::capture::transcode::{IntroSettings, JobState, TranscodeJob, TranscodeSettings};
+use crate::capture::transcode::{
+    FrameSettings, IntroSettings, JobState, TranscodeJob, TranscodeSettings,
+};
 use crate::capture::{Recording, RecordingOptions, Region, Target, VideoSource};
 use crate::config::AppConfig;
 use crate::core::control::{self, Action, ActionRequest, SharedStatus};
@@ -581,9 +584,25 @@ impl App {
             framerate: options.framerate,
             audio: options.has_audio(),
         });
+        let frame = (options.frame != Frame::None).then(|| FrameSettings {
+            frame: options.frame,
+            scale: self.config.frame.scale,
+            background: self
+                .config
+                .frame
+                .background_rgb()
+                .unwrap_or((1.0, 1.0, 1.0)),
+            width,
+            height,
+        });
         // Uncompressed Matroska needs no second pass: the capture is the final file.
         let zoom = zoom.then(|| self.config.zoom.clone());
-        if !options.compress && options.format == Format::Mkv && intro.is_none() && zoom.is_none() {
+        if !options.compress
+            && options.format == Format::Mkv
+            && intro.is_none()
+            && zoom.is_none()
+            && frame.is_none()
+        {
             let result = std::fs::rename(&capture, &output)
                 .with_context(|| format!("failed to rename {}", capture.display()));
             match result {
@@ -606,6 +625,7 @@ impl App {
                 encoder: self.encoder(),
                 intro,
                 zoom,
+                frame,
             },
         );
         self.jobs.borrow_mut().push(job);

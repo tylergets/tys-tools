@@ -11,8 +11,8 @@ use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
 use gtk::glib;
 use gtk::prelude::*;
 
-use crate::frame::Frame;
 use crate::selection::{PixelRect, Rect};
+use ty_common::frame::Frame;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Annotation {

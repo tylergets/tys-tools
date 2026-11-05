@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use ty_common::config::{expand_home, expand_user};
+use ty_common::frame::Frame;
 
 use crate::capture::encoder::EncoderChoice;
 use crate::capture::options::{Format, Quality, RecordingOptions};
@@ -25,6 +26,61 @@ pub struct AppConfig {
     pub zoom: ZoomSettings,
     #[serde(default)]
     pub marker: MarkerConfig,
+    #[serde(default)]
+    pub frame: FrameConfig,
+}
+
+/// Decorative frame (browser, phone, app window) around the video, added when
+/// post-processing. `style` is the default for the setup dialog.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct FrameConfig {
+    pub style: Frame,
+    /// `#rrggbb` shown outside the frame's rounded corners.
+    pub background: String,
+    /// Size of the frame's bars and borders; 2.0 suits a HiDPI screen.
+    pub scale: f64,
+}
+
+impl Default for FrameConfig {
+    fn default() -> Self {
+        Self {
+            style: Frame::None,
+            background: "#ffffff".to_string(),
+            scale: 1.0,
+        }
+    }
+}
+
+impl FrameConfig {
+    /// `background` as 0.0..=1.0 RGB components.
+    pub fn background_rgb(&self) -> Option<(f64, f64, f64)> {
+        parse_hex_color(&self.background)
+    }
+
+    fn validate(&self) -> Result<()> {
+        if self.background_rgb().is_none() {
+            bail!("frame.background must look like #rrggbb");
+        }
+        if !(0.5..=4.0).contains(&self.scale) {
+            bail!("frame.scale must be between 0.5 and 4.0");
+        }
+        Ok(())
+    }
+}
+
+/// `#rrggbb` as 0.0..=1.0 RGB components.
+fn parse_hex_color(color: &str) -> Option<(f64, f64, f64)> {
+    let hex = color.strip_prefix('#')?;
+    if hex.len() != 6 || !hex.is_ascii() {
+        return None;
+    }
+    let channel = |range: std::ops::Range<usize>| {
+        u8::from_str_radix(&hex[range], 16)
+            .ok()
+            .map(|value| f64::from(value) / 255.0)
+    };
+    Some((channel(0..2)?, channel(2..4)?, channel(4..6)?))
 }
 
 /// Border drawn around the recorded area while recording (outside it, so it is never
@@ -52,16 +108,7 @@ impl Default for MarkerConfig {
 impl MarkerConfig {
     /// `color` as 0.0..=1.0 RGB components.
     pub fn rgb(&self) -> Option<(f64, f64, f64)> {
-        let hex = self.color.strip_prefix('#')?;
-        if hex.len() != 6 || !hex.is_ascii() {
-            return None;
-        }
-        let channel = |range: std::ops::Range<usize>| {
-            u8::from_str_radix(&hex[range], 16)
-                .ok()
-                .map(|value| f64::from(value) / 255.0)
-        };
-        Some((channel(0..2)?, channel(2..4)?, channel(4..6)?))
+        parse_hex_color(&self.color)
     }
 
     fn validate(&self) -> Result<()> {
@@ -204,6 +251,7 @@ impl AppConfig {
         self.intro.validate()?;
         self.zoom.validate()?;
         self.marker.validate()?;
+        self.frame.validate()?;
         Ok(())
     }
 }
@@ -258,6 +306,7 @@ impl AppConfig {
             intro_title: self.intro.title.clone(),
             intro_logo: self.intro.logo.as_deref().map(expand_user),
             zoom: self.zoom.enabled,
+            frame: self.frame.style,
         }
     }
 }
@@ -326,6 +375,20 @@ mod tests {
         assert!(options.intro);
         assert_eq!(options.intro_title, "Demo");
         assert_eq!(options.intro_logo.as_deref(), Some(Path::new("/logo.png")));
+    }
+
+    #[test]
+    fn parses_frame() {
+        let cfg = AppConfig::parse("frame:\n  style: browser\n  background: \"#101010\"\n")
+            .expect("config should parse");
+        cfg.validate().expect("frame config should be valid");
+        assert_eq!(
+            cfg.default_options().frame,
+            ty_common::frame::Frame::Browser
+        );
+        assert!(AppConfig::parse("frame:\n  style: tablet\n").is_err());
+        let bad = AppConfig::parse("frame:\n  background: white\n").unwrap();
+        assert!(bad.validate().is_err());
     }
 
     #[test]

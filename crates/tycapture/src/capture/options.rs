@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use ty_common::frame::Frame;
 
 /// What is being recorded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
@@ -101,6 +102,8 @@ pub struct RecordingOptions {
     pub intro_logo: Option<PathBuf>,
     /// Zoom in on clicks and follow the pointer, applied when post-processing.
     pub zoom: bool,
+    /// Decorative frame around the video, added when post-processing. Forces a re-encode.
+    pub frame: Frame,
 }
 
 impl RecordingOptions {

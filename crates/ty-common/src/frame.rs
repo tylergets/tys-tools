@@ -1,16 +1,22 @@
-//! Decorative frames drawn around the screenshot: a browser window, a phone, a plain app
-//! window. The frame is added outside the selection, so the screenshot itself is never
-//! covered or cropped; the exported image grows to include it.
+//! Decorative frames drawn around an image or video: a browser window, a phone, a plain app
+//! window. The frame is added outside the content, so the content itself is never covered
+//! (except for its rounded corners) or cropped; the result grows to include the frame.
+//!
+//! [`Frame::paint`] draws with cairo around a content rectangle (tyshot); [`Frame::overlay`]
+//! renders the frame once as an RGBA image to lay over padded video frames (tycapture).
 //!
 //! All sizes are logical pixels.
 
 use std::f64::consts::{FRAC_PI_2, PI};
 
+use anyhow::{Context, Result};
 use gtk::cairo;
+use serde::{Deserialize, Serialize};
 
-use crate::selection::Rect;
+use crate::geometry::Rect;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Frame {
     #[default]
     None,
@@ -23,6 +29,8 @@ pub enum Frame {
 type Radii = [f64; 4];
 
 impl Frame {
+    pub const ALL: [Frame; 4] = [Frame::None, Frame::Browser, Frame::Mobile, Frame::Window];
+
     /// The next frame in the cycle the Frame button steps through.
     pub fn next(self) -> Self {
         match self {
@@ -31,6 +39,20 @@ impl Frame {
             Self::Mobile => Self::Window,
             Self::Window => Self::None,
         }
+    }
+
+    /// Lowercase name, as used in config files.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Browser => "browser",
+            Self::Mobile => "mobile",
+            Self::Window => "window",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|frame| frame.id() == id)
     }
 
     pub fn name(self) -> &'static str {
@@ -122,6 +144,103 @@ impl Frame {
             Self::Mobile => paint_phone_details(cr, &outer),
         }
         cr.restore().ok();
+    }
+}
+
+/// A frame rendered as an image for laying over video: pad each video frame by `left`/`top`
+/// to `width` x `height`, then draw `rgba` on top. Transparent only where the content shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Overlay {
+    pub width: u32,
+    pub height: u32,
+    /// Where the content's top-left corner goes.
+    pub left: u32,
+    pub top: u32,
+    /// Straight (not premultiplied) RGBA, row by row.
+    pub rgba: Vec<u8>,
+}
+
+impl Frame {
+    /// Render the frame around content `width` x `height` device pixels, with frame sizes
+    /// multiplied by `scale`. Outside the frame's rounded corners is `background` (RGB,
+    /// 0.0..=1.0). The overall size is rounded up to a multiple of `align` (2 for yuv420p).
+    pub fn overlay(
+        self,
+        width: u32,
+        height: u32,
+        scale: f64,
+        background: (f64, f64, f64),
+        align: u32,
+    ) -> Result<Overlay> {
+        let (left, top, right, bottom) = self.insets();
+        let px = |value: f64| (value * scale).round().max(0.0) as u32;
+        let align = align.max(1);
+        let total_width = (px(left) + width + px(right)).next_multiple_of(align);
+        let total_height = (px(top) + height + px(bottom)).next_multiple_of(align);
+        let (left, top) = (px(left), px(top));
+
+        let surface = cairo::ImageSurface::create(
+            cairo::Format::ARgb32,
+            total_width as i32,
+            total_height as i32,
+        )
+        .context("failed to create an image surface")?;
+        {
+            let cr = cairo::Context::new(&surface).context("failed to create a cairo context")?;
+            cr.set_source_rgb(background.0, background.1, background.2);
+            let _ = cr.paint();
+            // Punch out the content, then draw the frame around it.
+            cr.set_operator(cairo::Operator::Clear);
+            cr.rectangle(
+                f64::from(left),
+                f64::from(top),
+                f64::from(width),
+                f64::from(height),
+            );
+            let _ = cr.fill();
+            cr.set_operator(cairo::Operator::Over);
+            cr.scale(scale, scale);
+            let content = Rect {
+                x0: f64::from(left) / scale,
+                y0: f64::from(top) / scale,
+                x1: f64::from(left + width) / scale,
+                y1: f64::from(top + height) / scale,
+            };
+            self.paint(&cr, &content);
+        }
+        surface.flush();
+
+        let stride = surface.stride() as usize;
+        let mut rgba = Vec::with_capacity(total_width as usize * total_height as usize * 4);
+        surface
+            .with_data(|data| {
+                for row in data.chunks(stride).take(total_height as usize) {
+                    // Native-endian premultiplied 0xAARRGGBB words.
+                    for pixel in row[..total_width as usize * 4].chunks_exact(4) {
+                        let word = u32::from_ne_bytes([pixel[0], pixel[1], pixel[2], pixel[3]]);
+                        let alpha = (word >> 24) as u8;
+                        let straight = |shift: u32| {
+                            let value = (word >> shift) as u8;
+                            if alpha == 0 {
+                                0
+                            } else {
+                                ((u32::from(value) * 255 + u32::from(alpha) / 2) / u32::from(alpha))
+                                    .min(255) as u8
+                            }
+                        };
+                        rgba.extend([straight(16), straight(8), straight(0), alpha]);
+                    }
+                }
+            })
+            .context("failed to read the frame image")?;
+
+        Ok(Overlay {
+            width: total_width,
+            height: total_height,
+            left,
+            top,
+            rgba,
+        })
     }
 }
 
@@ -238,5 +357,27 @@ mod tests {
         assert_eq!(Frame::None.outer(&content), content);
         let browser = Frame::Browser.outer(&content);
         assert_eq!((browser.x0, browser.y0, browser.y1), (99.0, 56.0, 201.0));
+    }
+
+    #[test]
+    fn ids_round_trip() {
+        for frame in Frame::ALL {
+            assert_eq!(Frame::from_id(frame.id()), Some(frame));
+        }
+    }
+
+    #[test]
+    fn overlay_leaves_content_transparent_and_aligns() {
+        let overlay = Frame::Browser
+            .overlay(100, 60, 1.0, (1.0, 1.0, 1.0), 2)
+            .unwrap();
+        // 1 + 100 + 1 wide; 44 + 60 + 1 = 105 tall, rounded up to 106.
+        assert_eq!((overlay.width, overlay.height), (102, 106));
+        assert_eq!((overlay.left, overlay.top), (1, 44));
+        assert_eq!(overlay.rgba.len(), 102 * 106 * 4);
+        let alpha = |x: u32, y: u32| overlay.rgba[((y * overlay.width + x) * 4 + 3) as usize];
+        assert_eq!(alpha(50, 70), 0, "content shows through");
+        assert_eq!(alpha(50, 20), 255, "title bar is opaque");
+        assert_eq!(alpha(0, 0), 255, "outside the corner is background");
     }
 }

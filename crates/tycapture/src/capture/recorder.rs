@@ -445,6 +445,7 @@ mod tests {
             intro_title: String::new(),
             intro_logo: None,
             zoom: false,
+            frame: Default::default(),
         }
     }
 
