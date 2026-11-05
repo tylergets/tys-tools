@@ -14,8 +14,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use x11rb::connection::Connection;
-use x11rb::protocol::xproto::{ConnectionExt, KeyButMask};
+use ty_common::wm::{self, PointerPoller};
 
 use crate::capture::Region;
 
@@ -24,9 +23,9 @@ const LOG_VERSION: u32 = 1;
 const POLL_INTERVAL: Duration = Duration::from_millis(8);
 const FLUSH_INTERVAL: Duration = Duration::from_secs(1);
 
-pub const BUTTON_LEFT: u8 = 1;
-pub const BUTTON_MIDDLE: u8 = 2;
-pub const BUTTON_RIGHT: u8 = 4;
+pub const BUTTON_LEFT: u8 = wm::buttons::LEFT;
+pub const BUTTON_MIDDLE: u8 = wm::buttons::MIDDLE;
+pub const BUTTON_RIGHT: u8 = wm::buttons::RIGHT;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Header {
@@ -71,7 +70,9 @@ pub struct CursorLogger {
 }
 
 impl CursorLogger {
+    /// Start logging. On Wayland this must run on the GTK thread (see [`PointerPoller`]).
     pub fn start(region: Region, framerate: u32, path: PathBuf) -> Result<Self> {
+        let poller = PointerPoller::new().context("cannot follow the pointer for zooming")?;
         let file = File::create(&path)
             .with_context(|| format!("failed to create cursor log: {}", path.display()))?;
         let header = Header {
@@ -84,7 +85,7 @@ impl CursorLogger {
         let stop = Arc::new(AtomicBool::new(false));
         let thread = {
             let stop = stop.clone();
-            thread::spawn(move || log_pointer(BufWriter::new(file), header, region, &stop))
+            thread::spawn(move || log_pointer(&poller, BufWriter::new(file), header, region, &stop))
         };
         Ok(Self {
             stop,
@@ -109,14 +110,12 @@ impl Drop for CursorLogger {
 }
 
 fn log_pointer(
+    poller: &PointerPoller,
     mut out: BufWriter<File>,
     header: Header,
     region: Region,
     stop: &AtomicBool,
 ) -> Result<()> {
-    let (conn, screen_num) = x11rb::connect(None).context("cursor logger: X connect failed")?;
-    let root = conn.setup().roots[screen_num].root;
-
     serde_json::to_writer(&mut out, &header)?;
     out.write_all(b"\n")?;
 
@@ -125,10 +124,10 @@ fn log_pointer(
     let mut last: Option<(i32, i32, u8)> = None;
     loop {
         let stopping = stop.load(Ordering::Relaxed);
-        let pointer = conn.query_pointer(root)?.reply()?;
-        let x = i32::from(pointer.root_x) - region.x;
-        let y = i32::from(pointer.root_y) - region.y;
-        let buttons = buttons_from_mask(pointer.mask);
+        let pointer = poller.poll()?;
+        let x = pointer.x - region.x;
+        let y = pointer.y - region.y;
+        let buttons = pointer.buttons;
 
         // Always end with a sample, so the log's duration is the recording's.
         if stopping || last != Some((x, y, buttons)) {
@@ -155,17 +154,6 @@ fn log_pointer(
     }
     out.flush()?;
     Ok(())
-}
-
-fn buttons_from_mask(mask: KeyButMask) -> u8 {
-    [
-        (KeyButMask::BUTTON1, BUTTON_LEFT),
-        (KeyButMask::BUTTON2, BUTTON_MIDDLE),
-        (KeyButMask::BUTTON3, BUTTON_RIGHT),
-    ]
-    .into_iter()
-    .filter(|(bit, _)| mask.contains(*bit))
-    .fold(0, |buttons, (_, button)| buttons | button)
 }
 
 /// A loaded cursor log.
@@ -314,14 +302,5 @@ mod tests {
         assert_eq!(log.position_at(0.5), Some((0.0, 0.0)));
         assert_eq!(log.position_at(0.996), Some((40.0, 20.0)));
         assert_eq!(log.position_at(5.0), Some((80.0, 40.0)));
-    }
-
-    #[test]
-    fn maps_button_mask() {
-        assert_eq!(buttons_from_mask(KeyButMask::BUTTON1), BUTTON_LEFT);
-        assert_eq!(
-            buttons_from_mask(KeyButMask::BUTTON3 | KeyButMask::SHIFT),
-            BUTTON_RIGHT
-        );
     }
 }

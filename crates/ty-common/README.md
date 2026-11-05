@@ -13,6 +13,18 @@ its own. If two tools need the same thing, it belongs here.
 | `tray`   | AppIndicator tray applet built from a plain `TraySpec` (Linux only) |
 | `icons`  | The ty* icon set and its idle/attention/busy tray colors (Linux only) |
 | `wake`   | A "something changed" signal from any thread to the GTK thread |
+| `session` | X11 or Wayland, and which compositor (sway, Hyprland, other) |
+| `screen` | Screen bounds, monitors, scale and screenshots (X11, or `grim` on Wayland) |
+| `wm`     | Windows, the focused window, staging a window for recording, the pointer (X11/i3, sway, Hyprland) |
+| `overlay` | Full-screen input overlay for picking regions and windows (layer-shell on Wayland) |
+| `clipboard` | Read, write and watch the clipboard (GTK on X11, wl-clipboard on Wayland) |
+| `input`  | Type text and keys (enigo / `wtype`) and listen to every key press (XRecord / `/dev/input`) |
+
+The display modules (`session` to `input`) pick the X11 or Wayland backend at runtime, so
+the tools don't talk to X11 directly. On Wayland they lean on the wlroots protocols and
+helpers: layer-shell, screencopy (`grim`), data-control (`wl-clipboard`) and
+virtual-keyboard (`wtype`). `clipboard::ClipboardWatcher` and the `/dev/input` listener
+sleep until something happens (`wl-paste --watch`, inotify), in keeping with the tray.
 
 Plus `runtime_dir()` (`$XDG_RUNTIME_DIR`, or the temp dir) and `user_hint()` (`$USER`, or
 `"user"`), for per-user runtime files.
@@ -109,7 +121,7 @@ tray::spawn_gtk_thread(move || {
   which coalesces repeated wakes into one.
 - For things that change on their own (a recording's elapsed time), run a timer only while
   they are in progress, not all the time.
-- `spawn_gtk_thread` runs GTK on its own thread. Without `$DISPLAY`, or if setup fails, it
+- `spawn_gtk_thread` runs GTK on its own thread. Without `$WAYLAND_DISPLAY` or `$DISPLAY`, or if setup fails, it
   logs and returns `None`, so tools keep running without a tray.
 - `spawn_blocking` runs work off the GTK thread and hands the result back to it.
 - Icons are written to the user's hicolor theme on startup. The applet also re-registers

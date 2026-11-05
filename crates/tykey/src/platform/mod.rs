@@ -2,7 +2,7 @@ use std::time::Duration;
 
 #[cfg(target_os = "linux")]
 pub mod app_indicator;
-pub mod x11_rdev;
+pub mod keyboard;
 
 const NOTIFICATION_TIMEOUT: Duration = Duration::from_millis(2000);
 

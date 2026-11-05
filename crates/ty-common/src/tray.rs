@@ -483,15 +483,15 @@ const TRAY_STARTUP_TIMEOUT: Duration = Duration::from_secs(3);
 /// Start GTK on a new thread, run `setup` there (build the [`Applet`], timers, ...), then run
 /// the GTK main loop. Whatever `setup` returns stays alive for the life of the loop.
 ///
-/// Returns `None` (after logging) without `$DISPLAY` or if setup fails. If setup takes longer
+/// Returns `None` (after logging) outside a graphical session or if setup fails. If setup takes longer
 /// than a few seconds the thread keeps going and a handle is returned anyway.
 pub fn spawn_gtk_thread<K, F>(setup: F) -> Option<TrayThread>
 where
     K: 'static,
     F: FnOnce() -> Result<K> + Send + 'static,
 {
-    if env::var_os("DISPLAY").is_none() {
-        eprintln!("warning: DISPLAY is not set; cannot create tray icon");
+    if crate::session::current().is_none() {
+        eprintln!("warning: neither WAYLAND_DISPLAY nor DISPLAY is set; cannot create tray icon");
         return None;
     }
 

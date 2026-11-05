@@ -78,6 +78,25 @@ hold:
   threshold wins.
 - Commands run with `sh -c`; `$TYGESTURE` holds the gesture name (e.g. `swipe 3 left`).
 
+### Wayland
+
+The examples above use X11 tools. `xdotool` can't send keys to Wayland windows, so use
+`wtype` (in tygesture's PATH with the Nix package) and your compositor's own command:
+
+```yaml
+swipe:
+  3:
+    left: wtype -M alt -k Right -m alt   # browser forward
+    right: wtype -M alt -k Left -m alt
+  4:
+    left: swaymsg workspace prev         # Hyprland: hyprctl dispatch workspace e-1
+    right: swaymsg workspace next
+pinch:
+  2:
+    in: wtype -M ctrl -k minus -m ctrl
+    out: wtype -M ctrl -k plus -m ctrl
+```
+
 ## Home Manager
 
 ```nix

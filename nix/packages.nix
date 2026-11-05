@@ -35,6 +35,8 @@
       guiLibs
       ++ (with pkgs; [
         dbus
+        gtk-layer-shell
+        libxkbcommon
         libx11
         libxi
         libinput
@@ -58,6 +60,9 @@
         platforms = lib.platforms.linux;
       };
     });
+
+  # Programs the shared display layer (ty-common) runs on Wayland; tools add their own on top.
+  waylandDeps = with pkgs; [wl-clipboard];
 
   # Wrap `bins` from the workspace build with GTK env (icons, GSettings schemas),
   # LD_LIBRARY_PATH for the dlopen'd appindicator, and `runtimeDeps` on PATH.
@@ -98,28 +103,31 @@ in {
     name = "tyboard";
     description = "Clipboard history tray daemon";
     bins = ["tyboard" "tyboard-rofi"];
+    runtimeDeps = waylandDeps ++ [pkgs.xdotool];
   };
 
   tykey = mkTool {
     name = "tykey";
     description = "Text expander tray daemon";
+    runtimeDeps = [pkgs.wtype];
   };
 
   tycapture = mkTool {
     name = "tycapture";
-    description = "X11 screen recording tray applet";
-    runtimeDeps = with pkgs; [ffmpeg-full pulseaudio dunst i3];
+    description = "Screen recording tray applet (X11 and Wayland)";
+    runtimeDeps = with pkgs; [ffmpeg-full pulseaudio dunst i3 grim wf-recorder];
   };
 
   tyshot = mkTool {
     name = "tyshot";
-    description = "X11 screenshot and annotation tool";
+    description = "Screenshot and annotation tool (X11 and Wayland)";
+    runtimeDeps = waylandDeps ++ [pkgs.grim];
   };
 
   tyspeak = mkTool {
     name = "tyspeak";
     description = "Speech-to-text dictation tray daemon";
-    runtimeDeps = with pkgs; [pulseaudio xdotool];
+    runtimeDeps = waylandDeps ++ (with pkgs; [pulseaudio xdotool wtype]);
   };
 
   tylight = mkTool {

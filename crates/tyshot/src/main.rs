@@ -10,9 +10,11 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
 use gtk::glib;
+use ty_common::clipboard;
+use ty_common::screen::ScreenRect;
 use tyshot::config::AppConfig;
 use tyshot::overlay::{self, Action, Capture};
-use tyshot::{clipboard, opencode, output, x11};
+use tyshot::{opencode, output};
 
 use crate::cli::{Cli, Commands, FullArgs, GuiArgs};
 
@@ -52,7 +54,8 @@ fn load_config(path: Option<std::path::PathBuf>) -> Result<AppConfig> {
 fn gui(config_path: Option<std::path::PathBuf>, args: GuiArgs) -> Result<ExitCode> {
     let config = load_config(config_path)?;
     gtk::init().context("failed to initialize GTK")?;
-    let (snapshot, windows) = take_snapshot(args.delay)?;
+    let snapshot = take_snapshot(args.delay)?;
+    let windows = visible_windows();
 
     let result: Rc<RefCell<Option<Capture>>> = Rc::default();
     {
@@ -77,7 +80,7 @@ fn gui(config_path: Option<std::path::PathBuf>, args: GuiArgs) -> Result<ExitCod
 
 fn full(config_path: Option<std::path::PathBuf>, args: FullArgs) -> Result<ExitCode> {
     let config = load_config(config_path)?;
-    let (image, _) = take_snapshot(args.delay)?;
+    let image = take_snapshot(args.delay)?;
     if args.raw {
         write_raw(&image)?;
         return Ok(ExitCode::SUCCESS);
@@ -91,13 +94,13 @@ fn full(config_path: Option<std::path::PathBuf>, args: FullArgs) -> Result<ExitC
     Ok(ExitCode::SUCCESS)
 }
 
-/// The screen as a pixbuf, and the windows that were visible on it (topmost first).
-fn take_snapshot(delay: f64) -> Result<(Pixbuf, Vec<x11::WindowRect>)> {
+/// The screen as a pixbuf.
+fn take_snapshot(delay: f64) -> Result<Pixbuf> {
     if !(0.0..=3600.0).contains(&delay) {
         bail!("--delay must be between 0 and 3600 seconds");
     }
     std::thread::sleep(Duration::from_secs_f64(delay));
-    let shot = x11::screenshot().context("failed to snapshot the screen")?;
+    let shot = ty_common::screen::screenshot().context("failed to snapshot the screen")?;
     let image = Pixbuf::from_bytes(
         &glib::Bytes::from_owned(shot.rgb),
         Colorspace::Rgb,
@@ -107,7 +110,19 @@ fn take_snapshot(delay: f64) -> Result<(Pixbuf, Vec<x11::WindowRect>)> {
         shot.height as i32,
         shot.width as i32 * 3,
     );
-    Ok((image, shot.windows))
+    Ok(image)
+}
+
+/// Visible windows (topmost first), for snapping. A convenience: without it, selection still
+/// works by dragging.
+fn visible_windows() -> Vec<ScreenRect> {
+    match ty_common::wm::visible_windows() {
+        Ok(windows) => windows.into_iter().map(|window| window.rect).collect(),
+        Err(err) => {
+            eprintln!("warning: could not list windows for snapping: {err:#}");
+            Vec::new()
+        }
+    }
 }
 
 /// Write the image to stdout as PNG (for `--raw`; no clipboard, file or notification).
@@ -176,7 +191,7 @@ fn encode_and_deliver(config: &AppConfig, capture: Capture) -> Result<Delivered>
         .save_to_bufferv("png", &[])
         .context("failed to encode PNG")?;
     match capture.action {
-        Action::Copy => clipboard::copy_png(&png).map(|()| Delivered::Copied),
+        Action::Copy => clipboard::copy_png_detached(&png).map(|()| Delivered::Copied),
         Action::Save => output::save_png(&png, &config.save).map(Delivered::Saved),
         Action::SendToOpencode(target) => {
             let timestamp = glib::DateTime::now_local()

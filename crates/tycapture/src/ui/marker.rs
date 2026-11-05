@@ -1,8 +1,9 @@
 //! Border around the area being recorded, shown during the countdown and while recording.
 //!
-//! The border is four thin override-redirect windows placed just outside the region, so it is
-//! never part of the capture, works without a compositor, and i3 leaves it alone. Edges that
-//! would fall off-screen (e.g. for a full-screen recording) are not shown.
+//! The border is four thin windows placed just outside the region, so it is never part of the
+//! capture: override-redirect windows on X11 (which work without a compositor and which i3
+//! leaves alone), layer-shell surfaces on Wayland. Edges that would fall off-screen (e.g. for
+//! a full-screen recording) are not shown.
 
 use gtk::prelude::*;
 
@@ -14,18 +15,14 @@ pub struct Marker {
     windows: Vec<gtk::Window>,
 }
 
-/// A rectangle in device pixels: `(x0, y0, x1, y1)`, end exclusive.
+/// A rectangle in screen pixels: `(x0, y0, x1, y1)`, end exclusive.
 type Rect = (i32, i32, i32, i32);
 
 impl Marker {
-    /// Show a border around `region` on a `screen` sized X screen.
+    /// Show a border around `region` on a `screen` sized screen.
     pub fn show(region: Region, screen: (u32, u32), config: &MarkerConfig) -> Self {
         let (red, green, blue) = config.rgb().unwrap_or((0.9, 0.28, 0.3));
-        let scale = gtk::gdk::Screen::default()
-            .and_then(|screen| screen.display().monitor(0))
-            .map(|monitor| monitor.scale_factor())
-            .unwrap_or(1)
-            .max(1);
+        let scale = (ty_common::screen::logical_scale().round() as i32).max(1);
         let windows = border_rects(region, screen, config.width as i32)
             .into_iter()
             .map(|(rect, outward)| {
@@ -54,13 +51,7 @@ impl Drop for Marker {
 }
 
 fn strip_window((x, y, width, height): (i32, i32, i32, i32)) -> gtk::Window {
-    let window = gtk::Window::new(gtk::WindowType::Popup);
-    window.set_app_paintable(true);
-    window.set_accept_focus(false);
-    window.move_(x, y);
-    window.set_default_size(width, height);
-    window.set_size_request(width, height);
-    window
+    ty_common::overlay::floating_window("tycapture-marker", x, y, width, height)
 }
 
 /// Which side of a strip faces away from the region, so logical rounding never moves a
@@ -101,7 +92,7 @@ fn border_rects(
     .collect()
 }
 
-/// Convert a device-pixel rect to logical `(x, y, width, height)`, rounding the edge that
+/// Convert a screen-pixel rect to logical `(x, y, width, height)`, rounding the edge that
 /// touches the region away from it.
 fn to_logical((x0, y0, x1, y1): Rect, outward: Outward, scale: i32) -> (i32, i32, i32, i32) {
     let floor = |value: i32| value.div_euclid(scale);

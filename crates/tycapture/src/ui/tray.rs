@@ -9,20 +9,20 @@ use std::time::Duration;
 use anyhow::{bail, Context, Result};
 use gtk::glib::{self, ControlFlow, SourceId};
 use ty_common::icons::Tool;
+use ty_common::screen;
 use ty_common::tray::{self, Applet, IconState, MenuEntry, Receiver, TraySpec};
+use ty_common::wm::{self, WindowId, WindowPlacement};
 
 use crate::capture::encoder::{self, VideoEncoder};
 use crate::capture::options::{sanitize_base_name, Format};
 use crate::capture::transcode::{IntroSettings, JobState, TranscodeJob, TranscodeSettings};
-use crate::capture::{Recording, RecordingOptions, Region, Target};
+use crate::capture::{Recording, RecordingOptions, Region, Target, VideoSource};
 use crate::config::AppConfig;
 use crate::core::control::{self, Action, ActionRequest, SharedStatus};
 use crate::core::saved_options;
 use crate::core::status::{format_elapsed, JobStatus, State, Status};
 use crate::platform::desktop;
 use crate::platform::dunst::{self, DndGuard};
-use crate::platform::i3::{self, WindowPlacement};
-use crate::platform::x11;
 use crate::ui::marker::Marker;
 use crate::ui::region_select;
 use crate::ui::setup_dialog::{self, SetupContext};
@@ -30,7 +30,7 @@ use crate::zoom::cursor_log::{self, CursorLogger};
 use crate::zoom::zoomed_path;
 
 const APP_ID: &str = "tycapture";
-/// Time given to i3 to apply floating/resize before reading the window geometry.
+/// Time given to i3/sway to apply floating/resize before reading the window geometry.
 const WINDOW_SETTLE_DELAY: Duration = Duration::from_millis(400);
 /// Menu, status and job refresh rate while recording or processing.
 const TICK_INTERVAL: Duration = Duration::from_millis(250);
@@ -43,9 +43,7 @@ fn notify(summary: &str, body: &str) {
 }
 
 pub fn run(config: AppConfig, control_listener: UnixListener) -> Result<()> {
-    if std::env::var_os("DISPLAY").is_none() {
-        bail!("DISPLAY is not set; tycapture requires an X11 session");
-    }
+    ty_common::session::require("tycapture")?;
     gtk::init()?;
 
     let (tray_tx, tray_rx) = tray::channel();
@@ -250,23 +248,25 @@ impl App {
     }
 
     fn start_screen(self: &Rc<Self>, skip_dialog: bool) -> Result<()> {
-        let (width, height) = x11::screen_size()?;
+        // wf-recorder records one monitor at a time, so on Wayland "screen" is the focused one.
+        let region = if ty_common::session::is_wayland() {
+            let monitor = wm::focused_monitor()?;
+            Region::new(monitor.x, monitor.y, monitor.width, monitor.height)
+        } else {
+            let (width, height) = screen::size()?;
+            Region::new(0, 0, width, height)
+        };
         let Some(options) = self.choose_options(Target::Screen, skip_dialog, None, None)? else {
             self.set_phase(Phase::Idle);
             return Ok(());
         };
-        self.begin(
-            Target::Screen,
-            Region::new(0, 0, width, height),
-            options,
-            None,
-        );
+        self.begin(Target::Screen, region, options, None);
         Ok(())
     }
 
     fn start_window(self: &Rc<Self>, skip_dialog: bool) {
         let app = self.clone();
-        tray::spawn_blocking(x11::select_window, move |selection| {
+        let picked = move |selection: Result<Option<WindowId>>| {
             let result = selection.and_then(|window| match window {
                 Some(window) => app.stage_window(window, skip_dialog),
                 None => Ok(false),
@@ -275,15 +275,21 @@ impl App {
                 app.set_phase(Phase::Idle);
             }
             app.report(result.map(|_| ()));
-        });
+        };
+        if ty_common::session::is_wayland() {
+            // Wayland clients can't grab the pointer; pick from an overlay instead.
+            region_select::select_window(picked);
+        } else {
+            tray::spawn_blocking(wm::pick_x11_window, picked);
+        }
     }
 
-    /// Ask for options, hand the window to i3, then begin once it has settled.
-    /// Returns `Ok(false)` if the user cancelled.
-    fn stage_window(self: &Rc<Self>, window: u32, skip_dialog: bool) -> Result<bool> {
-        let current = x11::window_region(window)
+    /// Ask for options, hand the window to i3/sway (when running one), then begin once it
+    /// has settled. Returns `Ok(false)` if the user cancelled.
+    fn stage_window(self: &Rc<Self>, window: WindowId, skip_dialog: bool) -> Result<bool> {
+        let current = wm::window_rect(&window)
             .ok()
-            .map(|region| (region.width, region.height));
+            .map(|rect| (rect.width, rect.height));
         let Some(options) = self.choose_options(Target::Window, skip_dialog, current, None)? else {
             return Ok(false);
         };
@@ -292,14 +298,23 @@ impl App {
             .or(current)
             .context("could not determine the window size")?;
 
-        let placement =
-            i3::stage_window_for_recording(window, width, height, &self.config.window.workspace)?
-                .filter(|_| self.config.window.restore);
+        // Other window managers can't move the window aside; it is recorded where it is.
+        let placement = if wm::can_stage_windows() {
+            wm::stage_window(&window, width, height, &self.config.window.workspace)?
+                .filter(|_| self.config.window.restore)
+        } else {
+            None
+        };
 
         let app = self.clone();
         glib::timeout_add_local_once(WINDOW_SETTLE_DELAY, move || {
-            match x11::window_region(window) {
-                Ok(region) => app.begin(Target::Window, region, options, placement),
+            match wm::window_rect(&window) {
+                Ok(rect) => app.begin(
+                    Target::Window,
+                    Region::new(rect.x, rect.y, rect.width, rect.height),
+                    options,
+                    placement,
+                ),
                 Err(err) => {
                     restore_placement(placement);
                     app.set_phase(Phase::Idle);
@@ -344,7 +359,7 @@ impl App {
         let context = SetupContext {
             target,
             ffmpeg: self.config.recording.ffmpeg.clone(),
-            screen: x11::screen_size()?,
+            screen: screen::size()?,
             window_size,
             region_size,
         };
@@ -409,7 +424,7 @@ impl App {
         if !marker_config.enabled {
             return;
         }
-        let Ok(screen) = x11::screen_size() else {
+        let Ok(screen) = screen::size() else {
             return;
         };
         if let Some(region) = region.fit_for_encoding(screen.0, screen.1) {
@@ -444,8 +459,8 @@ impl App {
             options,
             placement,
         } = pending;
-        let (screen_width, screen_height) = x11::screen_size()?;
-        let region = region
+        let (screen_width, screen_height) = screen::size()?;
+        let region = single_monitor(region)?
             .fit_for_encoding(screen_width, screen_height)
             .context("selected area is not visible on screen")?;
         let (capture, final_output) = output_paths(
@@ -453,7 +468,7 @@ impl App {
             &options.base_name,
             options.format,
         );
-        let display = std::env::var("DISPLAY").context("DISPLAY is not set")?;
+        let source = VideoSource::current()?;
 
         let dnd = self
             .config
@@ -474,7 +489,7 @@ impl App {
             .transpose()?;
         let recording = Recording::start(
             &self.config.recording.ffmpeg,
-            &display,
+            &source,
             region,
             &options,
             &self.encoder(),
@@ -755,6 +770,36 @@ impl App {
 }
 
 /// `(capture, final)` paths: `<dir>/<base>-<timestamp>.capture.mkv` and `.<format>`.
+/// On Wayland, the part of `region` on the monitor under its center (wf-recorder records one
+/// monitor at a time). Unchanged on X11.
+fn single_monitor(region: Region) -> Result<Region> {
+    if !ty_common::session::is_wayland() {
+        return Ok(region);
+    }
+    let rect = ty_common::screen::ScreenRect::new(region.x, region.y, region.width, region.height);
+    let center = (
+        region.x + region.width as i32 / 2,
+        region.y + region.height as i32 / 2,
+    );
+    let monitors = screen::monitors()?;
+    let clipped = monitors
+        .iter()
+        .find(|monitor| monitor.contains(center))
+        .or_else(|| {
+            monitors
+                .iter()
+                .find(|monitor| monitor.intersect(&rect).is_some())
+        })
+        .and_then(|monitor| monitor.intersect(&rect))
+        .context("selected area is not on any monitor")?;
+    Ok(Region::new(
+        clipped.x,
+        clipped.y,
+        clipped.width,
+        clipped.height,
+    ))
+}
+
 fn output_paths(dir: &Path, base_name: &str, format: Format) -> (PathBuf, PathBuf) {
     let stamp = glib::DateTime::now_local()
         .and_then(|now| now.format("%Y%m%d-%H%M%S"))
@@ -832,7 +877,7 @@ fn notify_saved(output: PathBuf, capture: Option<PathBuf>) {
 
 fn restore_placement(placement: Option<WindowPlacement>) {
     if let Some(placement) = placement {
-        if let Err(err) = i3::restore_window(&placement) {
+        if let Err(err) = wm::restore_window(&placement) {
             eprintln!("warning: failed to restore window placement: {err:#}");
         }
     }

@@ -18,7 +18,7 @@ Hugging Face revisions and checksums. Like Hex, it runs them with
   remembered (`${XDG_STATE_HOME:-~/.local/state}/tyspeak/state.json`).
 - Resumable, SHA-256-verified downloads. If one fails, **Retry Download** in the tray (or
   `tyspeak retry`) picks up where it stopped.
-- Text is typed into the focused window (xdotool), put on the clipboard, or both.
+- Text is typed into the focused window (xdotool on X11, wtype on Wayland), put on the clipboard, or both.
 - A small D-Bus API on the session bus for i3 bindings, scripts and bars.
 - `status --follow` for polybar, eww and other bars.
 
@@ -38,9 +38,10 @@ selected model downloads automatically (set `auto_download: false` to turn that 
 
 ## Requirements
 
-- X11 session
+- X11 session, or a Wayland compositor with the virtual-keyboard protocol (sway, Hyprland, …)
 - PulseAudio or PipeWire with `pipewire-pulse` (`parec` records the microphone)
-- `xdotool` (typing), `notify-send`; optional: `xdg-open`
+- `xdotool` (typing on X11) or `wtype` and `wl-copy` (Wayland), `notify-send`; optional:
+  `xdg-open`
 - An AppIndicator/StatusNotifierItem tray host (eww `systray`, polybar with snixembed, KDE, …)
 
 The Nix package wraps the binary with all runtime tools on `PATH`. CPU inference is built for
@@ -73,7 +74,8 @@ before it takes effect, and a `start` in that window keeps the recording going, 
 push-to-talk works while the key is held.
 
 The text is typed with `xdotool type --clearmodifiers`, so modifiers still held from the
-binding don't change it.
+binding don't change it. On Wayland, `wtype`'s virtual keyboard has its own modifier state,
+so held modifiers don't apply either.
 
 ## CLI
 

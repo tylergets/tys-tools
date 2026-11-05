@@ -24,7 +24,7 @@ pub struct ClipboardConfig {
 impl Default for ClipboardConfig {
     fn default() -> Self {
         Self {
-            backend: ClipboardBackend::Gtk,
+            backend: ClipboardBackend::Auto,
             active_window: ActiveWindowConfig::default(),
             secrets: SecretsConfig::default(),
         }
@@ -34,8 +34,13 @@ impl Default for ClipboardConfig {
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ClipboardBackend {
+    /// `gtk` on X11, `wl_clipboard` on Wayland.
     #[default]
+    Auto,
+    /// GTK's clipboard (X11).
     Gtk,
+    /// `wl-paste --watch` (Wayland compositors with the data-control protocol).
+    WlClipboard,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -134,6 +139,17 @@ impl ClipboardConfig {
 #[cfg(test)]
 mod tests {
     use super::AppConfig;
+
+    #[test]
+    fn parses_clipboard_backends() {
+        let cfg: AppConfig =
+            serde_json::from_str(r#"{"clipboard": {"backend": "wl_clipboard"}}"#).unwrap();
+        assert_eq!(cfg.clipboard.backend, super::ClipboardBackend::WlClipboard);
+        assert_eq!(
+            AppConfig::default().clipboard.backend,
+            super::ClipboardBackend::Auto
+        );
+    }
 
     #[test]
     fn validate_accepts_empty_config() {

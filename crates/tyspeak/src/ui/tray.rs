@@ -35,9 +35,7 @@ const MIN_SAMPLES: usize = SAMPLE_RATE as usize / 4;
 const SILENCE_PEAK_DB: f32 = -50.0;
 
 pub fn run(config: AppConfig) -> Result<()> {
-    if std::env::var_os("DISPLAY").is_none() {
-        bail!("DISPLAY is not set; tyspeak requires an X11 session");
-    }
+    ty_common::session::require("tyspeak")?;
     gtk::init()?;
     let model_dir = config.resolved_model_dir()?;
 

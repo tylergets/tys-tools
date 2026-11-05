@@ -12,7 +12,10 @@ use gtk::prelude::*;
 use ty_common::icons::Tool;
 use ty_common::tray::{self, drain_actions, Applet, IconState, MenuEntry, TraySpec};
 
-use crate::clipboard::backend::{menu_label, set_clipboard_value, GtkClipboardBackend};
+use crate::clipboard::backend::{
+    menu_label, set_clipboard_value, ClipboardBackend as Backend, GtkClipboardBackend,
+    WlClipboardBackend,
+};
 use crate::clipboard::poller::ClipboardPoller;
 use crate::clipboard::secrets::SecretFilter;
 use crate::clipboard::{ClipboardEntry, SharedClipboardState};
@@ -40,20 +43,36 @@ pub fn start(
     clipboard_config: ClipboardConfig,
 ) -> Option<TrayIndicator> {
     ty_common::tray::spawn_gtk_thread(move || {
-        let clipboard = gtk::Clipboard::get(&gtk::gdk::SELECTION_CLIPBOARD);
-        let mut poller = match clipboard_config.backend {
-            ClipboardBackend::Gtk => ClipboardPoller::new(
-                GtkClipboardBackend::new(
-                    &clipboard,
-                    provider_from_config(&clipboard_config.active_window.backend),
-                ),
-                clipboard_config.active_window.blacklist.clone(),
-                SecretFilter::from_config(&clipboard_config.secrets).unwrap_or_else(|err| {
-                    eprintln!("warning: secret filter disabled: {err:#}");
-                    SecretFilter::default()
-                }),
-            ),
+        let provider = provider_from_config(&clipboard_config.active_window.backend);
+        let use_wayland = match clipboard_config.backend {
+            ClipboardBackend::Gtk => false,
+            ClipboardBackend::WlClipboard => true,
+            ClipboardBackend::Auto => ty_common::session::is_wayland(),
         };
+        // GTK: read on the clipboard's owner-change signal. Wayland: `wl-paste --watch`
+        // wakes this thread on each change.
+        let (backend, change_source): (Box<dyn Backend>, ChangeSource) = if use_wayland {
+            let (waker, wakeups) = ty_common::wake::pair();
+            (
+                Box::new(WlClipboardBackend::new(provider, waker)?),
+                ChangeSource::Wakeups(wakeups),
+            )
+        } else {
+            let clipboard = gtk::Clipboard::get(&gtk::gdk::SELECTION_CLIPBOARD);
+            (
+                Box::new(GtkClipboardBackend::new(&clipboard, provider)),
+                ChangeSource::OwnerChange(clipboard),
+            )
+        };
+        let secrets = SecretFilter::from_config(&clipboard_config.secrets).unwrap_or_else(|err| {
+            eprintln!("warning: secret filter disabled: {err:#}");
+            SecretFilter::default()
+        });
+        let mut poller = ClipboardPoller::new(
+            backend,
+            clipboard_config.active_window.blacklist.clone(),
+            secrets,
+        );
         if let Some(entry) = poller.poll_once() {
             if let Err(err) = shared_state.record_entry(entry) {
                 eprintln!("failed to seed clipboard history: {err}");
@@ -70,7 +89,6 @@ pub fn start(
         let tray = Rc::new(RefCell::new(Tray {
             applet,
             state: shared_state,
-            clipboard: clipboard.clone(),
             paused,
             _pause_monitor: None,
         }));
@@ -100,19 +118,27 @@ pub fn start(
             Err(err) => eprintln!("warning: cannot watch the pause marker: {err}"),
         }
 
-        // Read the clipboard when its owner changes rather than polling it.
+        // Read the clipboard when it changes rather than polling it.
         let watcher = Rc::new(ClipboardWatcher {
             poller: RefCell::new(poller),
             pending: Cell::new(false),
             tray: tray.clone(),
         });
-        // (gtk-rs 0.18 has no typed binding for this signal.)
-        clipboard.connect_local("owner-change", false, move |_| {
-            // Reading runs a nested main loop, so don't do it inside the signal.
-            let watcher = watcher.clone();
-            glib::idle_add_local_once(move || watcher.on_change());
-            None
-        });
+        match change_source {
+            ChangeSource::OwnerChange(clipboard) => {
+                // (gtk-rs 0.18 has no typed binding for this signal.)
+                clipboard.connect_local("owner-change", false, move |_| {
+                    // Reading runs a nested main loop, so don't do it inside the signal.
+                    let watcher = watcher.clone();
+                    glib::idle_add_local_once(move || watcher.on_change());
+                    None
+                });
+            }
+            ChangeSource::Wakeups(wakeups) => tray::on_wake(wakeups, move || {
+                watcher.on_change();
+                ControlFlow::Continue
+            }),
+        }
 
         Ok(tray)
     })
@@ -164,19 +190,24 @@ pub fn tray_spec(paused: bool, history: &[ClipboardEntry]) -> TraySpec<TrayActio
     }
 }
 
+/// What tells the tray the clipboard changed.
+enum ChangeSource {
+    OwnerChange(gtk::Clipboard),
+    Wakeups(ty_common::wake::Wakeups),
+}
+
 /// GTK-thread state. Never borrowed across a call that can spin a nested main loop
 /// (clipboard reads and `store()`), since the clipboard watcher and action handler share it.
 struct Tray {
     applet: Applet<TrayAction>,
     state: SharedClipboardState,
-    clipboard: gtk::Clipboard,
     paused: bool,
     _pause_monitor: Option<gio::FileMonitor>,
 }
 
 /// Records the clipboard after each owner change.
 struct ClipboardWatcher {
-    poller: RefCell<ClipboardPoller<GtkClipboardBackend>>,
+    poller: RefCell<ClipboardPoller<Box<dyn Backend>>>,
     /// A change arrived while a read was running (reads spin a nested main loop).
     pending: Cell<bool>,
     tray: Rc<RefCell<Tray>>,
@@ -253,16 +284,12 @@ fn handle_action(tray: &RefCell<Tray>, action: TrayAction) {
             tray.refresh();
         }
         TrayAction::CopyEntry(index) => {
-            let (clipboard, entry) = {
-                let tray = tray.borrow();
-                (
-                    tray.clipboard.clone(),
-                    tray.state.history_snapshot().get(index).cloned(),
-                )
-            };
-            // The owner change picks the new value up and moves it to the top of the history.
+            let entry = tray.borrow().state.history_snapshot().get(index).cloned();
+            // The change watcher picks the new value up and moves it to the top of the history.
             if let Some(entry) = entry {
-                set_clipboard_value(&clipboard, &entry);
+                if let Err(err) = set_clipboard_value(&entry) {
+                    eprintln!("failed to set the clipboard: {err:#}");
+                }
             }
         }
         TrayAction::ClearHistory => {

@@ -44,7 +44,7 @@ Example:
 
 ```yaml
 clipboard:
-  backend: gtk
+  backend: auto
   active_window:
     backend:
       kind: auto
@@ -53,16 +53,24 @@ clipboard:
       - slack
 ```
 
+### Clipboard Backend
+
+- `auto` (default) - `gtk` on X11, `wl_clipboard` on Wayland
+- `gtk` - GTK's clipboard (X11)
+- `wl_clipboard` - `wl-paste --watch` (Wayland compositors with the data-control protocol:
+  sway, Hyprland, KDE, …). GTK can't read the Wayland clipboard from a tray daemon.
+
 ### Active Window Backend
 
-- `kind: auto` - tries `hyprctl` first, then `xdotool`
+- `kind: auto` - tries `hyprctl` first, then (on Wayland) sway's IPC, then `xdotool`
 - `kind: disabled` - do not capture active-window metadata
 - `kind: command` - run a custom command and parse stdout as a title
 
 When available, `source_window` metadata includes more than `title` and `app_id`.
 `hyprctl` provides the richest details (`initial_app_id`, `initial_title`,
-`window_id`, `pid`, `workspace_id`, `workspace_name`, and `is_xwayland`), while
-`xdotool` includes `window_id`, `pid`, and `workspace_id`.
+`window_id`, `pid`, `workspace_id`, `workspace_name`, and `is_xwayland`), sway's IPC
+includes `window_id`, `pid`, `workspace_name`, and `is_xwayland`, while `xdotool` includes
+`window_id`, `pid`, and `workspace_id`.
 
 ### Active Window Blacklist
 

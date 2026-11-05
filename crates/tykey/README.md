@@ -1,6 +1,6 @@
 # tykey
 
-`tykey` is a small global text expansion CLI for Linux X11 (mainly used on i3).
+`tykey` is a small global text expansion CLI for Linux on X11 (mainly used on i3) and Wayland.
 
 This project is an eternal work in progress, built for my personal setup and day-to-day use. PRs are welcome, especially for support in other desktop environments.
 
@@ -8,7 +8,7 @@ It listens globally for trigger strings and replaces them with configured expans
 
 ## Features
 
-- Global trigger detection on X11
+- Global trigger detection on X11 and Wayland
 - YAML-based expansion config
 - Expansion action macros (keys, delays, caret movement)
 - Template macros for datetime (`DATETIME`, `DATE`, `TIME`), Linux commands (`CMD`), and emoji shortcodes (`EMOJI`)
@@ -18,8 +18,15 @@ It listens globally for trigger strings and replaces them with configured expans
 
 ## Requirements
 
-- Linux with X11 session
-- Input simulation support for your session/environment
+- Linux with an X11 session, or a Wayland compositor with the virtual-keyboard protocol
+  (sway, Hyprland, …)
+- On Wayland:
+  - read access to `/dev/input` (Wayland doesn't let one app see another's keys, so tykey
+    reads the keyboards directly): add yourself to the `input` group
+    (`users.users.<you>.extraGroups = ["input"];` on NixOS) and log in again
+  - the keyboard layout comes from `XKB_DEFAULT_LAYOUT` (and `XKB_DEFAULT_VARIANT`, …),
+    default `us`; set them to match your compositor's layout
+  - `wtype` for typing (on `PATH` in the Nix package)
 - For Nix usage: flakes enabled
 
 ## Install and run
@@ -186,7 +193,8 @@ on). tykey also has typed `expansions`, `snippets`, `matchBehavior`, `boundaryCh
 - `src/core/engine.rs`: trigger matching and expansion execution
 - `src/core/expansion.rs`: macro parsing
 - `src/io/`: input/output interfaces
-- `src/platform/x11_rdev.rs`: X11 backend (`rdev` listener + `enigo` output)
+- `src/platform/keyboard.rs`: keyboard backend on top of `ty_common::input` (X11: `rdev`
+  listener + `enigo` output; Wayland: `/dev/input` + xkbcommon listener, `wtype` output)
 - `../../nix/modules/tykey.nix`: Home Manager module
 
 ## License

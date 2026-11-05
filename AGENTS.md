@@ -4,8 +4,12 @@ Monorepo for the ty* X11 desktop tools. One Cargo workspace, one Nix flake.
 
 ## Layout
 - `crates/ty-common` — shared code: tray applet (`tray`), single-instance lock (`lock`),
-  config discovery/loading (`config`), notifications (`notify`), `status` CLI helpers.
-  If two tools need the same thing, it goes here, not in both.
+  config discovery/loading (`config`), notifications (`notify`), `status` CLI helpers, and the
+  X11/Wayland display layer: `session` (which one), `screen` (size, screenshot), `wm`
+  (windows, i3/sway/Hyprland IPC, pointer), `overlay` (full-screen input overlay, floating
+  windows), `clipboard`, `input` (typing, global key listening).
+  If two tools need the same thing, it goes here, not in both. Tools should not talk to X11
+  or Wayland directly.
 - `crates/<tool>` — tyboard, tykey, tycapture, tyshot, tyspeak.
 - `nix/packages.nix` — one crane build of the whole workspace + a thin wrapper per tool
   (runtime PATH / GTK env). Add a tool's runtime programs to its `runtimeDeps` there.

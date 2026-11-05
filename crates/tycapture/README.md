@@ -1,6 +1,7 @@
 # tycapture
 
-`tycapture` is an X11 screen recorder that lives in your system tray, built for i3.
+`tycapture` is a screen recorder that lives in your system tray, built for i3 on X11 and
+also working on Wayland (sway, Hyprland and other wlroots compositors).
 
 ## Features
 
@@ -8,8 +9,9 @@
   **middle-click stops** a recording (if your tray host forwards secondary activation)
 - **Record Entire Screen**
 - **Record Window**: click a window, pick a size (1080p, 720p, 4K, square, vertical, custom…),
-  and tycapture moves it to its own i3 workspace as a borderless floating window of exactly
-  that size. When recording ends the window goes back where it was.
+  and tycapture moves it to its own i3 (or sway) workspace as a borderless floating window of
+  exactly that size. When recording ends the window goes back where it was. With other
+  window managers the window is recorded where it is.
 - **Record Region**: drag out a rectangle on a dimmed snapshot of the screen
 - On-screen marker: a thin border just outside the recorded area during the countdown and
   recording (never part of the video; hidden for full-screen recordings)
@@ -30,9 +32,21 @@
 
 ## Requirements
 
-- X11 session (i3 for window recording)
+- X11 session, or a wlroots Wayland compositor (sway, Hyprland, …)
 - `ffmpeg` with x11grab and PulseAudio support (`ffmpeg-full` in nixpkgs), `pactl`,
   `notify-send`; optional: `dunstctl`, `xdg-open`
+- On Wayland: `wf-recorder` (recording) and `grim` (the region/window picker)
+
+### Wayland notes
+
+- Recording goes through `wf-recorder`, which captures one monitor: **Record Entire Screen**
+  records the focused monitor, and regions are clipped to the monitor under their center.
+- Videos are in layout (logical) pixels, so HiDPI monitors are scaled down to the region
+  size. The cursor is always recorded (`draw_mouse` has no effect).
+- **Record Window** picks the window from an overlay (Wayland clients can't grab the
+  pointer); this needs sway or Hyprland. Moving the window aside needs sway.
+- **Zoom** needs the pointer position, which only Hyprland exposes. Clicks are read from
+  `/dev/input` (be in the `input` group), otherwise the zoom follows the pointer only.
 - An AppIndicator/StatusNotifierItem tray host (eww `systray`, waybar, KDE, …)
 
 The Nix package wraps the binary with all runtime tools on `PATH`.

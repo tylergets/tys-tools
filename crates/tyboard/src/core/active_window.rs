@@ -61,24 +61,51 @@ impl ActiveWindowProvider for CommandActiveWindowProvider {
     }
 }
 
+/// The focused window from sway's (or i3's) IPC socket.
+pub struct IpcActiveWindowProvider;
+
+impl ActiveWindowProvider for IpcActiveWindowProvider {
+    fn capture(&self) -> Option<ActiveWindowContext> {
+        let window = ty_common::wm::active_window()?;
+        if window.title.trim().is_empty() {
+            return None;
+        }
+        Some(ActiveWindowContext {
+            backend: "ipc".to_string(),
+            title: window.title,
+            app_id: window.app_id,
+            initial_app_id: None,
+            initial_title: None,
+            window_id: window.window_id,
+            pid: window.pid,
+            workspace_id: None,
+            workspace_name: window.workspace_name,
+            is_xwayland: window.is_xwayland,
+        })
+    }
+}
+
 pub struct AutoActiveWindowProvider {
     providers: Vec<Box<dyn ActiveWindowProvider>>,
 }
 
 impl AutoActiveWindowProvider {
     pub fn new() -> Self {
-        Self {
-            providers: vec![
-                Box::new(CommandActiveWindowProvider::new(
-                    "hyprctl",
-                    vec!["activewindow".into(), "-j".into()],
-                    parse_hyprctl_active_window,
-                )),
-                Box::new(CommandActiveWindowProvider::new(
-                    "sh",
-                    vec![
-                        "-c".into(),
-                        "window_id=$(xdotool getactivewindow 2>/dev/null) || exit 1; \
+        let mut providers: Vec<Box<dyn ActiveWindowProvider>> =
+            vec![Box::new(CommandActiveWindowProvider::new(
+                "hyprctl",
+                vec!["activewindow".into(), "-j".into()],
+                parse_hyprctl_active_window,
+            ))];
+        // On Wayland xdotool only sees XWayland windows, so ask sway first.
+        if ty_common::session::is_wayland() {
+            providers.push(Box::new(IpcActiveWindowProvider));
+        }
+        providers.push(Box::new(CommandActiveWindowProvider::new(
+            "sh",
+            vec![
+                "-c".into(),
+                "window_id=$(xdotool getactivewindow 2>/dev/null) || exit 1; \
 title=$(xdotool getwindowname \"$window_id\" 2>/dev/null || true); \
 app_id=$(xdotool getwindowclassname \"$window_id\" 2>/dev/null || true); \
 pid=$(xdotool getwindowpid \"$window_id\" 2>/dev/null || true); \
@@ -88,12 +115,11 @@ printf 'title=%s\\n' \"$title\"; \
 printf 'app_id=%s\\n' \"$app_id\"; \
 printf 'pid=%s\\n' \"$pid\"; \
 printf 'workspace_id=%s\\n' \"$workspace_id\";"
-                            .into(),
-                    ],
-                    parse_xdotool_active_window,
-                )),
+                    .into(),
             ],
-        }
+            parse_xdotool_active_window,
+        )));
+        Self { providers }
     }
 }
 

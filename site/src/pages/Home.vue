@@ -7,8 +7,8 @@ import ToolIcon from "../ToolIcon.vue";
   <h1>ty's tools</h1>
   <p class="lede">
     Small desktop tools for Linux. Each one does one job, most sit in the system tray, and
-    all of them can be scripted from the command line. Built for X11 and used daily on i3.
-    Written in Rust, packaged with Nix, MIT licensed.
+    all of them can be scripted from the command line. Built for X11 and used daily on i3;
+    they run on Wayland too. Written in Rust, packaged with Nix, MIT licensed.
   </p>
   <p class="muted">v{{ version }}</p>
 
@@ -48,6 +48,14 @@ import ToolIcon from "../ToolIcon.vue";
       <p>{{ t.summary }}</p>
     </li>
   </ul>
+
+  <h2>Wayland</h2>
+  <p>
+    Every tool runs on Wayland compositors with the wlroots protocols (layer-shell, screencopy,
+    data-control, virtual-keyboard): sway, Hyprland, river and similar. KDE covers most of it;
+    GNOME doesn't offer these protocols. Each tool's page says what changes on Wayland, and
+    the Nix packages bring the helpers it needs (wl-clipboard, wtype, grim, wf-recorder).
+  </p>
 
   <h2>Install</h2>
   <p>Everything lives in one Nix flake.</p>

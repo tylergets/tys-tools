@@ -19,7 +19,9 @@ dbus = "0.9"
 dirs = "6"
 emojis = "0.7"
 enigo = "0.2"
+evdev = "0.13"
 gtk = "0.18.2"
+gtk-layer-shell = { version = "0.8", features = ["v0_6"] }
 hound = "3.5"
 input = "0.10"
 libappindicator = "0.9.0"
@@ -36,6 +38,7 @@ ureq = { version = "3", default-features = false }
 wayland-client = "0.31"
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 x11rb = "0.13"
+xkbcommon = { version = "0.7", default-features = false }
 
 [profile.release]
 lto = "thin"

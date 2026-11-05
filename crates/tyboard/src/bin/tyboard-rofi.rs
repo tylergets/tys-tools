@@ -49,9 +49,7 @@ fn main() -> Result<()> {
         .ok_or_else(|| anyhow!("selected entry index out of range: {index}"))?;
 
     gtk::init().context("failed to initialize GTK for clipboard access")?;
-    let clipboard = gtk::Clipboard::get(&gtk::gdk::SELECTION_CLIPBOARD);
-    set_clipboard_value(&clipboard, entry);
-    Ok(())
+    set_clipboard_value(entry)
 }
 
 fn prompt_selection(cli: &Cli, entries: &[ClipboardEntry]) -> Result<Option<usize>> {
