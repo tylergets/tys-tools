@@ -2,6 +2,7 @@
 // Keep text short; full details live in each crate's README.
 
 export const repo = "https://github.com/tylergets/tys-tools";
+export const license = `${repo}/blob/main/LICENSE`;
 
 export const tools = [
   {

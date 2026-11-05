@@ -34,7 +34,8 @@ Add an entry to `src/tools.js`. The card, nav link and `/<tool>` page appear aut
 
 `/deps` is built from the workspace `Cargo.toml`, each `crates/*/Cargo.toml` and
 `Cargo.lock` at build time (`import deps from "virtual:cargo-deps"`). Nothing is committed;
-the Pages workflow also runs when those files change, so the page stays current. The site
+the Pages workflow also runs when those files change, so the page stays current. Licenses come from the crates.io API (one
+request a second, cached in `node_modules/.cache`). The site
 version on the home page comes from the same place.
 
 ## Adding docs

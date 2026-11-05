@@ -1,5 +1,5 @@
 <script setup>
-import { tools } from "../tools.js";
+import { tools, license } from "../tools.js";
 import deps from "virtual:cargo-deps";
 import ToolIcon from "../ToolIcon.vue";
 </script>
@@ -9,7 +9,7 @@ import ToolIcon from "../ToolIcon.vue";
   <p class="lede">
     Small desktop tools for Linux. Each one does one job, most sit in the system tray, and
     all of them can be scripted from the command line. Built for X11 and used daily on i3;
-    they run on Wayland too. Written in Rust, packaged with Nix, MIT licensed.
+    they run on Wayland too. Written in Rust, packaged with Nix, <a :href="license">MIT licensed</a>.
   </p>
   <p class="muted">v{{ deps.version }} · <RouterLink to="/deps">dependencies</RouterLink></p>
 
@@ -35,7 +35,11 @@ import ToolIcon from "../ToolIcon.vue";
     </li>
     <li><strong>Never any ads.</strong> No upsells, no "pro" version, no sponsored anything.</li>
     <li><strong>Reproducible.</strong> One Nix flake, with Home Manager modules for each tool.</li>
-    <li><strong>Open source.</strong> MIT licensed.</li>
+    <li>
+      <strong>Minimal, auditable dependencies.</strong> A short list of well-known crates.
+      <RouterLink to="/deps">See every one</RouterLink>, with its version and license.
+    </li>
+    <li><strong>Open source.</strong> <a :href="license">MIT licensed</a>.</li>
   </ul>
 
   <h2>Tools</h2>

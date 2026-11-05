@@ -1,8 +1,8 @@
 // Vite plugin: `import deps from "virtual:cargo-deps"` gives the Rust dependencies of every
 // crate in the workspace, read from the Cargo manifests and Cargo.lock at build time.
 // Nothing is committed; each build (and the Pages deploy) picks up the current versions.
-import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
+import { resolve, dirname } from "node:path";
 import { parse } from "smol-toml";
 
 const ID = "virtual:cargo-deps";
@@ -100,13 +100,46 @@ function load(root) {
   };
 }
 
+// Cargo.lock has no licenses, so look them up on crates.io (one request a second, as its
+// crawler policy asks). Results are cached; a failed lookup just shows no license.
+const CACHE = resolve(import.meta.dirname, "node_modules/.cache/cargo-licenses.json");
+const USER_AGENT = "tys-tools-site (https://github.com/tylergets/tys-tools)";
+
+async function addLicenses(external) {
+  let cache = {};
+  try {
+    cache = JSON.parse(readFileSync(CACHE, "utf8"));
+  } catch {}
+  let first = true;
+  for (const dep of external) {
+    const key = `${dep.name}@${dep.versions[0]}`;
+    if (!(key in cache) && dep.versions[0]) {
+      if (!first) await new Promise((r) => setTimeout(r, 1000));
+      first = false;
+      try {
+        const res = await fetch(`https://crates.io/api/v1/crates/${dep.name}/${dep.versions[0]}`, {
+          headers: { "User-Agent": USER_AGENT },
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (res.ok) cache[key] = (await res.json()).version?.license ?? null;
+      } catch {}
+    }
+    dep.license = cache[key] ?? null;
+  }
+  try {
+    mkdirSync(dirname(CACHE), { recursive: true });
+    writeFileSync(CACHE, JSON.stringify(cache, null, 2));
+  } catch {}
+}
+
 export default function cargoDeps({ root }) {
   return {
     name: "cargo-deps",
     resolveId: (id) => (id === ID ? RESOLVED : null),
-    load(id) {
+    async load(id) {
       if (id !== RESOLVED) return null;
       const { data, files } = load(root);
+      await addLicenses(data.external);
       files.forEach((f) => this.addWatchFile(f));
       return `export default ${JSON.stringify(data)};`;
     },
