@@ -14,6 +14,7 @@ use ty_common::tray::{self, drain_actions, Applet, IconState, MenuEntry, TraySpe
 
 use crate::clipboard::backend::{menu_label, set_clipboard_value, GtkClipboardBackend};
 use crate::clipboard::poller::ClipboardPoller;
+use crate::clipboard::secrets::SecretFilter;
 use crate::clipboard::{ClipboardEntry, SharedClipboardState};
 use crate::config::{ClipboardBackend, ClipboardConfig};
 use crate::core::active_window::provider_from_config;
@@ -47,6 +48,10 @@ pub fn start(
                     provider_from_config(&clipboard_config.active_window.backend),
                 ),
                 clipboard_config.active_window.blacklist.clone(),
+                SecretFilter::from_config(&clipboard_config.secrets).unwrap_or_else(|err| {
+                    eprintln!("warning: secret filter disabled: {err:#}");
+                    SecretFilter::default()
+                }),
             ),
         };
         if let Some(entry) = poller.poll_once() {

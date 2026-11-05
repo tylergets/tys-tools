@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
+use crate::clipboard::secrets::SecretFilter;
+
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct AppConfig {
     #[serde(default)]
@@ -15,6 +17,8 @@ pub struct ClipboardConfig {
     pub backend: ClipboardBackend,
     #[serde(default)]
     pub active_window: ActiveWindowConfig,
+    #[serde(default)]
+    pub secrets: SecretsConfig,
 }
 
 impl Default for ClipboardConfig {
@@ -22,6 +26,7 @@ impl Default for ClipboardConfig {
         Self {
             backend: ClipboardBackend::Gtk,
             active_window: ActiveWindowConfig::default(),
+            secrets: SecretsConfig::default(),
         }
     }
 }
@@ -46,6 +51,27 @@ impl Default for ActiveWindowConfig {
         Self {
             backend: ActiveWindowBackend::Auto,
             blacklist: Vec::new(),
+        }
+    }
+}
+
+/// Text that looks like a secret is never added to history.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct SecretsConfig {
+    pub enabled: bool,
+    /// Use the built-in patterns (API keys, tokens, private keys, URL credentials).
+    pub builtin_patterns: bool,
+    /// Extra regexes; text matching any of them is treated as a secret.
+    pub patterns: Vec<String>,
+}
+
+impl Default for SecretsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            builtin_patterns: true,
+            patterns: Vec::new(),
         }
     }
 }
@@ -100,6 +126,7 @@ impl ClipboardConfig {
                 bail!("clipboard.active_window.blacklist[{index}] cannot be empty");
             }
         }
+        SecretFilter::from_config(&self.secrets)?;
         Ok(())
     }
 }
