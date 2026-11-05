@@ -7,12 +7,10 @@
 //!
 //! Nothing here polls: the GTK thread sleeps until a click, a message or a [`Waker`] wakes it.
 
-use std::cell::RefCell;
 use std::env;
 use std::ffi::CString;
 use std::fs;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -111,96 +109,39 @@ struct Slot {
     children: Vec<Slot>,
 }
 
-/// The tray icon and its menu. Updates are held while the menu is open, because tray hosts
-/// (e.g. eww) don't resize an open menu when its items change; they apply when it closes.
+/// The tray icon and its menu.
 pub struct Applet<A: Clone + Send + 'static> {
-    inner: Rc<RefCell<Inner<A>>>,
+    inner: Inner<A>,
 }
-
-/// How long an open menu holds back updates, in case the host never says it closed.
-const MAX_OPEN: Duration = Duration::from_secs(60);
 
 impl<A: Clone + Send + PartialEq + 'static> Applet<A> {
     /// Create the indicator and keep it registered with the tray host. GTK must already be
     /// initialized, and this must run on the GTK thread.
     pub fn new(id: &str, icons: &Icons, spec: TraySpec<A>, actions: Sender<A>) -> Result<Self> {
-        let inner = Rc::new(RefCell::new(Inner::new(id, icons, spec, actions)?));
-        watch_open(&inner);
-        Ok(Self { inner })
+        Ok(Self {
+            inner: Inner::new(id, icons, spec, actions)?,
+        })
     }
 
-    /// The latest spec, shown or waiting for the menu to close.
+    /// The spec shown.
     pub fn spec(&self) -> TraySpec<A> {
-        let inner = self.inner.borrow();
-        inner.pending.clone().unwrap_or_else(|| inner.spec.clone())
+        self.inner.spec.clone()
     }
 
     /// Show or hide the icon. Hidden icons are marked passive, which tray hosts don't show.
     pub fn set_visible(&mut self, visible: bool) {
-        let status = if visible { STATUS_ACTIVE } else { STATUS_PASSIVE };
+        let status = if visible {
+            STATUS_ACTIVE
+        } else {
+            STATUS_PASSIVE
+        };
         unsafe {
-            libappindicator::app_indicator_set_status(self.inner.borrow().indicator, status);
+            libappindicator::app_indicator_set_status(self.inner.indicator, status);
         }
     }
 
     pub fn update(&mut self, spec: TraySpec<A>) {
-        let mut inner = self.inner.borrow_mut();
-        if inner.open {
-            inner.pending = Some(spec);
-        } else {
-            inner.update(spec);
-        }
-    }
-}
-
-/// Follow the host's `opened` / `closed` events on the menu's root item.
-fn watch_open<A: Clone + Send + PartialEq + 'static>(inner: &Rc<RefCell<Inner<A>>>) {
-    let indicator: glib::Object = unsafe {
-        glib::translate::from_glib_none(inner.borrow().indicator as *mut glib::gobject_ffi::GObject)
-    };
-    let Some(root) = menu_root(&indicator) else {
-        return;
-    };
-    let weak = Rc::downgrade(inner);
-    root.connect_local("event", false, move |args| {
-        let name = args.get(1).and_then(|value| value.get::<String>().ok());
-        if let Some(inner) = weak.upgrade() {
-            match name.as_deref() {
-                Some("opened") => set_open(&inner, true),
-                Some("closed") => set_open(&inner, false),
-                _ => {}
-            }
-        }
-        // Not handled: let libdbusmenu carry on as usual.
-        Some(false.to_value())
-    });
-}
-
-/// libappindicator's dbusmenu server, and the root item the host's events arrive on.
-fn menu_root(indicator: &glib::Object) -> Option<glib::Object> {
-    indicator.find_property("dbus-menu-server")?;
-    let server = indicator.property::<Option<glib::Object>>("dbus-menu-server")?;
-    server.find_property("root-node")?;
-    server.property::<Option<glib::Object>>("root-node")
-}
-
-fn set_open<A: Clone + Send + PartialEq + 'static>(inner: &Rc<RefCell<Inner<A>>>, open: bool) {
-    let Ok(mut state) = inner.try_borrow_mut() else {
-        return;
-    };
-    state.open = open;
-    state.opened += 1;
-    if open {
-        let (weak, opened) = (Rc::downgrade(inner), state.opened);
-        glib::timeout_add_local_once(MAX_OPEN, move || {
-            if let Some(inner) = weak.upgrade() {
-                if inner.borrow().opened == opened {
-                    set_open(&inner, false);
-                }
-            }
-        });
-    } else if let Some(spec) = state.pending.take() {
-        state.update(spec);
+        self.inner.update(spec);
     }
 }
 
@@ -213,12 +154,6 @@ struct Inner<A: Clone + Send + 'static> {
     /// Widgets for `spec.menu`, index for index.
     slots: Vec<Slot>,
     icons: IconNames,
-    /// The host has the menu open.
-    open: bool,
-    /// Counts opens and closes, so a stale [`MAX_OPEN`] timer does nothing.
-    opened: u64,
-    /// The latest update while open.
-    pending: Option<TraySpec<A>>,
 }
 
 impl<A: Clone + Send + PartialEq + 'static> Inner<A> {
@@ -271,9 +206,6 @@ impl<A: Clone + Send + PartialEq + 'static> Inner<A> {
             menu,
             slots: Vec::new(),
             icons: names,
-            open: false,
-            opened: 0,
-            pending: None,
         };
         applet.rebuild_menu();
         unsafe {
