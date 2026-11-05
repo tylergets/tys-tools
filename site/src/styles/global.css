@@ -207,3 +207,11 @@ th {
 td:first-child {
   white-space: nowrap;
 }
+
+td .user + .user {
+  margin-left: 1ch;
+}
+
+tr.group-start td {
+  border-top: var(--rule);
+}
