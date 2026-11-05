@@ -85,7 +85,9 @@ fn spawn_scanner(config: AppConfig, ports: tray::Sender<Vec<Port>>, rescan: Rece
         let mut scanner = Scanner::default();
         loop {
             let scan = actions::list_with(&mut scanner, &config, false).map(|mut ports| {
-                titles.fill(&mut ports, &config.https_ports);
+                if config.fetch_titles {
+                    titles.fill(&mut ports, &config.https_ports);
+                }
                 ports
             });
             match scan {

@@ -64,7 +64,9 @@ fn load_config(path: Option<PathBuf>) -> Result<AppConfig> {
 
 fn list(config: &AppConfig, json: bool, all: bool) -> Result<()> {
     let mut ports = actions::list(config, all)?;
-    title::Cache::default().fill(&mut ports, &config.https_ports);
+    if config.fetch_titles {
+        title::Cache::default().fill(&mut ports, &config.https_ports);
+    }
     if json {
         println!("{}", serde_json::to_string_pretty(&ports)?);
         return Ok(());

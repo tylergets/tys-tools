@@ -17,6 +17,8 @@ pub struct AppConfig {
     pub ignore_processes: Vec<String>,
     /// Ports opened with `https://`.
     pub https_ports: Vec<u16>,
+    /// Fetch each port's page `<title>` with an HTTP request. Off by default.
+    pub fetch_titles: bool,
     /// Command that opens URLs (the URL is appended). Default: `xdg-open`.
     pub browser: Option<Vec<String>>,
     /// How often the tray rescans, in seconds.
@@ -29,6 +31,7 @@ impl Default for AppConfig {
             ignore_ports: Vec::new(),
             ignore_processes: vec!["kdeconnectd".into()],
             https_ports: Vec::new(),
+            fetch_titles: false,
             browser: None,
             refresh_seconds: 2.0,
         }

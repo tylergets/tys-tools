@@ -6,6 +6,7 @@ import ./lib.nix {inherit self;} {
     ignore_ports = [631 8384];
     ignore_processes = ["kdeconnectd"];
     https_ports = [8443];
+    fetch_titles = true;
     browser = ["firefox" "--new-tab"];
   };
 }

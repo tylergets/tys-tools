@@ -6,7 +6,7 @@ http.server`, Rails, anything) in the tray. Open one in the browser, copy its UR
 ## Features
 
 - Tray menu with one entry per port: `:5173  My App · vite · my-app`. The first part is the
-  page's `<title>` (fetched from the port, for anything that speaks HTTP). Names come from the command
+  page's `<title>`, fetched from the port when `fetch_titles` is on (off by default). Names come from the command
   line, so a Node or Python server shows as `vite`, `next` or `http.server` rather than
   `node`, and the project is the server's working directory.
 - Each entry shows the URL (click it to open it in the browser), **Copy URL**, the PIDs and
@@ -42,6 +42,7 @@ defaults:
 ignore_ports: []              # never shown
 ignore_processes: [kdeconnectd]  # by name as `typort list` prints it; case-insensitive
 https_ports: []               # opened with https:// (no title is fetched)
+fetch_titles: false           # GET each port to show its page <title>
 # browser: [firefox, --new-tab]  # URL is appended; default xdg-open
 refresh_seconds: 2
 ```
