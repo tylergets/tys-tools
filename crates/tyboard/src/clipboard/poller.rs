@@ -1,4 +1,5 @@
 use crate::clipboard::backend::ClipboardBackend;
+use crate::clipboard::secrets::SecretFilter;
 use crate::clipboard::ClipboardEntry;
 use crate::core::active_window::ActiveWindowContext;
 
@@ -6,14 +7,20 @@ pub struct ClipboardPoller<B: ClipboardBackend> {
     backend: B,
     last_seen_value: Option<ClipboardEntry>,
     active_window_blacklist: Vec<String>,
+    secret_filter: SecretFilter,
 }
 
 impl<B: ClipboardBackend> ClipboardPoller<B> {
-    pub fn new(backend: B, active_window_blacklist: Vec<String>) -> Self {
+    pub fn new(
+        backend: B,
+        active_window_blacklist: Vec<String>,
+        secret_filter: SecretFilter,
+    ) -> Self {
         Self {
             backend,
             last_seen_value: None,
             active_window_blacklist: normalized_blacklist(active_window_blacklist),
+            secret_filter,
         }
     }
 
@@ -28,6 +35,12 @@ impl<B: ClipboardBackend> ClipboardPoller<B> {
         }
 
         self.last_seen_value = Some(value.clone());
+        if let ClipboardEntry::Text { value: text, .. } = &value {
+            if self.secret_filter.is_secret(text) {
+                println!("clipboard event: secret skipped");
+                return None;
+            }
+        }
         let active_window = self.backend.read_active_window();
         if should_skip_for_blacklisted_window(active_window.as_ref(), &self.active_window_blacklist)
         {
@@ -71,7 +84,9 @@ fn should_skip_for_blacklisted_window(
 mod tests {
     use super::ClipboardPoller;
     use crate::clipboard::backend::ClipboardBackend;
+    use crate::clipboard::secrets::SecretFilter;
     use crate::clipboard::ClipboardEntry;
+    use crate::config::SecretsConfig;
     use crate::core::active_window::ActiveWindowContext;
     use std::cell::RefCell;
 
@@ -126,7 +141,11 @@ mod tests {
                 is_xwayland: None,
             })],
         );
-        let mut poller = ClipboardPoller::new(backend, vec!["KeePassXC".to_string()]);
+        let mut poller = ClipboardPoller::new(
+            backend,
+            vec!["KeePassXC".to_string()],
+            SecretFilter::default(),
+        );
 
         let entry = poller.poll_once();
         assert!(entry.is_none(), "blacklisted app id should be skipped");
@@ -149,7 +168,8 @@ mod tests {
                 is_xwayland: None,
             })],
         );
-        let mut poller = ClipboardPoller::new(backend, vec!["slack".to_string()]);
+        let mut poller =
+            ClipboardPoller::new(backend, vec!["slack".to_string()], SecretFilter::default());
 
         let entry = poller.poll_once();
         assert!(entry.is_none(), "blacklisted title should be skipped");
@@ -172,9 +192,29 @@ mod tests {
                 is_xwayland: None,
             })],
         );
-        let mut poller = ClipboardPoller::new(backend, vec!["slack".to_string()]);
+        let mut poller =
+            ClipboardPoller::new(backend, vec!["slack".to_string()], SecretFilter::default());
 
         let entry = poller.poll_once();
         assert!(entry.is_some(), "non-blacklisted window should be captured");
+    }
+
+    #[test]
+    fn skips_secret_text() {
+        let backend = MockBackend::new(
+            vec![
+                Some(text("ghp_0123456789abcdefghijABCDEFGHIJ012345")),
+                Some(text("hello")),
+            ],
+            vec![None],
+        );
+        let filter = SecretFilter::from_config(&SecretsConfig::default()).unwrap();
+        let mut poller = ClipboardPoller::new(backend, Vec::new(), filter);
+
+        assert!(poller.poll_once().is_none(), "secret should be skipped");
+        assert!(
+            poller.poll_once().is_some(),
+            "ordinary text should be captured"
+        );
     }
 }

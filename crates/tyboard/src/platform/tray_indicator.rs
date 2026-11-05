@@ -17,6 +17,7 @@ use crate::clipboard::backend::{
     WlClipboardBackend,
 };
 use crate::clipboard::poller::ClipboardPoller;
+use crate::clipboard::secrets::SecretFilter;
 use crate::clipboard::{ClipboardEntry, SharedClipboardState};
 use crate::config::{ClipboardBackend, ClipboardConfig};
 use crate::core::active_window::provider_from_config;
@@ -63,8 +64,15 @@ pub fn start(
                 ChangeSource::OwnerChange(clipboard),
             )
         };
-        let mut poller =
-            ClipboardPoller::new(backend, clipboard_config.active_window.blacklist.clone());
+        let secrets = SecretFilter::from_config(&clipboard_config.secrets).unwrap_or_else(|err| {
+            eprintln!("warning: secret filter disabled: {err:#}");
+            SecretFilter::default()
+        });
+        let mut poller = ClipboardPoller::new(
+            backend,
+            clipboard_config.active_window.blacklist.clone(),
+            secrets,
+        );
         if let Some(entry) = poller.poll_once() {
             if let Err(err) = shared_state.record_entry(entry) {
                 eprintln!("failed to seed clipboard history: {err}");
