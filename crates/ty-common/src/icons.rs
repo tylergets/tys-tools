@@ -22,10 +22,11 @@ pub enum Tool {
     Gesture,
     Port,
     Ci,
+    Pk,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 9] = [
+    pub const ALL: [Tool; 10] = [
         Tool::Board,
         Tool::Key,
         Tool::Capture,
@@ -35,6 +36,7 @@ impl Tool {
         Tool::Gesture,
         Tool::Port,
         Tool::Ci,
+        Tool::Pk,
     ];
 
     pub fn name(self) -> &'static str {
@@ -48,6 +50,7 @@ impl Tool {
             Tool::Gesture => "tygesture",
             Tool::Port => "typort",
             Tool::Ci => "tyci",
+            Tool::Pk => "typk",
         }
     }
 
@@ -63,6 +66,7 @@ impl Tool {
             Tool::Gesture => include_str!("../icons/tygesture.svg"),
             Tool::Port => include_str!("../icons/typort.svg"),
             Tool::Ci => include_str!("../icons/tyci.svg"),
+            Tool::Pk => include_str!("../icons/typk.svg"),
         }
     }
 
@@ -78,6 +82,7 @@ impl Tool {
             Tool::Gesture => "input-touchpad",
             Tool::Port => "network-server",
             Tool::Ci => "emblem-synchronizing",
+            Tool::Pk => "dialog-password",
         }
     }
 

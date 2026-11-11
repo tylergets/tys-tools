@@ -351,6 +351,37 @@ pull_requests:
 notifications:
   on_finish: true`,
   },
+  {
+    name: "typk",
+    tagline: "The password prompt for admin actions.",
+    summary:
+      "A polkit authentication agent: when pkexec, a disk mount or a system setting needs " +
+      "your password or fingerprint, typk asks for it in a small, focused window.",
+    features: [
+      "Password or fingerprint, whatever your PAM setup for polkit asks",
+      "Fingerprint readers get a fingerprint, with the password behind a button",
+      "typk verify: scripts and AI agents ask you to confirm, and only see the exit code",
+      "The asking app is the headline, with its icon and a quiet Kill button",
+      "Optionally darkens the screen behind the prompt",
+      "Shows PAM messages and allows a few attempts",
+      "Account chooser when several users may authenticate",
+      "Action id and details on request",
+      "Always on top and focused, then out of the way",
+    ],
+    wayland:
+      "The prompt is a layer-shell surface on the overlay layer with the keyboard, so it works on sway, Hyprland, river and KDE.",
+    requirements: [
+      "polkit and systemd-logind (or elogind)",
+      "No other polkit agent in the session",
+      "pam_fprintd in the polkit-1 PAM service, for fingerprints (optional)",
+    ],
+    usage: `typk run                                 # the agent
+typk verify --reason "Deploy to prod?"   # exit 0 once you confirmed
+typk validate-config`,
+    config: `max_attempts: 3
+show_details: false
+dim_screen: false`,
+  },
 ];
 
 export const findTool = (name) => tools.find((t) => t.name === name);

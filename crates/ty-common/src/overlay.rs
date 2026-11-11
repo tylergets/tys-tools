@@ -14,9 +14,12 @@ use std::rc::{Rc, Weak};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use gtk::glib::translate::ToGlibPtr;
 use gtk::prelude::*;
 use gtk::{cairo, gdk, glib};
 use gtk_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
+use x11rb::connection::Connection;
+use x11rb::protocol::xproto::{ConfigureWindowAux, ConnectionExt, StackMode};
 
 use crate::screen;
 use crate::session;
@@ -438,4 +441,157 @@ pub fn place_floating(window: &gtk::Window, x: i32, y: i32, width: i32, height: 
 /// Floating windows are layer-shell surfaces (on Wayland, where supported), else X11 popups.
 fn floating_is_layer() -> bool {
     session::is_wayland() && gtk_layer_shell::is_supported()
+}
+
+/// Windows darkening the screen behind a prompt; see [`dim_screen`]. Cheap to clone.
+#[derive(Clone)]
+pub struct Dim {
+    windows: Vec<gtk::Window>,
+}
+
+impl Dim {
+    /// Keep the dimming under `prompt`, which must be mapped already. Needed on X11, where
+    /// window managers stack their windows relative to each other only, so a prompt they
+    /// manage would otherwise end up under dimming mapped before it (or after a workspace
+    /// switch). Call it from the prompt's map and focus handlers.
+    pub fn stay_below(&self, prompt: &gtk::Window) {
+        if session::is_wayland() {
+            return;
+        }
+        let Some(frame) = x11_frame(prompt) else {
+            return;
+        };
+        let Ok((conn, _)) = screen::x11_connect() else {
+            return;
+        };
+        for window in &self.windows {
+            let Some(xid) = x11_xid(window) else {
+                continue;
+            };
+            let aux = ConfigureWindowAux::new()
+                .sibling(frame)
+                .stack_mode(StackMode::BELOW);
+            let _ = conn.configure_window(xid, &aux);
+        }
+        let _ = conn.flush();
+    }
+
+    pub fn close(&self) {
+        for window in &self.windows {
+            window.close();
+        }
+    }
+}
+
+/// The X window id of a realized GTK window.
+fn x11_xid(window: &gtk::Window) -> Option<u32> {
+    extern "C" {
+        fn gdk_x11_window_get_xid(window: *mut gdk::ffi::GdkWindow) -> libc::c_ulong;
+    }
+    let gdk_window = window.window()?;
+    // SAFETY: the GDK backend is X11 (checked by the caller) and the window is realized.
+    let xid = unsafe { gdk_x11_window_get_xid(gdk_window.to_glib_none().0) };
+    u32::try_from(xid).ok()
+}
+
+/// The topmost ancestor of `window` below the root: the window manager's frame around
+/// it, or the window itself when it isn't reparented.
+fn x11_frame(window: &gtk::Window) -> Option<u32> {
+    let mut current = x11_xid(window)?;
+    let (conn, _) = screen::x11_connect().ok()?;
+    loop {
+        let tree = conn.query_tree(current).ok()?.reply().ok()?;
+        if tree.parent == tree.root || tree.parent == 0 {
+            return Some(current);
+        }
+        current = tree.parent;
+    }
+}
+
+/// Darken every monitor behind a prompt: always-on-top windows that take no focus,
+/// painted translucent black (`alpha`), or solid black without a compositor. They last as
+/// long as the returned [`Dim`] does. Show the prompt after this so it stacks above them,
+/// and keep it there with [`Dim::stay_below`].
+pub fn dim_screen(namespace: &str, alpha: f64) -> Dim {
+    let mut windows = Vec::new();
+    if floating_is_layer() {
+        let Some(display) = gdk::Display::default() else {
+            return Dim { windows };
+        };
+        for index in 0..display.n_monitors() {
+            let Some(monitor) = display.monitor(index) else {
+                continue;
+            };
+            let window = gtk::Window::new(gtk::WindowType::Toplevel);
+            window.init_layer_shell();
+            window.set_namespace(namespace);
+            window.set_layer(Layer::Overlay);
+            window.set_monitor(&monitor);
+            for edge in [Edge::Left, Edge::Right, Edge::Top, Edge::Bottom] {
+                window.set_anchor(edge, true);
+            }
+            window.set_exclusive_zone(-1);
+            window.set_keyboard_mode(KeyboardMode::None);
+            windows.push(window);
+        }
+    } else if let Ok((width, height)) = screen::size() {
+        let scale = screen::logical_scale();
+        let window = gtk::Window::new(gtk::WindowType::Popup);
+        window.move_(0, 0);
+        let (width, height) = (
+            (f64::from(width) / scale).ceil() as i32,
+            (f64::from(height) / scale).ceil() as i32,
+        );
+        window.set_default_size(width, height);
+        window.set_size_request(width, height);
+        windows.push(window);
+    }
+    for window in &windows {
+        window.set_accept_focus(false);
+        window.set_app_paintable(true);
+        let translucent =
+            WidgetExt::screen(window).is_some_and(|screen| match screen.rgba_visual() {
+                Some(visual) if screen.is_composited() => {
+                    window.set_visual(Some(&visual));
+                    true
+                }
+                _ => false,
+            });
+        let alpha = if translucent { alpha } else { 1.0 };
+        window.connect_draw(move |_, cr| {
+            cr.set_source_rgba(0.0, 0.0, 0.0, alpha);
+            cr.set_operator(cairo::Operator::Source);
+            let _ = cr.paint();
+            glib::Propagation::Stop
+        });
+        window.show_all();
+    }
+    Dim { windows }
+}
+
+/// A window for a prompt that must be seen and answered right away, such as a password
+/// dialog: always on top, centered, and holding the keyboard as soon as it is shown. On
+/// Wayland it is a layer-shell surface on the overlay layer with exclusive keyboard focus,
+/// on the monitor the compositor considers focused; on X11 (and without layer-shell) a
+/// dialog-type toplevel, which window managers float, place by the pointer and focus. Not
+/// shown yet.
+pub fn dialog_window(namespace: &str, title: &str) -> gtk::Window {
+    let window = gtk::Window::new(gtk::WindowType::Toplevel);
+    window.set_title(title);
+    window.set_resizable(false);
+    if floating_is_layer() {
+        window.init_layer_shell();
+        window.set_namespace(namespace);
+        window.set_layer(Layer::Overlay);
+        window.set_keyboard_mode(KeyboardMode::Exclusive);
+        // No anchors: the compositor centers the surface on its monitor.
+    } else {
+        window.set_type_hint(gdk::WindowTypeHint::Dialog);
+        window.set_position(gtk::WindowPosition::Mouse);
+        window.set_keep_above(true);
+        // Follows workspace switches.
+        window.stick();
+        window.set_urgency_hint(true);
+    }
+    window
 }

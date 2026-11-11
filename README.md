@@ -18,6 +18,7 @@ Website: <https://tys.tools> (with every tool's [dependencies](https://tys.tools
 | [tygesture](crates/tygesture) | Touchpad gestures (swipe, pinch, rotate, hold) mapped to commands, read straight from libinput. X11 and Wayland. |
 | [typort](crates/typort) | Your running dev servers in the tray: open them in the browser or stop them. |
 | [tyci](crates/tyci) | Running CI and recently opened PRs from GitHub, in your tray. |
+| [typk](crates/typk) | Polkit authentication agent: the password or fingerprint prompt for actions that need one. |
 
 Each tool's README has the full details.
 
@@ -45,6 +46,7 @@ most of it; GNOME does not offer these protocols.
 | tylight | Sets gamma with `wlr-gamma-control` (sway, Hyprland, river, niri, labwc). Brightness over DDC works anywhere. Not on GNOME or KDE. |
 | tygesture | Unchanged: it reads libinput directly. Bind gestures to `wtype` and `swaymsg`/`hyprctl` instead of `xdotool` and `i3-msg`. |
 | typort, tyci | Unchanged: tray icon and `xdg-open` only. |
+| typk | The prompt is a layer-shell surface on the overlay layer, so it takes the keyboard wherever the focus was. |
 
 The Nix packages put the Wayland helpers on `PATH`.
 
@@ -103,7 +105,7 @@ tykey also has typed options (`expansions`, `snippets`, `matchBehavior`, `bounda
 
 ```nix
 nixpkgs.overlays = [inputs.tys-tools.overlays.default];
-# adds pkgs.tyboard, pkgs.tykey, pkgs.tycapture, pkgs.tyshot, pkgs.tyspeak, pkgs.tylight, pkgs.tygesture, pkgs.typort, pkgs.tyci
+# adds pkgs.tyboard, pkgs.tykey, pkgs.tycapture, pkgs.tyshot, pkgs.tyspeak, pkgs.tylight, pkgs.tygesture, pkgs.typort, pkgs.tyci, pkgs.typk
 ```
 
 ## Configuration

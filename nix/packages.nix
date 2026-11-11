@@ -87,6 +87,8 @@
     bins ? [name],
     runtimeDeps ? [],
     desktopEntries ? [],
+    # Extra install commands (files under $out).
+    extraInstall ? "",
   }: let
     items = map (desktopItem name) ([
         {
@@ -110,6 +112,7 @@
         install -Dm644 ${../crates/ty-common/icons + "/${name}.svg"} \
           $out/share/icons/hicolor/scalable/apps/${name}.svg
         ${lib.concatMapStrings (item: "ln -s ${item}/share/applications/* $out/share/applications/\n") items}
+        ${extraInstall}
       '';
       postFixup = lib.concatMapStrings (bin: ''
         makeWrapper ${workspace}/bin/${bin} $out/bin/${bin} \
@@ -195,5 +198,17 @@ in {
     name = "tyci";
     description = "Open GitHub PRs and running CI in your tray (via the gh CLI)";
     runtimeDeps = [pkgs.gh];
+  };
+
+  # Authenticates through polkit's own helper (the socket-activated service or the setuid
+  # binary the system provides), so nothing extra is needed at runtime.
+  typk = mkTool {
+    name = "typk";
+    description = "Polkit authentication agent: a password or fingerprint prompt";
+    # polkitd must know the `typk verify` action: on NixOS that takes the package in
+    # environment.systemPackages (polkit reads /run/current-system/sw/share/polkit-1).
+    extraInstall = ''
+      install -Dm644 ${../crates/typk/typk.policy} $out/share/polkit-1/actions/tools.tys.typk.policy
+    '';
   };
 }

@@ -1,0 +1,16 @@
+[package]
+name = "typk"
+description = "Polkit authentication agent: a password or fingerprint prompt for actions that need one."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ty-common.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+dirs.workspace = true
+dbus.workspace = true
+gtk.workspace = true
+libc.workspace = true
+serde.workspace = true

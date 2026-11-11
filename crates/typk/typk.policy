@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>ty's tools</vendor>
+  <vendor_url>https://tys.tools</vendor_url>
+
+  <!-- `typk verify`: the user confirms it's them (their own password or finger), nothing more. -->
+  <action id="tools.tys.typk.verify">
+    <description>Confirm your identity</description>
+    <message>A script asks you to confirm it's you</message>
+    <defaults>
+      <allow_any>auth_self</allow_any>
+      <allow_inactive>auth_self</allow_inactive>
+      <allow_active>auth_self</allow_active>
+    </defaults>
+  </action>
+</policyconfig>
