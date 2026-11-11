@@ -14,7 +14,9 @@ site/
     pages/Home.vue
     pages/Tool.vue      # template for every /<tool> page
     pages/Deps.vue      # /deps: every crate's Rust dependencies and locked versions
-    styles/global.css   # all styles
+    CodeBlock.vue       # <pre> with syntax highlighting (lang: yaml | shell | nix)
+    highlight.js        # the tiny tokenizer behind it; no highlighter dependency
+    styles/global.css   # all styles, including the token colors and the terminal theme
 ```
 
 ## Develop

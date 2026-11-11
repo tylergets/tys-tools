@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { findTool, repo } from "../tools.js";
 import ToolIcon from "../ToolIcon.vue";
+import CodeBlock from "../CodeBlock.vue";
 
 const props = defineProps({ name: { type: String, required: true } });
 const tool = computed(() => findTool(props.name));
@@ -30,20 +31,22 @@ const tool = computed(() => findTool(props.name));
     </template>
 
     <h2>Usage</h2>
-    <pre><code>{{ tool.usage }}</code></pre>
+    <CodeBlock :code="tool.usage" lang="shell" />
 
     <h2>Config</h2>
     <p>
       YAML, read from <code>./{{ tool.name }}.yaml</code> or
       <code>~/.config/{{ tool.name }}/config.yaml</code>.
     </p>
-    <pre><code>{{ tool.config }}</code></pre>
+    <CodeBlock :code="tool.config" lang="yaml" />
 
     <h2>Install</h2>
-    <pre><code>nix run github:tylergets/tys-tools#{{ tool.name }}</code></pre>
+    <CodeBlock :code="`nix run github:tylergets/tys-tools#${tool.name}`" lang="shell" />
     <p>Home Manager:</p>
-    <pre><code>imports = [ inputs.tys-tools.homeManagerModules.{{ tool.name }} ];
-programs.{{ tool.name }}.enable = true;</code></pre>
+    <CodeBlock
+      :code="`imports = [ inputs.tys-tools.homeManagerModules.${tool.name} ];\nprograms.${tool.name}.enable = true;`"
+      lang="nix"
+    />
 
     <p>
       <a :href="`${repo}/tree/main/crates/${tool.name}`">Full README</a>

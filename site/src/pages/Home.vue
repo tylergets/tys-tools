@@ -2,6 +2,20 @@
 import { tools, license } from "../tools.js";
 import deps from "virtual:cargo-deps";
 import ToolIcon from "../ToolIcon.vue";
+import CodeBlock from "../CodeBlock.vue";
+
+const tryOne = `# try one
+nix run github:tylergets/tys-tools#tyshot
+
+# install all of them
+nix profile install github:tylergets/tys-tools`;
+const homeManager = `inputs.tys-tools.url = "github:tylergets/tys-tools";
+
+imports = [ inputs.tys-tools.homeManagerModules.default ];
+programs.tyboard.enable = true;
+programs.tyshot.enable = true;`;
+const fromSource = `nix develop
+cargo run -p tyboard -- run`;
 </script>
 
 <template>
@@ -46,18 +60,9 @@ import ToolIcon from "../ToolIcon.vue";
 
   <h2>Install</h2>
   <p>Everything lives in one Nix flake.</p>
-  <pre><code># try one
-nix run github:tylergets/tys-tools#tyshot
-
-# install all of them
-nix profile install github:tylergets/tys-tools</code></pre>
+  <CodeBlock :code="tryOne" lang="shell" />
   <p>Home Manager, all tools at once:</p>
-  <pre><code>inputs.tys-tools.url = "github:tylergets/tys-tools";
-
-imports = [ inputs.tys-tools.homeManagerModules.default ];
-programs.tyboard.enable = true;
-programs.tyshot.enable = true;</code></pre>
+  <CodeBlock :code="homeManager" lang="nix" />
   <p>From source:</p>
-  <pre><code>nix develop
-cargo run -p tyboard -- run</code></pre>
+  <CodeBlock :code="fromSource" lang="shell" />
 </template>

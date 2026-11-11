@@ -4,6 +4,22 @@
   --muted: #555;
   --accent: #e5484d;
   --rule: 3px solid var(--fg);
+
+  /* YAML and Nix tokens, on the page background */
+  --tok-key: #0550ae;
+  --tok-str: #0a7a4a;
+  --tok-num: #8250df;
+  --tok-bool: #953800;
+  --tok-comment: var(--muted);
+
+  /* Shell blocks: always a dark terminal */
+  --term-bg: #0d0d0d;
+  --term-fg: #e6e6e6;
+  --term-cmd: #7ee787;
+  --term-flag: #79c0ff;
+  --term-arg: #d2a8ff;
+  --term-str: #ffa657;
+  --term-comment: #8b949e;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -11,6 +27,10 @@
     --bg: #000;
     --fg: #fff;
     --muted: #aaa;
+    --tok-key: #79c0ff;
+    --tok-str: #7ee787;
+    --tok-num: #d2a8ff;
+    --tok-bool: #ffa657;
   }
 }
 
@@ -159,6 +179,75 @@ pre {
 
 code {
   font-family: inherit;
+}
+
+/* Highlighted code (CodeBlock.vue) */
+.lang-yaml .tok-key,
+.lang-nix .tok-key {
+  color: var(--tok-key);
+  font-weight: 700;
+}
+
+.lang-yaml .tok-str,
+.lang-nix .tok-str {
+  color: var(--tok-str);
+}
+
+.lang-yaml .tok-num {
+  color: var(--tok-num);
+}
+
+.lang-yaml .tok-bool,
+.lang-nix .tok-bool {
+  color: var(--tok-bool);
+}
+
+.lang-yaml .tok-punct,
+.lang-nix .tok-punct {
+  color: var(--muted);
+}
+
+.tok-comment {
+  color: var(--tok-comment);
+  font-style: italic;
+}
+
+.lang-shell {
+  background: var(--term-bg);
+  color: var(--term-fg);
+  border-color: var(--term-bg);
+  box-shadow: 0 0 0 3px var(--fg) inset;
+}
+
+.lang-shell .tok-prompt {
+  color: var(--accent);
+  font-weight: 700;
+  user-select: none;
+}
+
+.lang-shell .tok-cmd {
+  color: var(--term-cmd);
+  font-weight: 700;
+}
+
+.lang-shell .tok-flag {
+  color: var(--term-flag);
+}
+
+.lang-shell .tok-arg {
+  color: var(--term-arg);
+}
+
+.lang-shell .tok-str {
+  color: var(--term-str);
+}
+
+.lang-shell .tok-punct {
+  color: var(--term-comment);
+}
+
+.lang-shell .tok-comment {
+  color: var(--term-comment);
 }
 
 footer {
