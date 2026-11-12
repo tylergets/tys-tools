@@ -5,7 +5,7 @@ Implements `org.freedesktop.Notifications` 1.2 methods and lifecycle signals, so
 `notify-send` and applications work without changing their notification clients.
 GTK popup cards have app icons, urgency borders, action buttons, dismiss buttons,
 and progress bars. Popups use the primary monitor (first monitor if none is primary).
-The stack has an opaque background and a footer showing how many notifications are
+Cards have opaque backgrounds with transparent gaps between them, and a footer shows how many notifications are
 queued beyond the visible limit (four by default). Existing cards stay in place
 when another notification arrives.
 
@@ -41,14 +41,15 @@ Each successful daemon start shows a short, transient **tynotif is running** pop
 and prints a readiness message in the terminal. To preview the notification types:
 
 ```sh
-nix run .#tynotif -- --force --test
+nix run .#tynotif -- --force --test 3
 ```
 
-`--test` starts the daemon and sends examples through its notification D-Bus API,
-one second apart after the startup message: low/normal/critical urgency, icons,
+`--test [SECONDS]` starts the daemon and sends examples through its notification D-Bus API,
+at the chosen interval after the startup message (default: 3 seconds; range: 1–3600): low/normal/critical urgency, icons,
 long text, actions, resident actions, transient notifications, stacked progress
 updates, replacement by ID, and sticky/default-critical notifications. Actions
-print their key in the terminal. Most examples expire after 2.5 seconds; the final
+print their key in the terminal. Most examples expire 1.5 seconds after the chosen
+interval (at least 2.5 seconds), so replacement targets remain visible; the final
 two are sticky. The daemon stays running after the sequence. The normal visible
 limit and hover-to-pause behavior still apply, so queued examples may appear later.
 
@@ -56,7 +57,8 @@ limit and hover-to-pause behavior still apply, so queued examples may appear lat
 tynotif run                      # default command
 tynotif run --replace            # take over from a replaceable daemon
 tynotif run --force              # also stop Dunst's owning user service if needed
-tynotif --test                   # start and send demo notifications 1 second apart
+tynotif --test 3                 # start and send demo notifications 3 seconds apart
+tynotif --test                   # same as --test 3
 tynotif status                   # JSON: paused, active count, history count
 tynotif list                     # JSON array of active/queued notifications
 tynotif close [ID]               # dismiss ID, or the first visible notification

@@ -24,9 +24,10 @@ struct Cli {
     /// Take over, stopping the owning Dunst user service if replacement is refused.
     #[arg(long, global = true)]
     force: bool,
-    /// Send demo notifications one second apart after starting the daemon.
-    #[arg(long, global = true)]
-    test: bool,
+    /// Send demo notifications SECONDS apart (default: 3; range: 1–3600).
+    #[arg(long, global = true, num_args = 0..=1, default_missing_value = "3",
+        value_name = "SECONDS", value_parser = clap::value_parser!(u64).range(1..=3600))]
+    test: Option<u64>,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -69,7 +70,7 @@ fn main() -> Result<()> {
                 Arc::new(Mutex::new(model::State::new(config))),
                 cli.replace,
                 cli.force,
-                cli.test,
+                cli.test.map(std::time::Duration::from_secs),
             )
         }
         Command::Status => bus::command("status", ""),

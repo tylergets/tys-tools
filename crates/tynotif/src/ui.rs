@@ -10,7 +10,7 @@ use gtk::{gdk, gio, glib};
 use crate::bus::{self, Shared};
 use crate::model::Notification;
 
-pub fn run(state: Shared, replace: bool, force: bool, test: bool) -> Result<()> {
+pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) -> Result<()> {
     gtk::init()?;
     ty_common::appearance::apply_gtk();
     let connection = bus::serve(state.clone(), replace, force)?;
@@ -18,8 +18,8 @@ pub fn run(state: Shared, replace: bool, force: bool, test: bool) -> Result<()> 
     let screen = gdk::Screen::default().context("no screen")?;
     let css = gtk::CssProvider::new();
     css.load_from_data(format!(
-        "#tynotif, #tynotif viewport {{ background: {}; color: {}; }} .notification {{ background: {}; color: {}; border: 1px solid {}; border-radius: 10px; padding: 16px; }} .notification.critical {{ border-color: {}; }} .notification label, #tynotif .queue {{ color: {}; }} .app {{ opacity: 0.65; }} .summary {{ font-weight: bold; }}",
-        config.background, config.foreground, config.background, config.foreground, config.border, config.critical, config.foreground
+        "#tynotif, #tynotif viewport, #tynotif scrolledwindow {{ background: transparent; box-shadow: none; }} .notification, #tynotif .queue {{ background: {}; color: {}; border: 1px solid {}; border-radius: 10px; padding: 16px; }} .notification.critical {{ border-color: {}; }} .notification label {{ color: {}; }} .app {{ opacity: 0.65; }} .summary {{ font-weight: bold; }}",
+        config.background, config.foreground, config.border, config.critical, config.foreground
     ).as_bytes())?;
     gtk::StyleContext::add_provider_for_screen(
         &screen,
@@ -28,9 +28,18 @@ pub fn run(state: Shared, replace: bool, force: bool, test: bool) -> Result<()> 
     );
     let window = ty_common::overlay::floating_window("tynotif", 0, 0, config.width, 1);
     window.set_widget_name("tynotif");
-    // The shared floating window defaults to an app-painted transparent surface.
-    // Let GTK paint an opaque background, including the gaps and newly resized areas.
-    window.set_app_paintable(false);
+    if let Some(visual) = screen.rgba_visual() {
+        window.set_visual(Some(&visual));
+    }
+    // Clear damaged pixels to transparent before GTK draws the opaque cards. Merely
+    // setting transparent CSS on an app-painted window leaves old pixels behind.
+    window.connect_draw(|_, cr| {
+        let _ = cr.save();
+        cr.set_operator(gtk::cairo::Operator::Clear);
+        let _ = cr.paint();
+        let _ = cr.restore();
+        glib::Propagation::Proceed
+    });
     let scroll = gtk::ScrolledWindow::new(gtk::Adjustment::NONE, gtk::Adjustment::NONE);
     scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
     let stack = gtk::Box::new(gtk::Orientation::Vertical, config.gap);
@@ -146,6 +155,7 @@ pub fn run(state: Shared, replace: bool, force: bool, test: bool) -> Result<()> 
             height,
         );
         window.show();
+        window.queue_draw();
         glib::ControlFlow::Continue
     });
     crate::demo::start(&startup_connection, test);

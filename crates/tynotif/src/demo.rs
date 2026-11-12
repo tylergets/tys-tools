@@ -38,12 +38,12 @@ impl Example {
     }
 }
 
-fn examples() -> VecDeque<Example> {
+fn examples(delay: Duration) -> VecDeque<Example> {
     let mut low = Example::new("Low urgency", "A quiet, low-priority notification.");
     low.urgency = 0;
     let mut critical = Example::new(
         "Critical urgency",
-        "Critical border styling; this demo expires after 2.5 seconds.",
+        "Critical border styling; this demo expires automatically.",
     );
     critical.urgency = 2;
     critical.icon = "dialog-error";
@@ -75,7 +75,7 @@ fn examples() -> VecDeque<Example> {
     sticky_critical.urgency = 2;
     sticky_critical.icon = "dialog-warning";
     sticky_critical.timeout = -1;
-    VecDeque::from(vec![
+    let mut examples = VecDeque::from(vec![
         low,
         Example::new("Normal urgency", "A normal desktop notification, with an application icon."),
         critical,
@@ -89,11 +89,18 @@ fn examples() -> VecDeque<Example> {
             .hint("value", 50i32).hint("x-dunst-stack-tag", "tynotif-demo-progress"),
         Example::new("Progress: 100%", "Complete.")
             .hint("value", 100i32).hint("x-dunst-stack-tag", "tynotif-demo-progress"),
-        Example::new("Replacement target", "In one second this card will be updated by ID."),
+        Example::new("Replacement target", "The next demo step will update this card by ID."),
         replacement,
         sticky,
         sticky_critical,
-    ])
+    ]);
+    // Keep replacement targets alive until the next step, even with a long delay.
+    for example in &mut examples {
+        if example.timeout > 0 {
+            example.timeout = (delay.as_millis() + 1500).max(2500).min(i32::MAX as u128) as i32;
+        }
+    }
+    examples
 }
 
 fn send(
@@ -146,22 +153,27 @@ fn send(
     );
 }
 
-fn next(connection: gio::DBusConnection, mut examples: VecDeque<Example>, previous_id: u32) {
+fn next(
+    connection: gio::DBusConnection,
+    mut examples: VecDeque<Example>,
+    previous_id: u32,
+    delay: Duration,
+) {
     let Some(example) = examples.pop_front() else {
         println!("tynotif notification demo complete");
         return;
     };
-    glib::timeout_add_local_once(Duration::from_secs(1), move || {
+    glib::timeout_add_local_once(delay, move || {
         let next_connection = connection.clone();
         println!("tynotif test: {}", example.summary);
         send(&connection, example, previous_id, move |id| {
-            next(next_connection, examples, id)
+            next(next_connection, examples, id, delay)
         });
     });
 }
 
-pub fn start(connection: &gio::DBusConnection, test: bool) {
-    if test {
+pub fn start(connection: &gio::DBusConnection, test: Option<Duration>) {
+    if test.is_some() {
         connection.signal_subscribe(
             connection.unique_name().as_deref(),
             Some(bus::NAME),
@@ -183,8 +195,8 @@ pub fn start(connection: &gio::DBusConnection, test: bool) {
     let connection_copy = connection.clone();
     send(connection, startup, 0, move |_| {
         println!("tynotif is running");
-        if test {
-            next(connection_copy, examples(), 0);
+        if let Some(delay) = test {
+            next(connection_copy, examples(delay), 0, delay);
         }
     });
 }
