@@ -17,7 +17,9 @@ until displayed. Existing cards stay in place when another notification arrives.
 When more than one notification is active, hovering the stack slides in a
 **Dismiss all (N)** button below the cards. It dismisses both visible and queued
 notifications, using the same history and close signals as `tynotif close-all`.
-The footer appears separately without shifting the cards. A short hover grace
+The footer is sized to its controls and right-aligned below the cards, rather than
+occupying a notification-wide transparent rectangle. It appears without shifting
+the cards. A short hover grace
 period lets you cross the gaps to reach the control; single notifications keep
 their individual dismiss button.
 

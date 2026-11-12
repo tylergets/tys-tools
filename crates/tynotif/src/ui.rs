@@ -55,7 +55,7 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
     queued.set_ellipsize(gtk::pango::EllipsizeMode::End);
     queued.set_max_width_chars(26);
     queued.set_no_show_all(true);
-    toolbar.pack_start(&queued, true, true, 0);
+    toolbar.pack_start(&queued, false, false, 0);
     footer.add(&toolbar);
     toolbar.show_all();
     let mut revision = u64::MAX;
@@ -165,11 +165,30 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
             waiting = total.saturating_sub(presented.len());
             queued.set_text(&format!("+{waiting} more queued"));
             queued.set_visible(waiting > 0);
+            // A full-width transparent footer still has a rectangular compositor
+            // shadow and input region. Size it to the badge/button, right-aligned.
+            // Use the full button width even while its reveal animation is hidden.
+            let button_width = if total > 1 {
+                dismiss_all.preferred_width().1
+            } else {
+                0
+            };
+            let badge_width = if waiting > 0 {
+                queued.preferred_width().1
+            } else {
+                0
+            };
+            let spacing = if button_width > 0 && badge_width > 0 {
+                8
+            } else {
+                0
+            };
+            let footer_width = (button_width + badge_width + spacing).max(1).min(width);
             place(
                 &footer,
-                x,
+                x + width - footer_width,
                 y.min(bottom - footer_height),
-                width,
+                footer_width,
                 footer_height,
             );
             if presented.is_empty() {
