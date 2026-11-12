@@ -19,7 +19,7 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
     let screen = gdk::Screen::default().context("no screen")?;
     let css = gtk::CssProvider::new();
     css.load_from_data(format!(
-        "#tynotif, #tynotif viewport, #tynotif scrolledwindow {{ background: transparent; box-shadow: none; }} .notification, #tynotif .queue {{ background: {}; color: {}; border: 1px solid {}; border-radius: 10px; padding: 10px 12px; }} .notification.critical {{ border-color: {}; }} .notification label {{ color: {}; }} .app {{ opacity: 0.65; }} .summary {{ font-weight: bold; }} #tynotif button.dismiss {{ background: transparent; background-image: none; border: none; box-shadow: none; min-width: 18px; min-height: 18px; padding: 0; }} #tynotif button.dismiss:hover {{ background: alpha(currentColor, 0.12); }} #tynotif .actions button {{ min-height: 0; padding: 3px 8px; }} #tynotif .actions flowboxchild {{ padding: 0; }}",
+        "#tynotif, #tynotif viewport, #tynotif scrolledwindow {{ background: transparent; box-shadow: none; }} .notification, #tynotif .queue {{ background: {}; color: {}; border: 1px solid {}; border-radius: 10px; padding: 12px 14px; }} .notification.critical {{ border-color: {}; }} .notification label {{ color: {}; }} .app {{ opacity: 0.65; }} .summary {{ font-weight: bold; }} #tynotif button.dismiss {{ background: transparent; background-image: none; border: none; box-shadow: none; min-width: 18px; min-height: 18px; padding: 0; }} #tynotif button.dismiss:hover {{ background: alpha(currentColor, 0.12); }} #tynotif .actions button {{ min-height: 18px; padding: 6px 12px; }} #tynotif .actions flowboxchild {{ padding: 0; }}",
         config.background, config.foreground, config.border, config.critical, config.foreground
     ).as_bytes())?;
     gtk::StyleContext::add_provider_for_screen(
@@ -213,20 +213,15 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
             card.pack_start(&image, false, false, 0);
         }
     }
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 6);
     card.pack_start(&text, true, true, 0);
     let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     let app = label(&n.app, "app");
     app.set_line_wrap(false);
     app.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    app.set_max_width_chars(14);
+    app.set_max_width_chars(40);
     app.set_tooltip_text(Some(&n.app));
-    header.pack_start(&app, false, false, 0);
-    let summary = label(&n.summary, "summary");
-    summary.set_line_wrap(false);
-    summary.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    summary.set_tooltip_text(Some(&n.summary));
-    header.pack_start(&summary, true, true, 0);
+    header.pack_start(&app, true, true, 0);
     let dismiss = gtk::Button::with_label("×");
     dismiss.style_context().add_class("dismiss");
     dismiss.set_valign(gtk::Align::Start);
@@ -237,6 +232,13 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
     dismiss.connect_clicked(move |_| bus::close(&bus, &mut model.lock().unwrap(), id, 2));
     header.pack_end(&dismiss, false, false, 0);
     text.pack_start(&header, false, false, 0);
+    if !n.summary.is_empty() {
+        let summary = label(&n.summary, "summary");
+        summary.set_lines(2);
+        summary.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        summary.set_tooltip_text(Some(&n.summary));
+        text.pack_start(&summary, false, false, 0);
+    }
     if !n.body.is_empty() {
         let body = label(&n.body, "body");
         body.set_lines(3);
@@ -247,6 +249,8 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
     if let Some(value) = n.progress {
         let progress = gtk::ProgressBar::new();
         progress.set_fraction(f64::from(value) / 100.0);
+        progress.set_margin_top(4);
+        progress.set_margin_bottom(2);
         text.pack_start(&progress, false, false, 0);
     }
     // Share a row when possible; wrap long/localized actions onto further rows.
@@ -255,8 +259,9 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
     actions.set_selection_mode(gtk::SelectionMode::None);
     actions.set_min_children_per_line(1);
     actions.set_max_children_per_line(3);
-    actions.set_column_spacing(4);
-    actions.set_row_spacing(4);
+    actions.set_margin_top(4);
+    actions.set_column_spacing(8);
+    actions.set_row_spacing(6);
     for pair in n.actions.chunks_exact(2) {
         let button = gtk::Button::new();
         button.add(&label(&pair[1], "action"));

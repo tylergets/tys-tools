@@ -5,8 +5,9 @@ Implements `org.freedesktop.Notifications` 1.2 methods and lifecycle signals, so
 `notify-send` and applications work without changing their notification clients.
 GTK popup cards have app icons, urgency borders, action buttons, dismiss buttons,
 and progress bars. Popups use the primary monitor (first monitor if none is primary).
-The compact layout puts a 24px icon beside an inline app/title header, with up to
-three body lines underneath and wrapping action buttons. Hover truncated text to
+The layout puts a 24px icon beside the text, with an app header, a separate title
+(up to two lines), and up to three body lines. Progress bars and wrapping action
+buttons have extra spacing to keep controls distinct. Hover truncated text to
 read it in a tooltip; history retains the full text.
 Cards have opaque backgrounds with transparent gaps between them, and a footer shows how many notifications are
 queued beyond the visible limit (four by default). Existing cards stay in place
