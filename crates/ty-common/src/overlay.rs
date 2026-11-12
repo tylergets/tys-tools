@@ -453,6 +453,50 @@ fn floating_window_impl(
     window
 }
 
+/// Match an X11 floating window's bounding/input shape to its rounded painting.
+/// ARGB clearing alone leaves a rectangular native surface for compositors to
+/// process. Wayland uses the painted alpha channel instead of X11 window shapes.
+pub fn round_floating_window(window: &gtk::Window, radius: i32) {
+    if crate::session::is_wayland() {
+        return;
+    }
+
+    fn update(window: &gtk::Window, radius: i32) {
+        let Some(surface) = window.window() else {
+            return;
+        };
+        let width = window.allocated_width();
+        let height = window.allocated_height();
+        let radius = radius.max(0).min(width / 2).min(height / 2);
+        let region = cairo::Region::create_rectangle(&cairo::RectangleInt::new(
+            0,
+            radius,
+            width,
+            height - 2 * radius,
+        ));
+        for y in 0..radius {
+            // Keep every pixel touched by the antialiased arc. Cairo still
+            // supplies the smooth edge; the native shape excludes the corners.
+            let dy = f64::from(radius - y - 1);
+            let r = f64::from(radius);
+            let inset = (r - (r * r - dy * dy).sqrt()).floor() as i32;
+            for row in [y, height - y - 1] {
+                let _ = region.union_rectangle(&cairo::RectangleInt::new(
+                    inset,
+                    row,
+                    width - 2 * inset,
+                    1,
+                ));
+            }
+        }
+        surface.shape_combine_region(Some(&region), 0, 0);
+        surface.input_shape_combine_region(Some(&region), 0, 0);
+    }
+
+    window.connect_realize(move |window| update(window, radius));
+    window.connect_size_allocate(move |window, _| update(window, radius));
+}
+
 /// Let a [`floating_window`] take keyboard focus when clicked on Wayland.
 /// X11 also needs [`focus_floating_on_click`] because the popup is override-redirect.
 pub fn set_floating_focusable(window: &gtk::Window) {

@@ -10,6 +10,9 @@ use gtk::{gdk, gio, glib};
 use crate::bus::{self, Shared};
 use crate::model::Notification;
 
+const CARD_RADIUS: i32 = 10;
+const TEXT_SPACING: i32 = 6;
+
 pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) -> Result<()> {
     gtk::init()?;
     gdk::set_program_class("Tynotif");
@@ -48,7 +51,7 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
         #tynotif .notification, #tynotif .queue {{
             background: {background}; color: {foreground};
             border: 1px solid alpha({border}, 0.65); border-image: none;
-            box-shadow: none; border-radius: 10px; padding: 10px 16px;
+            box-shadow: none; border-radius: {radius}px; padding: 14px 16px;
         }}
         #tynotif .notification.critical {{ border-color: {critical}; }}
         #tynotif label, #tynotif image {{ color: inherit; text-shadow: none; }}
@@ -69,7 +72,7 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
         #tynotif button:disabled {{ opacity: 0.4; }}
         #tynotif button.dismiss {{
             background: transparent; border-color: transparent;
-            min-width: 24px; min-height: 18px; padding: 0;
+            min-width: 24px; min-height: 24px; padding: 0;
         }}
         #tynotif button.dismiss image {{ opacity: 0.65; }}
         #tynotif button.dismiss:hover {{ background: alpha(currentColor, 0.12); }}
@@ -94,6 +97,7 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
         foreground = config.foreground,
         border = config.border,
         critical = config.critical,
+        radius = CARD_RADIUS,
     ).as_bytes())?;
     gtk::StyleContext::add_provider_for_screen(
         &screen,
@@ -384,6 +388,9 @@ fn popup(width: i32, id: u32, hover: &Rc<RefCell<Hover>>) -> gtk::Window {
     if let Some(visual) = gdk::Screen::default().and_then(|screen| screen.rgba_visual()) {
         window.set_visual(Some(&visual));
     }
+    if id != 0 {
+        ty_common::overlay::round_floating_window(&window, CARD_RADIUS);
+    }
     window.connect_draw(move |window, cr| {
         let _ = cr.save();
         cr.set_operator(gtk::cairo::Operator::Clear);
@@ -398,7 +405,7 @@ fn popup(width: i32, id: u32, hover: &Rc<RefCell<Hover>>) -> gtk::Window {
                 // not prevent a rectangular child background filling the corners.
                 let width = f64::from(window.allocated_width());
                 let height = f64::from(window.allocated_height());
-                let radius = 10.0_f64.min(width / 2.0).min(height / 2.0);
+                let radius = f64::from(CARD_RADIUS).min(width / 2.0).min(height / 2.0);
                 let quarter = std::f64::consts::FRAC_PI_2;
                 cr.new_sub_path();
                 cr.arc(width - radius, radius, radius, -quarter, 0.0);
@@ -506,9 +513,12 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
         image.set_valign(gtk::Align::Start);
         card.pack_start(&image, false, false, 0);
     }
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    // Keep the text rhythm independent of the icon and dismiss hit target.
+    // A button in the app row makes that row taller and centers the app label,
+    // introducing hidden spacing above and below it.
+    let text = gtk::Box::new(gtk::Orientation::Vertical, TEXT_SPACING);
+    text.set_valign(gtk::Align::Start);
     card.pack_start(&text, true, true, 0);
-    let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     let indicators = if config.show_indicators {
         format!(
             "{}{}",
@@ -527,7 +537,7 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
     app.set_ellipsize(gtk::pango::EllipsizeMode::End);
     app.set_max_width_chars(40);
     app.set_tooltip_text(Some(&n.app));
-    header.pack_start(&app, true, true, 0);
+    text.pack_start(&app, false, false, 0);
     let dismiss = gtk::Button::new();
     let close_icon = gtk::Image::from_icon_name(
         Some("window-close-symbolic"),
@@ -544,8 +554,7 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
     let bus = connection.clone();
     let id = n.id;
     dismiss.connect_clicked(move |_| bus::close(&bus, &mut model.lock().unwrap(), id, 2));
-    header.pack_end(&dismiss, false, false, 0);
-    text.pack_start(&header, false, false, 0);
+    card.pack_end(&dismiss, false, false, 0);
     if let Some(format) = &config.format {
         let formatted = label("", "body");
         formatted.set_markup(&crate::content::formatted(n, format, config.markup));
@@ -574,8 +583,7 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
     if let Some(value) = n.progress {
         let progress = gtk::ProgressBar::new();
         progress.set_fraction(f64::from(value) / 100.0);
-        progress.set_margin_top(4);
-        progress.set_margin_bottom(2);
+        progress.set_margin_top(2);
         text.pack_start(&progress, false, false, 0);
     }
     // Share a row when possible; wrap long/localized actions onto further rows.
@@ -584,13 +592,13 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
     actions.set_selection_mode(gtk::SelectionMode::None);
     actions.set_min_children_per_line(1);
     actions.set_max_children_per_line(3);
-    actions.set_margin_top(4);
+    actions.set_margin_top(2);
     actions.set_column_spacing(8);
     actions.set_row_spacing(6);
     for pair in n.actions.chunks_exact(2) {
         if pair[0] == "inline-reply" {
             let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-            row.set_margin_top(8);
+            row.set_margin_top(2);
             let entry = gtk::Entry::new();
             entry.set_width_chars(12);
             entry.set_placeholder_text(Some(if n.reply_placeholder.is_empty() {
