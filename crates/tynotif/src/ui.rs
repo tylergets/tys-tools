@@ -1,5 +1,5 @@
-use std::cell::Cell;
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -34,88 +34,38 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
         &css,
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
-    let window = ty_common::overlay::floating_window("tynotif", 0, 0, config.width, 1);
-    window.set_widget_name("tynotif");
-    window.set_title("tynotif");
-    // Compositors must treat this as an overlay, not as a normal app window.
-    // In particular, Picom's normal-window transparent clipping cuts through
-    // underlying windows to the wallpaper at our gaps and antialiased corners.
-    window.set_type_hint(gdk::WindowTypeHint::Notification);
-    window.set_decorated(false);
-    window.set_skip_taskbar_hint(true);
-    window.set_skip_pager_hint(true);
-    if let Some(visual) = screen.rgba_visual() {
-        window.set_visual(Some(&visual));
-    }
-    // Clear damaged pixels to transparent before GTK draws the opaque cards. Merely
-    // setting transparent CSS on an app-painted window leaves old pixels behind.
-    window.connect_draw(|_, cr| {
-        let _ = cr.save();
-        cr.set_operator(gtk::cairo::Operator::Clear);
-        let _ = cr.paint();
-        let _ = cr.restore();
-        glib::Propagation::Proceed
-    });
-    let scroll = gtk::ScrolledWindow::new(gtk::Adjustment::NONE, gtk::Adjustment::NONE);
-    scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-    scroll.set_shadow_type(gtk::ShadowType::None);
-    let viewport = gtk::Viewport::new(gtk::Adjustment::NONE, gtk::Adjustment::NONE);
-    viewport.set_shadow_type(gtk::ShadowType::None);
-    let stack = gtk::Box::new(gtk::Orientation::Vertical, config.gap);
-    viewport.add(&stack);
-    scroll.add(&viewport);
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    // Reserve a small transparent footer only for multi-notification stacks.
-    // The fixed height keeps hover animation from resizing/moving its hit area.
-    let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    toolbar.set_size_request(-1, 38);
-    toolbar.set_no_show_all(true);
+    let hover = Rc::new(RefCell::new(Hover::default()));
+    // Cards have separate native windows. There is no viewport or shared surface
+    // spanning their gaps, and no scroller that can paint a rectangular backdrop.
+    let footer = popup(config.width, 0, &hover);
+    let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     let reveal = gtk::Revealer::new();
     reveal.set_transition_type(gtk::RevealerTransitionType::SlideUp);
     reveal.set_transition_duration(160);
     let dismiss_all = gtk::Button::with_label("Dismiss all");
     dismiss_all.style_context().add_class("dismiss-all");
     dismiss_all.set_tooltip_text(Some("Dismiss all visible and queued notifications"));
-    dismiss_all.set_margin_top(6);
     let model = state.clone();
     let bus = connection.clone();
     dismiss_all.connect_clicked(move |_| bus::close_all(&bus, &mut model.lock().unwrap()));
     reveal.add(&dismiss_all);
-    reveal.show_all();
     toolbar.pack_end(&reveal, false, false, 0);
-    content.pack_start(&scroll, true, true, 0);
     let queued = label("", "queue");
-    queued.set_xalign(0.5);
-    queued.set_margin_top(8);
-    queued.set_margin_bottom(8);
+    queued.set_line_wrap(false);
+    queued.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    queued.set_max_width_chars(26);
     queued.set_no_show_all(true);
-    content.pack_start(&queued, false, false, 0);
-    content.pack_end(&toolbar, false, false, 0);
-    window.add(&content);
-    let hovered = Rc::new(Cell::new(false));
-    let active_count = Rc::new(Cell::new(0));
-    window.add_events(gdk::EventMask::ENTER_NOTIFY_MASK | gdk::EventMask::LEAVE_NOTIFY_MASK);
-    let flag = hovered.clone();
-    let count = active_count.clone();
-    let control = reveal.clone();
-    window.connect_enter_notify_event(move |_, _| {
-        flag.set(true);
-        control.set_reveal_child(count.get() > 1);
-        glib::Propagation::Proceed
-    });
-    let flag = hovered.clone();
-    let control = reveal.clone();
-    window.connect_leave_notify_event(move |_, event| {
-        if event.detail() != gdk::NotifyType::Inferior {
-            flag.set(false);
-            control.set_reveal_child(false);
-        }
-        glib::Propagation::Proceed
-    });
+    toolbar.pack_start(&queued, true, true, 0);
+    footer.add(&toolbar);
+    toolbar.show_all();
     let mut revision = u64::MAX;
     let mut last = Instant::now();
     let mut last_area = (0, 0, 0, 0);
-    let mut cards: HashMap<u32, (Notification, gtk::Box)> = HashMap::new();
+    let mut cards: HashMap<u32, Card> = HashMap::new();
+    let mut presented = Vec::new();
+    let mut total = 0;
+    let mut waiting = 0;
+    let mut paused = false;
     let startup_connection = connection.clone();
     glib::timeout_add_local(Duration::from_millis(50), move || {
         let now = Instant::now();
@@ -123,8 +73,8 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
         last = now;
         let mut model = state.lock().unwrap();
         model.wake_if_due(std::time::SystemTime::now());
-        if !hovered.get() {
-            for notification in model.tick(elapsed) {
+        if !hover.borrow().active() {
+            for notification in model.tick_visible(elapsed, &presented) {
                 bus::closed(&connection, &notification, 1);
             }
         }
@@ -134,95 +84,148 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
         let monitor =
             gdk::Display::default().and_then(|d| d.primary_monitor().or_else(|| d.monitor(0)));
         let Some(monitor) = monitor else {
+            for card in cards.values() { card.window.hide(); }
+            footer.hide();
+            presented.clear();
+            *hover.borrow_mut() = Hover::default();
+            revision = u64::MAX;
             return glib::ControlFlow::Continue;
         };
         let area = monitor.workarea();
         let geometry = (area.x(), area.y(), area.width(), area.height());
-        if revision == model.revision && geometry == last_area {
-            return glib::ControlFlow::Continue;
-        }
-        last_area = geometry;
-        revision = model.revision;
-        let notifications = model.visible();
-        let count = model.active.len();
-        active_count.set(count);
-        dismiss_all.set_label(&format!("Dismiss all ({count})"));
-        toolbar.set_visible(count > 1 && !notifications.is_empty());
-        reveal.set_reveal_child(count > 1 && !notifications.is_empty() && hovered.get());
-        let waiting = model.active.len().saturating_sub(notifications.len());
-        drop(model);
-        cards.retain(|id, (_, widget)| {
-            let keep = notifications.iter().any(|n| n.id == *id);
-            if !keep {
-                stack.remove(widget);
-            }
-            keep
-        });
-        if notifications.is_empty() {
-            window.hide();
-            hovered.set(false);
-            return glib::ControlFlow::Continue;
-        }
-        let width = config
-            .width
-            .min((area.width() - 2 * config.margin).max(200));
-        for (position, notification) in notifications.into_iter().enumerate() {
-            let unchanged = cards
-                .get(&notification.id)
-                .is_some_and(|(previous, _)| same_content(previous, &notification));
-            if !unchanged {
-                if let Some((_, widget)) = cards.remove(&notification.id) {
-                    stack.remove(&widget);
+        if revision != model.revision || geometry != last_area {
+            last_area = geometry;
+            revision = model.revision;
+            let notifications = model.visible();
+            total = model.active.len();
+            paused = model.paused;
+            drop(model);
+            cards.retain(|id, card| {
+                let keep = notifications.iter().any(|n| n.id == *id);
+                if !keep {
+                    hover.borrow_mut().over.remove(id);
+                    card.window.close();
                 }
-                let widget = card(&notification, &state, &connection);
-                stack.pack_start(&widget, false, false, 0);
-                cards.insert(notification.id, (notification.clone(), widget));
+                keep
+            });
+            let width = config.width.min((area.width() - 2 * config.margin).max(200));
+            let origin = ty_common::screen::bounds().ok();
+            let x = area.x() - origin.map(|r| r.x).unwrap_or(0) + area.width() - width - config.margin;
+            let mut y = area.y() - origin.map(|r| r.y).unwrap_or(0) + config.top;
+            let bottom = area.y() - origin.map(|r| r.y).unwrap_or(0) + area.height() - config.margin;
+            dismiss_all.set_label(&format!("Dismiss all ({total})"));
+            // Keep room for a queue badge and hover control at the bottom. Measure
+            // their full height, not the revealer's animated height.
+            queued.set_text("More notifications queued");
+            queued.show();
+            let footer_height = dismiss_all.preferred_height_for_width(width).1
+                .max(queued.preferred_height_for_width(width).1).max(36);
+            let budget_bottom = bottom - footer_height - config.gap;
+            presented.clear();
+            for notification in notifications {
+                let id = notification.id;
+                let entry = cards.entry(id).or_insert_with(|| {
+                    let window = popup(width, id, &hover);
+                    let child = card(&notification, &state, &connection);
+                    window.add(&child);
+                    Card { window, child, notification: notification.clone() }
+                });
+                if !same_content(&entry.notification, &notification) {
+                    entry.window.remove(&entry.child);
+                    entry.child = card(&notification, &state, &connection);
+                    entry.window.add(&entry.child);
+                    entry.notification = notification;
+                }
+                entry.child.show_all();
+                let height = entry.child.preferred_height_for_width(width).1.max(1);
+                if y + height > budget_bottom && !presented.is_empty() {
+                    entry.window.hide();
+                    hover.borrow_mut().over.remove(&id);
+                    continue;
+                }
+                place(&entry.window, x, y, width, height);
+                entry.window.show();
+                entry.window.queue_draw();
+                presented.push(id);
+                y += height + config.gap;
             }
-            stack.reorder_child(&cards[&notification.id].1, position as i32);
+            waiting = total.saturating_sub(presented.len());
+            queued.set_text(&format!("+{waiting} more queued"));
+            queued.set_visible(waiting > 0);
+            place(&footer, x, y.min(bottom - footer_height), width, footer_height);
+            if presented.is_empty() { *hover.borrow_mut() = Hover::default(); }
+        } else { drop(model); }
+        let show_control = total > 1 && !paused && hover.borrow().active();
+        reveal.set_reveal_child(show_control);
+        if !paused && !presented.is_empty() && (waiting > 0 || show_control || reveal.is_child_revealed()) {
+            footer.show();
+        } else {
+            footer.hide();
+            hover.borrow_mut().over.remove(&0);
         }
-        queued.set_text(&format!(
-            "+{waiting} more notification{} queued",
-            if waiting == 1 { "" } else { "s" }
-        ));
-        queued.set_visible(waiting > 0);
-        content.show_all();
-        // Measure the full button rather than the revealer's animated height,
-        // including when a user-selected font needs more than the default space.
-        toolbar.set_size_request(-1, dismiss_all.preferred_height_for_width(width).1.max(38));
-        let (_, natural) = stack.preferred_height_for_width(width);
-        let footer_height = if waiting > 0 {
-            queued.preferred_height_for_width(width).1
-        } else {
-            0
-        };
-        let toolbar_height = if count > 1 {
-            toolbar.preferred_height_for_width(width).1
-        } else {
-            0
-        };
-        let height = (natural + footer_height + toolbar_height)
-            .min((area.height() - config.top - config.margin).max(100))
-            .max(1);
-        let origin = ty_common::screen::bounds().ok();
-        // overlay uses canvas-relative coordinates on Wayland; X11 uses root coordinates.
-        let ox = origin.map(|r| r.x).unwrap_or(0);
-        let oy = origin.map(|r| r.y).unwrap_or(0);
-        // Realize while unmapped so the first visible frame uses the final geometry.
-        window.realize();
-        ty_common::overlay::place_floating(
-            &window,
-            area.x() - ox + area.width() - width - config.margin,
-            area.y() - oy + config.top,
-            width,
-            height,
-        );
-        window.show();
-        window.queue_draw();
         glib::ControlFlow::Continue
     });
     crate::demo::start(&startup_connection, test);
     gtk::main();
     Ok(())
+}
+
+struct Card {
+    window: gtk::Window,
+    child: gtk::Box,
+    notification: Notification,
+}
+
+#[derive(Default)]
+struct Hover {
+    over: HashSet<u32>,
+    left_at: Option<Instant>,
+}
+
+impl Hover {
+    fn active(&self) -> bool {
+        !self.over.is_empty() || self.left_at.is_some_and(|t| t.elapsed() < Duration::from_millis(250))
+    }
+}
+
+fn popup(width: i32, id: u32, hover: &Rc<RefCell<Hover>>) -> gtk::Window {
+    let window = ty_common::overlay::floating_window("tynotif", 0, 0, width, 1);
+    window.set_widget_name("tynotif");
+    window.set_title("tynotif");
+    window.set_type_hint(gdk::WindowTypeHint::Notification);
+    window.set_decorated(false);
+    window.set_skip_taskbar_hint(true);
+    window.set_skip_pager_hint(true);
+    if let Some(visual) = window.screen().and_then(|screen| screen.rgba_visual()) {
+        window.set_visual(Some(&visual));
+    }
+    window.connect_draw(|_, cr| {
+        let _ = cr.save();
+        cr.set_operator(gtk::cairo::Operator::Clear);
+        let _ = cr.paint();
+        let _ = cr.restore();
+        glib::Propagation::Proceed
+    });
+    window.add_events(gdk::EventMask::ENTER_NOTIFY_MASK | gdk::EventMask::LEAVE_NOTIFY_MASK);
+    let state = hover.clone();
+    window.connect_enter_notify_event(move |_, _| {
+        state.borrow_mut().over.insert(id);
+        glib::Propagation::Proceed
+    });
+    let state = hover.clone();
+    window.connect_leave_notify_event(move |_, event| {
+        if event.detail() != gdk::NotifyType::Inferior {
+            let mut state = state.borrow_mut();
+            if state.over.remove(&id) { state.left_at = Some(Instant::now()); }
+        }
+        glib::Propagation::Proceed
+    });
+    window
+}
+
+fn place(window: &gtk::Window, x: i32, y: i32, width: i32, height: i32) {
+    window.realize();
+    ty_common::overlay::place_floating(window, x, y, width, height);
 }
 
 fn same_content(a: &Notification, b: &Notification) -> bool {
