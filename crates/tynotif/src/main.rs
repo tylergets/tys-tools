@@ -2,6 +2,7 @@ mod bus;
 mod config;
 mod demo;
 mod model;
+mod tray;
 mod ui;
 
 use std::path::PathBuf;
@@ -40,12 +41,26 @@ enum Command {
     List,
     History,
     HistoryClear,
-    HistoryPop { id: Option<u32> },
-    Close { id: Option<u32> },
+    HistoryPop {
+        id: Option<u32>,
+    },
+    Close {
+        id: Option<u32>,
+    },
     CloseAll,
     IsPaused,
-    SetPaused { value: Paused },
-    Action { id: u32, key: String },
+    SetPaused {
+        value: Paused,
+    },
+    /// Pause notifications for a number of minutes, then resume automatically.
+    Snooze {
+        #[arg(value_parser = clap::value_parser!(u64).range(1..=1440))]
+        minutes: u64,
+    },
+    Action {
+        id: u32,
+        key: String,
+    },
 }
 
 #[derive(Clone, ValueEnum)]
@@ -86,6 +101,7 @@ fn main() -> Result<()> {
         }
         Command::CloseAll => bus::command("close-all", ""),
         Command::IsPaused => bus::command("is-paused", ""),
+        Command::Snooze { minutes } => bus::command("snooze", &minutes.to_string()),
         Command::SetPaused { value } => bus::command(
             "set-paused",
             match value {

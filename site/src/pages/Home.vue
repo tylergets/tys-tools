@@ -27,6 +27,23 @@ cargo run -p tyboard -- run`;
   </p>
   <p class="muted">v{{ deps.version }} · <RouterLink to="/deps">dependencies</RouterLink></p>
 
+  <nav class="tray-bar" aria-label="Desktop bar preview — explore the tools">
+    <span class="tray-workspace" aria-hidden="true">1</span>
+    <span class="tray-title" aria-hidden="true">ty's tools</span>
+    <div class="tray-icons">
+      <RouterLink
+        v-for="t in tools"
+        :key="t.name"
+        :to="`/${t.name}`"
+        :aria-label="`${t.name} — ${t.tagline}`"
+        :title="`${t.name} — ${t.tagline}`"
+      >
+        <ToolIcon :name="t.name" />
+      </RouterLink>
+    </div>
+    <span class="tray-clock" aria-hidden="true">Nov 11&nbsp; 11:28 PM</span>
+  </nav>
+
   <h2>Why use them</h2>
   <ul class="plain">
     <li><strong>Private.</strong> No telemetry, no accounts, no cloud. Works offline.</li>
@@ -66,3 +83,85 @@ cargo run -p tyboard -- run`;
   <p>From source:</p>
   <CodeBlock :code="fromSource" lang="shell" />
 </template>
+
+<style scoped>
+.tray-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 10px 4px 4px;
+  margin: 24px 0 32px;
+  background: #252525;
+  color: #d4d4d4;
+  border-bottom: 2px solid #777;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.tray-workspace {
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  min-width: 28px;
+  border-bottom: 2px solid #e5c453;
+  background: #373737;
+}
+
+.tray-title {
+  white-space: nowrap;
+  margin-right: auto;
+}
+
+.tray-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.tray-icons a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 32px;
+  color: #d4d4d4;
+  text-decoration: none;
+}
+
+.tray-icons a:nth-child(4n) {
+  color: #e5c453;
+}
+
+.tray-icons a:nth-child(7n) {
+  color: #e87979;
+}
+
+.tray-icons a:hover,
+.tray-icons a:focus-visible {
+  background: #454545;
+  color: #fff;
+  outline: 1px solid #e5c453;
+  outline-offset: -1px;
+}
+
+.tray-icons .icon {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+}
+
+.tray-clock {
+  white-space: nowrap;
+}
+
+@media (max-width: 680px) {
+  .tray-title,
+  .tray-clock {
+    display: none;
+  }
+
+  .tray-icons {
+    margin-left: auto;
+  }
+}
+</style>

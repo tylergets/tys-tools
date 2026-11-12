@@ -13,7 +13,7 @@ Cards have opaque backgrounds with transparent gaps between them, and a footer s
 queued beyond the visible limit (four by default). Existing cards stay in place
 when another notification arrives.
 When more than one notification is active, hovering the stack slides in a
-**Dismiss all (N)** button above the cards. It dismisses both visible and queued
+**Dismiss all (N)** button below the cards. It dismisses both visible and queued
 notifications, using the same history and close signals as `tynotif close-all`.
 The toolbar's space stays fixed during the animation so the button is easy to hit;
 single notifications keep their individual dismiss button.
@@ -53,6 +53,23 @@ as your notification daemon.
 
 ## CLI
 
+### Tray and history
+
+The bell icon opens a menu with a newest-first **History** submenu, like tyboard's.
+Select an entry to read its full, selectable text in a scrollable detail window
+(Close or Escape dismisses it). Reading history works while notifications are
+paused and does not replay stale actions or change do-not-disturb.
+
+**Sleep notifications** offers 15, 30, 60, or 120 minutes, with automatic resume and
+a remaining-time label. The bell turns yellow while sleeping or paused. You can
+also pause indefinitely, resume immediately, dismiss all active/queued notifications,
+clear history, or quit. Middle-click toggles pause/resume. New notifications queue
+while sleeping; manual pause/resume cancels any timer. Sleep state is memory-only
+and resets when the daemon restarts. A StatusNotifierItem-compatible tray is needed
+to display the icon; the CLI remains available without one.
+
+### Commands and demos
+
 Each successful daemon start shows a short, transient **tynotif is running** popup
 and prints a readiness message in the terminal. To preview the notification types:
 
@@ -82,6 +99,7 @@ tynotif close-all                # dismiss active and queued notifications
 tynotif action ID KEY            # invoke an advertised action
 tynotif is-paused                # true / false
 tynotif set-paused true          # also false / toggle
+tynotif snooze 30                # sleep for 30 minutes (1–1440), then resume
 tynotif history                  # JSON, newest closed notification first
 tynotif history-pop [ID]         # redisplay history, returns a new ID
 tynotif history-clear
@@ -93,6 +111,7 @@ History is memory-only, bounded, and cleared on daemon restart. JSON entries hav
 `actions` (alternating keys/labels), and nullable `progress`. This is tynotif's
 schema, not `dunstctl history`'s schema. Replayed notifications are sticky copies
 with new IDs and no stale client actions. They do not add duplicate history entries.
+`status` includes `snooze_remaining_seconds` (null when no timed sleep is set).
 
 Critical notifications default to no expiration. Other timeouts start while a
 notification is visible; queued notifications and do-not-disturb do not consume

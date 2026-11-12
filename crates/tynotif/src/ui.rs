@@ -15,11 +15,18 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
     gdk::set_program_class("Tynotif");
     ty_common::appearance::apply_gtk();
     let connection = bus::serve(state.clone(), replace, force)?;
+    let mut tray = match crate::tray::Tray::new(state.clone(), connection.clone()) {
+        Ok(tray) => Some(tray),
+        Err(error) => {
+            eprintln!("Cannot create notification tray icon: {error:#}");
+            None
+        }
+    };
     let config = state.lock().unwrap().config.clone();
     let screen = gdk::Screen::default().context("no screen")?;
     let css = gtk::CssProvider::new();
     css.load_from_data(format!(
-        "#tynotif, #tynotif viewport, #tynotif scrolledwindow {{ background: transparent; box-shadow: none; }} .notification, #tynotif .queue {{ background: {}; color: {}; border: 1px solid {}; border-radius: 10px; padding: 12px 14px; }} .notification.critical {{ border-color: {}; }} .notification label {{ color: {}; }} .app {{ opacity: 0.65; }} .summary {{ font-weight: bold; }} #tynotif button.dismiss {{ background: transparent; background-image: none; border: none; box-shadow: none; min-width: 18px; min-height: 18px; padding: 0; }} #tynotif button.dismiss:hover {{ background: alpha(currentColor, 0.12); }} #tynotif .actions button {{ min-height: 18px; padding: 6px 12px; }} #tynotif .actions flowboxchild {{ padding: 0; }} #tynotif button.dismiss-all {{ background: {}; color: {}; border: 1px solid {}; border-radius: 8px; box-shadow: none; min-height: 20px; padding: 4px 10px; }} #tynotif button.dismiss-all:hover {{ border-color: currentColor; }}",
+        "#tynotif, #tynotif viewport, #tynotif scrolledwindow, #tynotif scrolledwindow undershoot, #tynotif scrolledwindow overshoot {{ background: transparent; border: none; outline: none; box-shadow: none; }} #tynotif .notification, #tynotif .queue {{ background: {}; color: {}; border: 1px solid alpha({}, 0.65); border-image: none; box-shadow: none; border-radius: 10px; padding: 12px 14px; }} #tynotif .notification.critical {{ border-color: {}; }} #tynotif .notification label {{ color: {}; }} .app {{ opacity: 0.65; }} .summary {{ font-weight: bold; }} #tynotif button.dismiss {{ background: transparent; background-image: none; border: none; box-shadow: none; min-width: 18px; min-height: 18px; padding: 0; }} #tynotif button.dismiss:hover {{ background: alpha(currentColor, 0.12); }} #tynotif .actions button {{ min-height: 18px; padding: 6px 12px; }} #tynotif .actions flowboxchild {{ padding: 0; }} #tynotif button.dismiss-all {{ background: {}; color: {}; border: 1px solid {}; border-radius: 8px; box-shadow: none; min-height: 20px; padding: 4px 10px; }} #tynotif button.dismiss-all:hover {{ border-color: currentColor; }}",
         config.background, config.foreground, config.border, config.critical, config.foreground, config.background, config.foreground, config.border
     ).as_bytes())?;
     gtk::StyleContext::add_provider_for_screen(
@@ -51,35 +58,39 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
     });
     let scroll = gtk::ScrolledWindow::new(gtk::Adjustment::NONE, gtk::Adjustment::NONE);
     scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    scroll.set_shadow_type(gtk::ShadowType::None);
+    let viewport = gtk::Viewport::new(gtk::Adjustment::NONE, gtk::Adjustment::NONE);
+    viewport.set_shadow_type(gtk::ShadowType::None);
     let stack = gtk::Box::new(gtk::Orientation::Vertical, config.gap);
-    scroll.add(&stack);
+    viewport.add(&stack);
+    scroll.add(&viewport);
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    // Reserve a small transparent toolbar only for multi-notification stacks.
+    // Reserve a small transparent footer only for multi-notification stacks.
     // The fixed height keeps hover animation from resizing/moving its hit area.
     let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     toolbar.set_size_request(-1, 38);
     toolbar.set_no_show_all(true);
     let reveal = gtk::Revealer::new();
-    reveal.set_transition_type(gtk::RevealerTransitionType::SlideDown);
+    reveal.set_transition_type(gtk::RevealerTransitionType::SlideUp);
     reveal.set_transition_duration(160);
     let dismiss_all = gtk::Button::with_label("Dismiss all");
     dismiss_all.style_context().add_class("dismiss-all");
     dismiss_all.set_tooltip_text(Some("Dismiss all visible and queued notifications"));
-    dismiss_all.set_margin_bottom(6);
+    dismiss_all.set_margin_top(6);
     let model = state.clone();
     let bus = connection.clone();
     dismiss_all.connect_clicked(move |_| bus::close_all(&bus, &mut model.lock().unwrap()));
     reveal.add(&dismiss_all);
     reveal.show_all();
     toolbar.pack_end(&reveal, false, false, 0);
-    content.pack_start(&toolbar, false, false, 0);
     content.pack_start(&scroll, true, true, 0);
     let queued = label("", "queue");
     queued.set_xalign(0.5);
     queued.set_margin_top(8);
     queued.set_margin_bottom(8);
     queued.set_no_show_all(true);
-    content.pack_end(&queued, false, false, 0);
+    content.pack_start(&queued, false, false, 0);
+    content.pack_end(&toolbar, false, false, 0);
     window.add(&content);
     let hovered = Rc::new(Cell::new(false));
     let active_count = Rc::new(Cell::new(0));
@@ -111,10 +122,14 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
         let elapsed = now.duration_since(last).as_millis().min(u64::MAX as u128) as u64;
         last = now;
         let mut model = state.lock().unwrap();
+        model.wake_if_due(std::time::SystemTime::now());
         if !hovered.get() {
             for notification in model.tick(elapsed) {
                 bus::closed(&connection, &notification, 1);
             }
+        }
+        if let Some(tray) = &mut tray {
+            tray.refresh(&model);
         }
         let monitor =
             gdk::Display::default().and_then(|d| d.primary_monitor().or_else(|| d.monitor(0)));

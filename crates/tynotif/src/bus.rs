@@ -341,18 +341,23 @@ fn command_call(
     match command {
         "history" => return serde_json::to_string(&state.history).map_err(|e| e.to_string()),
         "list" => return serde_json::to_string(&state.active).map_err(|e| e.to_string()),
-        "status" => return Ok(serde_json::json!({"paused": state.paused, "active": state.active.len(), "history": state.history.len()}).to_string()),
+        "status" => return Ok(serde_json::json!({"paused": state.paused, "snooze_remaining_seconds": state.snooze_remaining().map(|d| d.as_secs()), "active": state.active.len(), "history": state.history.len()}).to_string()),
         "is-paused" => return Ok(state.paused.to_string()),
         "set-paused" => {
-            state.paused = match value { "true" => true, "false" => false, "toggle" => !state.paused, _ => return Err("expected true, false or toggle".into()) };
-            state.revision += 1;
+            let paused = match value { "true" => true, "false" => false, "toggle" => !state.paused, _ => return Err("expected true, false or toggle".into()) };
+            state.set_paused(paused);
+        }
+        "snooze" => {
+            let minutes: u64 = value.parse().map_err(|_| "expected minutes between 1 and 1440")?;
+            if !(1..=1440).contains(&minutes) { return Err("expected minutes between 1 and 1440".into()); }
+            state.snooze(std::time::Duration::from_secs(minutes * 60));
         }
         "close" => {
             let id = if value.is_empty() { state.visible().first().map(|n| n.id).unwrap_or(0) } else { value.parse().map_err(|_| "invalid id")? };
             close(connection, state, id, 2);
         }
         "close-all" => close_all(connection, state),
-        "history-clear" => state.history.clear(),
+        "history-clear" => state.clear_history(),
         "history-pop" => {
             let id = if value.is_empty() { 0 } else { value.parse().map_err(|_| "invalid id")? };
             return state.replay(id).map(|id| id.to_string()).map_err(str::to_string);

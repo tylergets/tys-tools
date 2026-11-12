@@ -7,25 +7,29 @@ export const license = `${repo}/blob/main/LICENSE`;
 export const tools = [
   {
     name: "tynotif",
-    tagline: "Notifications, on your terms.",
+    tagline: "Notifications, history, and a little quiet.",
     summary:
       "An opt-in notification daemon with popup actions, progress, in-memory history " +
-      "and do-not-disturb controls. Works with notify-send and desktop apps.",
+      "and tray controls for history and timed snoozing. Works with notify-send and desktop apps.",
     features: [
       "Standard desktop notification D-Bus API",
       "Action buttons, progress bars and urgency styling",
       "Replacement IDs and app-scoped stack tags",
       "Bounded history with JSON output and replay",
+      "Bell tray icon with readable notification history",
+      "Timed snooze, indefinite pause and instant resume",
       "Do-not-disturb and scriptable dismiss controls",
     ],
     wayland: "Popup surfaces use layer-shell on supported compositors.",
     requirements: [
       "Linux desktop with GTK and a session D-Bus",
+      "A StatusNotifierItem tray (optional, for history and sleep controls)",
       "X11 or a Wayland compositor with layer-shell",
       "Stop your current notification daemon before starting tynotif",
     ],
     usage: `tynotif run
 tynotif set-paused toggle
+tynotif snooze 30
 tynotif close
 tynotif history
 tynotif history-pop

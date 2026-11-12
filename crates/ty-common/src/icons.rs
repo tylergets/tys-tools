@@ -23,10 +23,11 @@ pub enum Tool {
     Port,
     Ci,
     Pk,
+    Notif,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 10] = [
+    pub const ALL: [Tool; 11] = [
         Tool::Board,
         Tool::Key,
         Tool::Capture,
@@ -37,6 +38,7 @@ impl Tool {
         Tool::Port,
         Tool::Ci,
         Tool::Pk,
+        Tool::Notif,
     ];
 
     pub fn name(self) -> &'static str {
@@ -51,6 +53,7 @@ impl Tool {
             Tool::Port => "typort",
             Tool::Ci => "tyci",
             Tool::Pk => "typk",
+            Tool::Notif => "tynotif",
         }
     }
 
@@ -67,6 +70,7 @@ impl Tool {
             Tool::Port => include_str!("../icons/typort.svg"),
             Tool::Ci => include_str!("../icons/tyci.svg"),
             Tool::Pk => include_str!("../icons/typk.svg"),
+            Tool::Notif => include_str!("../icons/tynotif.svg"),
         }
     }
 
@@ -83,6 +87,7 @@ impl Tool {
             Tool::Port => "network-server",
             Tool::Ci => "emblem-synchronizing",
             Tool::Pk => "dialog-password",
+            Tool::Notif => "preferences-system-notifications",
         }
     }
 

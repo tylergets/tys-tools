@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::time::{Duration, SystemTime};
 
 use serde::Serialize;
 
@@ -32,6 +33,7 @@ pub struct State {
     pub active: Vec<Notification>,
     pub history: VecDeque<Notification>,
     pub paused: bool,
+    pub snoozed_until: Option<SystemTime>,
     pub revision: u64,
     next_id: u32,
 }
@@ -43,6 +45,7 @@ impl State {
             active: Vec::new(),
             history: VecDeque::new(),
             paused: false,
+            snoozed_until: None,
             revision: 0,
             next_id: 1,
         }
@@ -84,6 +87,34 @@ impl State {
         self.active.push(notification);
         self.revision += 1;
         Ok(id)
+    }
+
+    pub fn set_paused(&mut self, paused: bool) {
+        self.paused = paused;
+        self.snoozed_until = None;
+        self.revision += 1;
+    }
+
+    pub fn snooze(&mut self, duration: Duration) {
+        self.paused = true;
+        self.snoozed_until = SystemTime::now().checked_add(duration);
+        self.revision += 1;
+    }
+
+    pub fn wake_if_due(&mut self, now: SystemTime) {
+        if self.snoozed_until.is_some_and(|until| now >= until) {
+            self.set_paused(false);
+        }
+    }
+
+    pub fn snooze_remaining(&self) -> Option<Duration> {
+        self.snoozed_until
+            .map(|until| until.duration_since(SystemTime::now()).unwrap_or_default())
+    }
+
+    pub fn clear_history(&mut self) {
+        self.history.clear();
+        self.revision += 1;
     }
 
     pub fn close(&mut self, id: u32) -> Option<Notification> {
@@ -164,6 +195,40 @@ mod tests {
             transient: false,
             remaining: Some(100),
         }
+    }
+
+    #[test]
+    fn snooze_resumes_without_consuming_queued_timeouts() {
+        let mut state = State::new(Config::default());
+        let id = state.notify(notification(), 0).unwrap();
+        state.snooze(Duration::from_secs(60));
+        let deadline = state.snoozed_until.unwrap();
+        assert!(state.visible().is_empty());
+        assert!(state.tick(60000).is_empty());
+        state.wake_if_due(deadline - Duration::from_secs(1));
+        assert!(state.paused);
+        state.wake_if_due(deadline);
+        assert!(!state.paused);
+        assert!(state.snoozed_until.is_none());
+        assert_eq!(state.active[0].remaining, Some(100));
+        assert_eq!(state.tick(100)[0].id, id);
+    }
+
+    #[test]
+    fn changing_sleep_or_manually_pausing_cancels_old_deadline() {
+        let mut state = State::new(Config::default());
+        state.snooze(Duration::from_secs(30));
+        let old_deadline = state.snoozed_until.unwrap();
+        state.snooze(Duration::from_secs(60));
+        state.wake_if_due(old_deadline);
+        assert!(state.paused);
+        state.set_paused(false);
+        assert!(state.snoozed_until.is_none());
+        state.snooze(Duration::from_secs(30));
+        state.set_paused(true);
+        state.wake_if_due(old_deadline + Duration::from_secs(120));
+        assert!(state.paused);
+        assert!(state.snoozed_until.is_none());
     }
 
     #[test]
