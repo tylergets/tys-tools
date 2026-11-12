@@ -52,6 +52,14 @@ fn examples(delay: Duration) -> VecDeque<Example> {
         "Click a button; the invoked action is printed in the terminal.",
     );
     actions.actions = vec!["default", "Open", "reply", "Reply"];
+    let mut reply = Example::new(
+        "Inline reply",
+        "Type a reply and press Enter; the reply is printed in the terminal.",
+    )
+    .hint("x-kde-reply-placeholder-text", "Type your message…")
+    .hint("x-kde-reply-submit-button-text", "Send")
+    .hint("x-kde-reply-submit-button-icon-name", "mail-send");
+    reply.actions = vec!["inline-reply", "Reply"];
     let mut resident = Example::new(
         "Resident action",
         "Clicking Acknowledge keeps this card open until its timeout.",
@@ -81,6 +89,7 @@ fn examples(delay: Duration) -> VecDeque<Example> {
         critical,
         Example::new("Long body", "This longer notification demonstrates word wrapping within the popup card.\nIt also includes a second paragraph, with Unicode: café — 日本語 — 🔔."),
         actions,
+        reply,
         resident,
         Example::new("Transient notification", "This notification will not be saved in history.").hint("transient", true),
         Example::new("Progress: 10%", "The next updates replace this card using a stack tag.")
@@ -174,6 +183,19 @@ fn next(
 
 pub fn start(connection: &gio::DBusConnection, test: Option<Duration>) {
     if test.is_some() {
+        connection.signal_subscribe(
+            connection.unique_name().as_deref(),
+            Some(bus::NAME),
+            Some("NotificationReplied"),
+            Some(bus::PATH),
+            None,
+            gio::DBusSignalFlags::NONE,
+            |_, _, _, _, _, parameters| {
+                if let Some((id, text)) = parameters.get::<(u32, String)>() {
+                    println!("tynotif test reply: notification {id}, text {text:?}");
+                }
+            },
+        );
         connection.signal_subscribe(
             connection.unique_name().as_deref(),
             Some(bus::NAME),

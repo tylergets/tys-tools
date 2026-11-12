@@ -84,9 +84,9 @@ nix run .#tynotif -- --force --test 3
 
 `--test [SECONDS]` starts the daemon and sends examples through its notification D-Bus API,
 at the chosen interval after the startup message (default: 3 seconds; range: 1–3600): low/normal/critical urgency, icons,
-long text, actions, resident actions, transient notifications, stacked progress
+long text, actions, inline replies, resident actions, transient notifications, stacked progress
 updates, replacement by ID, and sticky/default-critical notifications. Actions
-print their key in the terminal. Most examples expire 1.5 seconds after the chosen
+print their key in the terminal; inline replies print the submitted text. Most examples expire 1.5 seconds after the chosen
 interval (at least 2.5 seconds), so replacement targets remain visible; the final
 two are sticky. The daemon stays running after the sequence. The normal visible
 limit and hover-to-pause behavior still apply, so queued examples may appear later.
@@ -131,6 +131,20 @@ Resident notifications remain after an action; transient notifications skip hist
 Body text is plain text: markup, inline/raw image data, sounds, URL opening,
 Dunst rules and the Dunst control D-Bus API are not implemented. Existing
 `dunstctl` scripts need migration to the CLI above before replacing Dunst.
+
+## Inline replies
+
+Apps can use the KDE `inline-reply` extension to offer a text field directly in
+the notification. Type a reply and press Enter or click its submit button.
+Keyboard focus is requested only on interaction, and expiration pauses while a
+popup has keyboard focus. Empty replies are disabled. Resident notifications
+remain open after sending; other notifications close after sending.
+
+tynotif advertises `inline-reply` and sends `NotificationReplied(id, text)` to the
+originating app, honoring `x-kde-reply-placeholder-text`,
+`x-kde-reply-submit-button-text`, and `x-kde-reply-submit-button-icon-name` hints.
+Ordinary actions labeled “Reply” retain their usual app-defined behavior.
+`tynotif action` cannot submit an inline reply; use the popup text field.
 
 ## Configuration
 

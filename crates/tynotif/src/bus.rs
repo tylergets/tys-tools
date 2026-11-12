@@ -22,6 +22,7 @@ const XML: &str = r#"<node>
  <method name="CloseNotification"><arg type="u" direction="in"/></method>
  <signal name="NotificationClosed"><arg type="u"/><arg type="u"/></signal>
  <signal name="ActionInvoked"><arg type="u"/><arg type="s"/></signal>
+ <signal name="NotificationReplied"><arg type="u"/><arg type="s"/></signal>
 </interface>
 <interface name="tools.tys.tynotif">
  <method name="Command"><arg type="s" direction="in"/><arg type="s" direction="in"/><arg type="s" direction="out"/></method>
@@ -186,7 +187,9 @@ fn notification_call(
     parameters: &glib::Variant,
 ) -> Result<glib::Variant, String> {
     match method {
-        "GetCapabilities" => Ok((vec!["body", "actions", "persistence"],).to_variant()),
+        "GetCapabilities" => {
+            Ok((vec!["body", "actions", "persistence", "inline-reply"],).to_variant())
+        }
         "GetServerInformation" => {
             Ok(("tynotif", "tys-tools", env!("CARGO_PKG_VERSION"), "1.2").to_variant())
         }
@@ -252,6 +255,9 @@ fn notification_call(
                     .unwrap_or_default()
                     .as_secs(),
                 actions,
+                reply_placeholder: string_hint("x-kde-reply-placeholder-text"),
+                reply_submit_text: string_hint("x-kde-reply-submit-button-text"),
+                reply_submit_icon: string_hint("x-kde-reply-submit-button-icon-name"),
                 progress: hints
                     .get("value")
                     .and_then(|v| v.get::<i32>())
@@ -304,6 +310,9 @@ pub fn action(
     id: u32,
     key: &str,
 ) -> Result<(), String> {
+    if key == "inline-reply" {
+        return Err("inline replies require text; use the notification's reply field".into());
+    }
     let notification = state
         .active
         .iter()
@@ -324,6 +333,43 @@ pub fn action(
             NAME,
             "ActionInvoked",
             Some(&(id, key).to_variant()),
+        )
+        .map_err(|e| e.to_string())?;
+    if !notification.resident {
+        close(connection, state, id, 2);
+    }
+    Ok(())
+}
+
+pub fn reply(
+    connection: &gio::DBusConnection,
+    state: &mut State,
+    id: u32,
+    text: &str,
+) -> Result<(), String> {
+    if text.trim().is_empty() {
+        return Err("reply cannot be empty".into());
+    }
+    let notification = state
+        .active
+        .iter()
+        .find(|n| n.id == id)
+        .ok_or("notification not active")?;
+    if notification.sender.is_empty()
+        || !notification
+            .actions
+            .chunks_exact(2)
+            .any(|pair| pair[0] == "inline-reply")
+    {
+        return Err("inline reply not available".into());
+    }
+    connection
+        .emit_signal(
+            Some(&notification.sender),
+            PATH,
+            NAME,
+            "NotificationReplied",
+            Some(&(id, text).to_variant()),
         )
         .map_err(|e| e.to_string())?;
     if !notification.resident {

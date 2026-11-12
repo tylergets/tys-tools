@@ -15,6 +15,12 @@ pub struct Notification {
     pub urgency: u8,
     pub timestamp: u64,
     pub actions: Vec<String>,
+    #[serde(skip)]
+    pub reply_placeholder: String,
+    #[serde(skip)]
+    pub reply_submit_text: String,
+    #[serde(skip)]
+    pub reply_submit_icon: String,
     pub progress: Option<i32>,
     #[serde(skip)]
     pub sender: String,
@@ -197,6 +203,9 @@ mod tests {
             urgency: 1,
             timestamp: 0,
             actions: vec!["default".into(), "Open".into()],
+            reply_placeholder: String::new(),
+            reply_submit_text: String::new(),
+            reply_submit_icon: String::new(),
             progress: None,
             sender: ":1.2".into(),
             tag: String::new(),

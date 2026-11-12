@@ -73,7 +73,8 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
         last = now;
         let mut model = state.lock().unwrap();
         model.wake_if_due(std::time::SystemTime::now());
-        if !hover.borrow().active() {
+        if !hover.borrow().active() && !cards.values().any(|card| card.window.has_toplevel_focus())
+        {
             for notification in model.tick_visible(elapsed, &presented) {
                 bus::closed(&connection, &notification, 1);
             }
@@ -244,6 +245,8 @@ fn popup(width: i32, id: u32, hover: &Rc<RefCell<Hover>>) -> gtk::Window {
     window.set_decorated(false);
     window.set_skip_taskbar_hint(true);
     window.set_skip_pager_hint(true);
+    window.set_focus_on_map(false);
+    ty_common::overlay::set_floating_focusable(&window);
     if let Some(visual) = gdk::Screen::default().and_then(|screen| screen.rgba_visual()) {
         window.set_visual(Some(&visual));
     }
@@ -285,6 +288,10 @@ fn same_content(a: &Notification, b: &Notification) -> bool {
         && a.icon == b.icon
         && a.urgency == b.urgency
         && a.actions == b.actions
+        && a.sender == b.sender
+        && a.reply_placeholder == b.reply_placeholder
+        && a.reply_submit_text == b.reply_submit_text
+        && a.reply_submit_icon == b.reply_submit_icon
         && a.progress == b.progress
 }
 
@@ -369,6 +376,62 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
     actions.set_column_spacing(8);
     actions.set_row_spacing(6);
     for pair in n.actions.chunks_exact(2) {
+        if pair[0] == "inline-reply" {
+            let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+            let entry = gtk::Entry::new();
+            entry.set_width_chars(12);
+            entry.set_placeholder_text(Some(if n.reply_placeholder.is_empty() {
+                "Reply…"
+            } else {
+                &n.reply_placeholder
+            }));
+            entry.connect_button_press_event(|entry, event| {
+                if let Some(window) = entry
+                    .toplevel()
+                    .and_then(|w| w.downcast::<gtk::Window>().ok())
+                {
+                    ty_common::overlay::focus_floating_on_click(&window, event.time());
+                }
+                glib::Propagation::Proceed
+            });
+            let submit = gtk::Button::with_label(if n.reply_submit_text.is_empty() {
+                &pair[1]
+            } else {
+                &n.reply_submit_text
+            });
+            if !n.reply_submit_icon.is_empty() {
+                submit.set_image(Some(&gtk::Image::from_icon_name(
+                    Some(&n.reply_submit_icon),
+                    gtk::IconSize::Button,
+                )));
+                submit.set_always_show_image(true);
+            }
+            submit.set_sensitive(false);
+            let weak_submit = submit.downgrade();
+            entry.connect_changed(move |entry| {
+                if let Some(submit) = weak_submit.upgrade() {
+                    submit.set_sensitive(!entry.text().trim().is_empty());
+                }
+            });
+            let model = state.clone();
+            let bus = connection.clone();
+            entry.connect_activate(move |entry| {
+                match bus::reply(&bus, &mut model.lock().unwrap(), id, entry.text().as_str()) {
+                    Ok(()) => entry.set_text(""),
+                    Err(error) => eprintln!("{error}"),
+                }
+            });
+            let weak_entry = entry.downgrade();
+            submit.connect_clicked(move |_| {
+                if let Some(entry) = weak_entry.upgrade() {
+                    entry.emit_activate();
+                }
+            });
+            row.pack_start(&entry, true, true, 0);
+            row.pack_start(&submit, false, false, 0);
+            text.pack_start(&row, false, false, 0);
+            continue;
+        }
         let button = gtk::Button::new();
         button.add(&label(&pair[1], "action"));
         let key = pair[0].clone();
@@ -381,7 +444,7 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
         });
         actions.insert(&button, -1);
     }
-    if !n.actions.is_empty() {
+    if !actions.children().is_empty() {
         text.pack_start(&actions, false, false, 0);
     }
     card

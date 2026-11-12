@@ -424,6 +424,18 @@ pub fn set_floating_focusable(window: &gtk::Window) {
     }
 }
 
+/// Focus an X11 floating window after a click; Wayland uses on-demand focus.
+pub fn focus_floating_on_click(window: &gtk::Window, timestamp: u32) {
+    // Override-redirect X11 popups need an explicit focus request. Call only in
+    // response to user interaction, never when presenting a notification.
+    if !floating_is_layer() {
+        window.set_accept_focus(true);
+        if let Some(surface) = window.window() {
+            surface.focus(timestamp);
+        }
+    }
+}
+
 /// Move and resize a [`floating_window`] (same coordinates as when creating it). It can move
 /// to another monitor.
 pub fn place_floating(window: &gtk::Window, x: i32, y: i32, width: i32, height: i32) {
