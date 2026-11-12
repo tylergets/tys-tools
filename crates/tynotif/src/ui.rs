@@ -41,7 +41,7 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
     let css = gtk::CssProvider::new();
     css.load_from_data(format!(
         r#"
-        #tynotif, #tynotif viewport, #tynotif scrolledwindow,
+        #tynotif, #tynotif decoration, #tynotif viewport, #tynotif scrolledwindow,
         #tynotif scrolledwindow undershoot, #tynotif scrolledwindow overshoot {{
             background: transparent; border: none; outline: none; box-shadow: none;
         }}
@@ -384,12 +384,17 @@ fn popup(width: i32, id: u32, hover: &Rc<RefCell<Hover>>) -> gtk::Window {
     if let Some(visual) = gdk::Screen::default().and_then(|screen| screen.rgba_visual()) {
         window.set_visual(Some(&visual));
     }
-    window.connect_draw(|_, cr| {
+    window.connect_draw(|window, cr| {
         let _ = cr.save();
         cr.set_operator(gtk::cairo::Operator::Clear);
         let _ = cr.paint();
         let _ = cr.restore();
-        glib::Propagation::Proceed
+        // Draw only our child over the cleared ARGB surface. GtkWindow's default
+        // draw handler can paint theme decoration underneath the rounded card.
+        if let Some(child) = window.child() {
+            window.propagate_draw(&child, cr);
+        }
+        glib::Propagation::Stop
     });
     window.add_events(gdk::EventMask::ENTER_NOTIFY_MASK | gdk::EventMask::LEAVE_NOTIFY_MASK);
     let state = hover.clone();
