@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -9,7 +10,7 @@ use gtk::{gdk, gio, glib};
 use crate::bus::{self, Shared};
 use crate::model::Notification;
 
-pub fn run(state: Shared, replace: bool, force: bool) -> Result<()> {
+pub fn run(state: Shared, replace: bool, force: bool, test: bool) -> Result<()> {
     gtk::init()?;
     ty_common::appearance::apply_gtk();
     let connection = bus::serve(state.clone(), replace, force)?;
@@ -17,8 +18,8 @@ pub fn run(state: Shared, replace: bool, force: bool) -> Result<()> {
     let screen = gdk::Screen::default().context("no screen")?;
     let css = gtk::CssProvider::new();
     css.load_from_data(format!(
-        "#tynotif {{ background: transparent; }} .notification {{ background: {}; color: {}; border: 1px solid {}; border-radius: 10px; padding: 16px; }} .notification.critical {{ border-color: {}; }} .notification label {{ color: {}; }} .app {{ opacity: 0.65; }} .summary {{ font-weight: bold; }}",
-        config.background, config.foreground, config.border, config.critical, config.foreground
+        "#tynotif, #tynotif viewport {{ background: {}; color: {}; }} .notification {{ background: {}; color: {}; border: 1px solid {}; border-radius: 10px; padding: 16px; }} .notification.critical {{ border-color: {}; }} .notification label, #tynotif .queue {{ color: {}; }} .app {{ opacity: 0.65; }} .summary {{ font-weight: bold; }}",
+        config.background, config.foreground, config.background, config.foreground, config.border, config.critical, config.foreground
     ).as_bytes())?;
     gtk::StyleContext::add_provider_for_screen(
         &screen,
@@ -27,14 +28,22 @@ pub fn run(state: Shared, replace: bool, force: bool) -> Result<()> {
     );
     let window = ty_common::overlay::floating_window("tynotif", 0, 0, config.width, 1);
     window.set_widget_name("tynotif");
-    if let Some(visual) = screen.rgba_visual() {
-        window.set_visual(Some(&visual));
-    }
+    // The shared floating window defaults to an app-painted transparent surface.
+    // Let GTK paint an opaque background, including the gaps and newly resized areas.
+    window.set_app_paintable(false);
     let scroll = gtk::ScrolledWindow::new(gtk::Adjustment::NONE, gtk::Adjustment::NONE);
     scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
     let stack = gtk::Box::new(gtk::Orientation::Vertical, config.gap);
     scroll.add(&stack);
-    window.add(&scroll);
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    content.pack_start(&scroll, true, true, 0);
+    let queued = label("", "queue");
+    queued.set_xalign(0.5);
+    queued.set_margin_top(8);
+    queued.set_margin_bottom(8);
+    queued.set_no_show_all(true);
+    content.pack_end(&queued, false, false, 0);
+    window.add(&content);
     let hovered = Rc::new(Cell::new(false));
     window.add_events(gdk::EventMask::ENTER_NOTIFY_MASK | gdk::EventMask::LEAVE_NOTIFY_MASK);
     let flag = hovered.clone();
@@ -52,6 +61,8 @@ pub fn run(state: Shared, replace: bool, force: bool) -> Result<()> {
     let mut revision = u64::MAX;
     let mut last = Instant::now();
     let mut last_area = (0, 0, 0, 0);
+    let mut cards: HashMap<u32, (Notification, gtk::Box)> = HashMap::new();
+    let startup_connection = connection.clone();
     glib::timeout_add_local(Duration::from_millis(50), move || {
         let now = Instant::now();
         let elapsed = now.duration_since(last).as_millis().min(u64::MAX as u128) as u64;
@@ -75,10 +86,15 @@ pub fn run(state: Shared, replace: bool, force: bool) -> Result<()> {
         last_area = geometry;
         revision = model.revision;
         let notifications = model.visible();
+        let waiting = model.active.len().saturating_sub(notifications.len());
         drop(model);
-        for child in stack.children() {
-            stack.remove(&child);
-        }
+        cards.retain(|id, (_, widget)| {
+            let keep = notifications.iter().any(|n| n.id == *id);
+            if !keep {
+                stack.remove(widget);
+            }
+            keep
+        });
         if notifications.is_empty() {
             window.hide();
             hovered.set(false);
@@ -87,18 +103,41 @@ pub fn run(state: Shared, replace: bool, force: bool) -> Result<()> {
         let width = config
             .width
             .min((area.width() - 2 * config.margin).max(200));
-        for notification in notifications {
-            stack.pack_start(&card(&notification, &state, &connection), false, false, 0);
+        for (position, notification) in notifications.into_iter().enumerate() {
+            let unchanged = cards
+                .get(&notification.id)
+                .is_some_and(|(previous, _)| same_content(previous, &notification));
+            if !unchanged {
+                if let Some((_, widget)) = cards.remove(&notification.id) {
+                    stack.remove(&widget);
+                }
+                let widget = card(&notification, &state, &connection);
+                stack.pack_start(&widget, false, false, 0);
+                cards.insert(notification.id, (notification.clone(), widget));
+            }
+            stack.reorder_child(&cards[&notification.id].1, position as i32);
         }
-        stack.show_all();
+        queued.set_text(&format!(
+            "+{waiting} more notification{} queued",
+            if waiting == 1 { "" } else { "s" }
+        ));
+        queued.set_visible(waiting > 0);
+        content.show_all();
         let (_, natural) = stack.preferred_height_for_width(width);
-        let height = natural
+        let footer_height = if waiting > 0 {
+            queued.preferred_height_for_width(width).1
+        } else {
+            0
+        };
+        let height = (natural + footer_height)
             .min((area.height() - config.top - config.margin).max(100))
             .max(1);
         let origin = ty_common::screen::bounds().ok();
         // overlay uses canvas-relative coordinates on Wayland; X11 uses root coordinates.
         let ox = origin.map(|r| r.x).unwrap_or(0);
         let oy = origin.map(|r| r.y).unwrap_or(0);
+        // Realize while unmapped so the first visible frame uses the final geometry.
+        window.realize();
         ty_common::overlay::place_floating(
             &window,
             area.x() - ox + area.width() - width - config.margin,
@@ -106,11 +145,22 @@ pub fn run(state: Shared, replace: bool, force: bool) -> Result<()> {
             width,
             height,
         );
-        window.show_all();
+        window.show();
         glib::ControlFlow::Continue
     });
+    crate::demo::start(&startup_connection, test);
     gtk::main();
     Ok(())
+}
+
+fn same_content(a: &Notification, b: &Notification) -> bool {
+    a.app == b.app
+        && a.summary == b.summary
+        && a.body == b.body
+        && a.icon == b.icon
+        && a.urgency == b.urgency
+        && a.actions == b.actions
+        && a.progress == b.progress
 }
 
 fn label(text: &str, class: &str) -> gtk::Label {

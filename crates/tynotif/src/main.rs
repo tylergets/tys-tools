@@ -1,5 +1,6 @@
 mod bus;
 mod config;
+mod demo;
 mod model;
 mod ui;
 
@@ -23,6 +24,9 @@ struct Cli {
     /// Take over, stopping the owning Dunst user service if replacement is refused.
     #[arg(long, global = true)]
     force: bool,
+    /// Send demo notifications one second apart after starting the daemon.
+    #[arg(long, global = true)]
+    test: bool,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -65,6 +69,7 @@ fn main() -> Result<()> {
                 Arc::new(Mutex::new(model::State::new(config))),
                 cli.replace,
                 cli.force,
+                cli.test,
             )
         }
         Command::Status => bus::command("status", ""),
