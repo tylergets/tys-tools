@@ -291,6 +291,13 @@ pub fn close(connection: &gio::DBusConnection, state: &mut State, id: u32, reaso
     }
 }
 
+pub fn close_all(connection: &gio::DBusConnection, state: &mut State) {
+    let ids: Vec<_> = state.active.iter().map(|n| n.id).collect();
+    for id in ids {
+        close(connection, state, id, 2);
+    }
+}
+
 pub fn action(
     connection: &gio::DBusConnection,
     state: &mut State,
@@ -344,10 +351,7 @@ fn command_call(
             let id = if value.is_empty() { state.visible().first().map(|n| n.id).unwrap_or(0) } else { value.parse().map_err(|_| "invalid id")? };
             close(connection, state, id, 2);
         }
-        "close-all" => {
-            let ids: Vec<_> = state.active.iter().map(|n| n.id).collect();
-            for id in ids { close(connection, state, id, 2); }
-        }
+        "close-all" => close_all(connection, state),
         "history-clear" => state.history.clear(),
         "history-pop" => {
             let id = if value.is_empty() { 0 } else { value.parse().map_err(|_| "invalid id")? };

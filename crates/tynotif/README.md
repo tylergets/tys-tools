@@ -12,6 +12,11 @@ read it in a tooltip; history retains the full text.
 Cards have opaque backgrounds with transparent gaps between them, and a footer shows how many notifications are
 queued beyond the visible limit (four by default). Existing cards stay in place
 when another notification arrives.
+When more than one notification is active, hovering the stack slides in a
+**Dismiss all (N)** button above the cards. It dismisses both visible and queued
+notifications, using the same history and close signals as `tynotif close-all`.
+The toolbar's space stays fixed during the animation so the button is easy to hit;
+single notifications keep their individual dismiss button.
 
 On X11 the popup declares the notification window type and `Tynotif` WM_CLASS.
 Compositors should blend its alpha over underlying windows and leave its corners

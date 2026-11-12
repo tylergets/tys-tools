@@ -19,8 +19,8 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
     let screen = gdk::Screen::default().context("no screen")?;
     let css = gtk::CssProvider::new();
     css.load_from_data(format!(
-        "#tynotif, #tynotif viewport, #tynotif scrolledwindow {{ background: transparent; box-shadow: none; }} .notification, #tynotif .queue {{ background: {}; color: {}; border: 1px solid {}; border-radius: 10px; padding: 12px 14px; }} .notification.critical {{ border-color: {}; }} .notification label {{ color: {}; }} .app {{ opacity: 0.65; }} .summary {{ font-weight: bold; }} #tynotif button.dismiss {{ background: transparent; background-image: none; border: none; box-shadow: none; min-width: 18px; min-height: 18px; padding: 0; }} #tynotif button.dismiss:hover {{ background: alpha(currentColor, 0.12); }} #tynotif .actions button {{ min-height: 18px; padding: 6px 12px; }} #tynotif .actions flowboxchild {{ padding: 0; }}",
-        config.background, config.foreground, config.border, config.critical, config.foreground
+        "#tynotif, #tynotif viewport, #tynotif scrolledwindow {{ background: transparent; box-shadow: none; }} .notification, #tynotif .queue {{ background: {}; color: {}; border: 1px solid {}; border-radius: 10px; padding: 12px 14px; }} .notification.critical {{ border-color: {}; }} .notification label {{ color: {}; }} .app {{ opacity: 0.65; }} .summary {{ font-weight: bold; }} #tynotif button.dismiss {{ background: transparent; background-image: none; border: none; box-shadow: none; min-width: 18px; min-height: 18px; padding: 0; }} #tynotif button.dismiss:hover {{ background: alpha(currentColor, 0.12); }} #tynotif .actions button {{ min-height: 18px; padding: 6px 12px; }} #tynotif .actions flowboxchild {{ padding: 0; }} #tynotif button.dismiss-all {{ background: {}; color: {}; border: 1px solid {}; border-radius: 8px; box-shadow: none; min-height: 20px; padding: 4px 10px; }} #tynotif button.dismiss-all:hover {{ border-color: currentColor; }}",
+        config.background, config.foreground, config.border, config.critical, config.foreground, config.background, config.foreground, config.border
     ).as_bytes())?;
     gtk::StyleContext::add_provider_for_screen(
         &screen,
@@ -54,6 +54,25 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
     let stack = gtk::Box::new(gtk::Orientation::Vertical, config.gap);
     scroll.add(&stack);
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    // Reserve a small transparent toolbar only for multi-notification stacks.
+    // The fixed height keeps hover animation from resizing/moving its hit area.
+    let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    toolbar.set_size_request(-1, 38);
+    toolbar.set_no_show_all(true);
+    let reveal = gtk::Revealer::new();
+    reveal.set_transition_type(gtk::RevealerTransitionType::SlideDown);
+    reveal.set_transition_duration(160);
+    let dismiss_all = gtk::Button::with_label("Dismiss all");
+    dismiss_all.style_context().add_class("dismiss-all");
+    dismiss_all.set_tooltip_text(Some("Dismiss all visible and queued notifications"));
+    dismiss_all.set_margin_bottom(6);
+    let model = state.clone();
+    let bus = connection.clone();
+    dismiss_all.connect_clicked(move |_| bus::close_all(&bus, &mut model.lock().unwrap()));
+    reveal.add(&dismiss_all);
+    reveal.show_all();
+    toolbar.pack_end(&reveal, false, false, 0);
+    content.pack_start(&toolbar, false, false, 0);
     content.pack_start(&scroll, true, true, 0);
     let queued = label("", "queue");
     queued.set_xalign(0.5);
@@ -63,16 +82,22 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
     content.pack_end(&queued, false, false, 0);
     window.add(&content);
     let hovered = Rc::new(Cell::new(false));
+    let active_count = Rc::new(Cell::new(0));
     window.add_events(gdk::EventMask::ENTER_NOTIFY_MASK | gdk::EventMask::LEAVE_NOTIFY_MASK);
     let flag = hovered.clone();
+    let count = active_count.clone();
+    let control = reveal.clone();
     window.connect_enter_notify_event(move |_, _| {
         flag.set(true);
+        control.set_reveal_child(count.get() > 1);
         glib::Propagation::Proceed
     });
     let flag = hovered.clone();
+    let control = reveal.clone();
     window.connect_leave_notify_event(move |_, event| {
         if event.detail() != gdk::NotifyType::Inferior {
             flag.set(false);
+            control.set_reveal_child(false);
         }
         glib::Propagation::Proceed
     });
@@ -104,6 +129,11 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
         last_area = geometry;
         revision = model.revision;
         let notifications = model.visible();
+        let count = model.active.len();
+        active_count.set(count);
+        dismiss_all.set_label(&format!("Dismiss all ({count})"));
+        toolbar.set_visible(count > 1 && !notifications.is_empty());
+        reveal.set_reveal_child(count > 1 && !notifications.is_empty() && hovered.get());
         let waiting = model.active.len().saturating_sub(notifications.len());
         drop(model);
         cards.retain(|id, (_, widget)| {
@@ -141,13 +171,21 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
         ));
         queued.set_visible(waiting > 0);
         content.show_all();
+        // Measure the full button rather than the revealer's animated height,
+        // including when a user-selected font needs more than the default space.
+        toolbar.set_size_request(-1, dismiss_all.preferred_height_for_width(width).1.max(38));
         let (_, natural) = stack.preferred_height_for_width(width);
         let footer_height = if waiting > 0 {
             queued.preferred_height_for_width(width).1
         } else {
             0
         };
-        let height = (natural + footer_height)
+        let toolbar_height = if count > 1 {
+            toolbar.preferred_height_for_width(width).1
+        } else {
+            0
+        };
+        let height = (natural + footer_height + toolbar_height)
             .min((area.height() - config.top - config.margin).max(100))
             .max(1);
         let origin = ty_common::screen::bounds().ok();
