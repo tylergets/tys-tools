@@ -12,13 +12,14 @@ use crate::model::Notification;
 
 pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) -> Result<()> {
     gtk::init()?;
+    gdk::set_program_class("Tynotif");
     ty_common::appearance::apply_gtk();
     let connection = bus::serve(state.clone(), replace, force)?;
     let config = state.lock().unwrap().config.clone();
     let screen = gdk::Screen::default().context("no screen")?;
     let css = gtk::CssProvider::new();
     css.load_from_data(format!(
-        "#tynotif, #tynotif viewport, #tynotif scrolledwindow {{ background: transparent; box-shadow: none; }} .notification, #tynotif .queue {{ background: {}; color: {}; border: 1px solid {}; border-radius: 10px; padding: 16px; }} .notification.critical {{ border-color: {}; }} .notification label {{ color: {}; }} .app {{ opacity: 0.65; }} .summary {{ font-weight: bold; }}",
+        "#tynotif, #tynotif viewport, #tynotif scrolledwindow {{ background: transparent; box-shadow: none; }} .notification, #tynotif .queue {{ background: {}; color: {}; border: 1px solid {}; border-radius: 10px; padding: 10px 12px; }} .notification.critical {{ border-color: {}; }} .notification label {{ color: {}; }} .app {{ opacity: 0.65; }} .summary {{ font-weight: bold; }} #tynotif button.dismiss {{ background: transparent; background-image: none; border: none; box-shadow: none; min-width: 18px; min-height: 18px; padding: 0; }} #tynotif button.dismiss:hover {{ background: alpha(currentColor, 0.12); }} #tynotif .actions button {{ min-height: 0; padding: 3px 8px; }} #tynotif .actions flowboxchild {{ padding: 0; }}",
         config.background, config.foreground, config.border, config.critical, config.foreground
     ).as_bytes())?;
     gtk::StyleContext::add_provider_for_screen(
@@ -28,6 +29,14 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
     );
     let window = ty_common::overlay::floating_window("tynotif", 0, 0, config.width, 1);
     window.set_widget_name("tynotif");
+    window.set_title("tynotif");
+    // Compositors must treat this as an overlay, not as a normal app window.
+    // In particular, Picom's normal-window transparent clipping cuts through
+    // underlying windows to the wallpaper at our gaps and antialiased corners.
+    window.set_type_hint(gdk::WindowTypeHint::Notification);
+    window.set_decorated(false);
+    window.set_skip_taskbar_hint(true);
+    window.set_skip_pager_hint(true);
     if let Some(visual) = screen.rgba_visual() {
         window.set_visual(Some(&visual));
     }
@@ -184,48 +193,70 @@ fn label(text: &str, class: &str) -> gtk::Label {
 }
 
 fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> gtk::Box {
-    let card = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    let card = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     card.style_context().add_class("notification");
     if n.urgency == 2 {
         card.style_context().add_class("critical");
     }
-    let header = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     if !n.icon.is_empty() {
         let image = if n.icon.starts_with('/') {
-            gtk::gdk_pixbuf::Pixbuf::from_file_at_scale(&n.icon, 48, 48, true)
+            gtk::gdk_pixbuf::Pixbuf::from_file_at_scale(&n.icon, 24, 24, true)
                 .ok()
                 .map(|p| gtk::Image::from_pixbuf(Some(&p)))
         } else {
             let image = gtk::Image::from_icon_name(Some(&n.icon), gtk::IconSize::Dialog);
-            image.set_pixel_size(48);
+            image.set_pixel_size(24);
             Some(image)
         };
         if let Some(image) = image {
-            header.pack_start(&image, false, false, 0);
+            image.set_valign(gtk::Align::Start);
+            card.pack_start(&image, false, false, 0);
         }
     }
-    header.pack_start(&label(&n.app, "app"), true, true, 0);
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    card.pack_start(&text, true, true, 0);
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let app = label(&n.app, "app");
+    app.set_line_wrap(false);
+    app.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    app.set_max_width_chars(14);
+    app.set_tooltip_text(Some(&n.app));
+    header.pack_start(&app, false, false, 0);
+    let summary = label(&n.summary, "summary");
+    summary.set_line_wrap(false);
+    summary.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    summary.set_tooltip_text(Some(&n.summary));
+    header.pack_start(&summary, true, true, 0);
     let dismiss = gtk::Button::with_label("×");
+    dismiss.style_context().add_class("dismiss");
+    dismiss.set_valign(gtk::Align::Start);
     dismiss.set_tooltip_text(Some("Dismiss notification"));
     let model = state.clone();
     let bus = connection.clone();
     let id = n.id;
     dismiss.connect_clicked(move |_| bus::close(&bus, &mut model.lock().unwrap(), id, 2));
     header.pack_end(&dismiss, false, false, 0);
-    card.pack_start(&header, false, false, 0);
-    card.pack_start(&label(&n.summary, "summary"), false, false, 0);
+    text.pack_start(&header, false, false, 0);
     if !n.body.is_empty() {
         let body = label(&n.body, "body");
-        body.set_lines(8);
+        body.set_lines(3);
         body.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        card.pack_start(&body, false, false, 0);
+        body.set_tooltip_text(Some(&n.body));
+        text.pack_start(&body, false, false, 0);
     }
     if let Some(value) = n.progress {
         let progress = gtk::ProgressBar::new();
         progress.set_fraction(f64::from(value) / 100.0);
-        card.pack_start(&progress, false, false, 0);
+        text.pack_start(&progress, false, false, 0);
     }
-    // Vertical buttons keep long/localized action names within the popup width.
+    // Share a row when possible; wrap long/localized actions onto further rows.
+    let actions = gtk::FlowBox::new();
+    actions.style_context().add_class("actions");
+    actions.set_selection_mode(gtk::SelectionMode::None);
+    actions.set_min_children_per_line(1);
+    actions.set_max_children_per_line(3);
+    actions.set_column_spacing(4);
+    actions.set_row_spacing(4);
     for pair in n.actions.chunks_exact(2) {
         let button = gtk::Button::new();
         button.add(&label(&pair[1], "action"));
@@ -237,7 +268,10 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
                 eprintln!("{error}");
             }
         });
-        card.pack_start(&button, false, false, 0);
+        actions.insert(&button, -1);
+    }
+    if !n.actions.is_empty() {
+        text.pack_start(&actions, false, false, 0);
     }
     card
 }
