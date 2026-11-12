@@ -176,5 +176,13 @@ One outline SVG per tool in [`icons/`](icons/): 24px grid, 2px round strokes, dr
 `<tool>-attention` (`#e5484d`) and `<tool>-busy` (`#f5c542`), with a freedesktop icon as a
 fallback.
 
+Design for the status bar first: use an 18px primary outline (coordinates 3–21,
+including a 2px stroke leaves 2px of outer padding), centered on the 24px canvas.
+Adjust narrower silhouettes optically rather than stretching them into squares.
+Keep details sparse and separated so they survive at 16px. Distinguish tools by
+silhouette, not color: clipboard for tyboard, keyboard for tykey, and a swiping
+hand for tygesture. Use these shared assets for the tray, windows, and website;
+state colors must not change their geometry.
+
 To add a tool: add its SVG to `icons/` in the same style and a variant to `Tool` (`ALL`,
 `name`, `svg`, `fallback`).
