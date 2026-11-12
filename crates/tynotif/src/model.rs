@@ -60,6 +60,9 @@ pub struct RawImage {
 }
 
 pub struct State {
+    /// Actual on-screen order, updated by the popup layout. Retain these slots
+    /// across replacements (including urgency changes) and new arrivals.
+    pub displayed: Vec<u32>,
     pub interactions: VecDeque<(Option<u32>, Vec<crate::config::MouseAction>)>,
     pub config: Config,
     pub active: Vec<Notification>,
@@ -73,6 +76,7 @@ pub struct State {
 impl State {
     pub fn new(config: Config) -> Self {
         Self {
+            displayed: Vec::new(),
             interactions: VecDeque::new(),
             config,
             active: Vec::new(),
@@ -167,7 +171,10 @@ impl State {
             return Vec::new();
         }
         let mut notifications: Vec<_> = self.active.iter().collect();
-        notifications.sort_by_key(|n| std::cmp::Reverse(n.urgency));
+        notifications.sort_by_key(|n| match self.displayed.iter().position(|id| *id == n.id) {
+            Some(index) => (0, index),
+            None => (1, usize::from(2 - n.urgency)),
+        });
         notifications.truncate(self.config.limit);
         notifications.into_iter().cloned().collect()
     }
@@ -246,6 +253,31 @@ pub(crate) mod tests {
             transient: false,
             remaining: Some(100),
         }
+    }
+
+    #[test]
+    fn displayed_cards_keep_their_slots_across_updates_and_arrivals() {
+        let mut state = State::new(Config {
+            limit: 2,
+            ..Config::default()
+        });
+        let mut first = notification();
+        first.urgency = 2;
+        let first_id = state.notify(first.clone(), 0).unwrap();
+        let second_id = state.notify(notification(), 0).unwrap();
+        state.displayed = vec![first_id, second_id];
+
+        // Opening an inline reply may replace a card with a different urgency.
+        first.urgency = 0;
+        first.actions = vec!["inline-reply".into(), "Reply".into()];
+        state.notify(first, first_id).unwrap();
+        let mut incoming = notification();
+        incoming.urgency = 2;
+        let incoming_id = state.notify(incoming, 0).unwrap();
+        let ids = |state: &State| state.visible().iter().map(|n| n.id).collect::<Vec<_>>();
+        assert_eq!(ids(&state), vec![first_id, second_id]);
+        state.close(first_id);
+        assert_eq!(ids(&state), vec![second_id, incoming_id]);
     }
 
     #[test]

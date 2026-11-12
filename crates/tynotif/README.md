@@ -13,7 +13,9 @@ Each card has its own native popup window, with no shared scrolling viewport or
 backing panel between notifications. Excess notifications queue when they reach
 the visible limit (four by default) or do not fit the monitor's available height.
 A separate footer shows the queue count; queued notifications keep their timeouts
-until displayed. Existing cards stay in place when another notification arrives.
+until displayed. Existing cards retain their stack order when another notification
+arrives or an application replaces a card, including changes to urgency. Urgency
+prioritizes queued notifications as slots become available.
 When more than one notification is active, hovering the stack slides in a
 **Dismiss all (N)** button below the cards. It dismisses both visible and queued
 notifications, using the same history and close signals as `tynotif close-all`.
@@ -224,6 +226,8 @@ the notification. Type a reply and press Enter or click its submit button.
 Keyboard focus is requested only on interaction, and expiration pauses while a
 popup has keyboard focus. Empty replies are disabled. Resident notifications
 remain open after sending; other notifications close after sending.
+Updates from the same client preserve an existing reply draft, selection and focus
+when the replacement still offers inline reply.
 
 tynotif advertises `inline-reply` and sends `NotificationReplied(id, text)` to the
 originating app, honoring `x-kde-reply-placeholder-text`,

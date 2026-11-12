@@ -134,6 +134,7 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
             }
             footer.hide();
             presented.clear();
+            model.displayed.clear();
             *hover.borrow_mut() = Hover::default();
             revision = u64::MAX;
             return glib::ControlFlow::Continue;
@@ -189,10 +190,35 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
                     }
                 });
                 if !same_content(&entry.notification, &notification) {
+                    let draft = if entry.notification.sender == notification.sender {
+                        reply_entry(entry.child.upcast_ref()).map(|reply| {
+                            (
+                                reply.text().to_string(),
+                                reply.position(),
+                                reply.selection_bounds(),
+                                reply.has_focus(),
+                            )
+                        })
+                    } else {
+                        None
+                    };
                     entry.window.remove(&entry.child);
                     entry.child = card(&notification, &state, &connection);
                     entry.window.add(&entry.child);
                     entry.notification = notification;
+                    entry.child.show_all();
+                    if let (Some((text, cursor, selection, focused)), Some(reply)) =
+                        (draft, reply_entry(entry.child.upcast_ref()))
+                    {
+                        reply.set_text(&text);
+                        if focused {
+                            reply.grab_focus();
+                        }
+                        reply.set_position(cursor);
+                        if let Some((start, end)) = selection {
+                            reply.select_region(start, end);
+                        }
+                    }
                 }
                 entry.child.show_all();
                 let height = entry.child.preferred_height_for_width(width).1.max(1);
@@ -208,6 +234,7 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
                 y += height + config.gap;
             }
             waiting = total.saturating_sub(presented.len());
+            state.lock().unwrap().displayed.clone_from(&presented);
             queued.set_text(&format!("+{waiting} more queued"));
             queued.set_visible(waiting > 0);
             // A full-width transparent footer still has a rectangular compositor
@@ -282,7 +309,11 @@ impl Hover {
 }
 
 fn popup(width: i32, id: u32, hover: &Rc<RefCell<Hover>>) -> gtk::Window {
-    let window = ty_common::overlay::floating_window("tynotif", 0, 0, width, 1);
+    let window = if id == 0 {
+        ty_common::overlay::floating_window("tynotif", 0, 0, width, 1)
+    } else {
+        ty_common::overlay::interactive_floating_window("tynotif", 0, 0, width, 1)
+    };
     window.set_widget_name("tynotif");
     window.set_title("tynotif");
     window.set_type_hint(gdk::WindowTypeHint::Notification);
@@ -290,7 +321,6 @@ fn popup(width: i32, id: u32, hover: &Rc<RefCell<Hover>>) -> gtk::Window {
     window.set_skip_taskbar_hint(true);
     window.set_skip_pager_hint(true);
     window.set_focus_on_map(false);
-    ty_common::overlay::set_floating_focusable(&window);
     if let Some(visual) = gdk::Screen::default().and_then(|screen| screen.rgba_visual()) {
         window.set_visual(Some(&visual));
     }
@@ -542,6 +572,17 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
     }
     apply_colors(&card, n);
     events
+}
+
+fn reply_entry(widget: &gtk::Widget) -> Option<gtk::Entry> {
+    if let Some(entry) = widget.downcast_ref::<gtk::Entry>() {
+        return Some(entry.clone());
+    }
+    widget
+        .downcast_ref::<gtk::Container>()?
+        .children()
+        .iter()
+        .find_map(reply_entry)
 }
 
 fn notification_image(n: &Notification) -> Option<gtk::Image> {

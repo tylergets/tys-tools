@@ -394,19 +394,57 @@ fn wayland_surfaces(namespace: &str) -> Result<(Vec<Surface>, (f64, f64))> {
 /// An always-on-top window that doesn't take focus, covering the given rectangle (logical
 /// pixels on the overlay canvas, see the module docs). Not shown yet.
 pub fn floating_window(namespace: &str, x: i32, y: i32, width: i32, height: i32) -> gtk::Window {
+    floating_window_impl(namespace, x, y, width, height, false)
+}
+
+/// A floating surface with GTK toplevel keyboard handling, without focus on map.
+/// X11 still bypasses the window manager; callers focus it only on user interaction.
+pub fn interactive_floating_window(
+    namespace: &str,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+) -> gtk::Window {
+    floating_window_impl(namespace, x, y, width, height, true)
+}
+
+fn floating_window_impl(
+    namespace: &str,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    interactive: bool,
+) -> gtk::Window {
     let wayland = floating_is_layer();
-    let window = gtk::Window::new(if wayland {
+    let window = gtk::Window::new(if wayland || interactive {
         gtk::WindowType::Toplevel
     } else {
         gtk::WindowType::Popup
     });
     window.set_app_paintable(true);
-    window.set_accept_focus(false);
+    window.set_accept_focus(interactive);
+    window.set_focus_on_map(false);
+    if interactive && !wayland {
+        // GtkWindowType::Popup does not maintain toplevel focus for entry widgets,
+        // even if XSetInputFocus succeeds. Use GTK's normal keyboard handling while
+        // preserving an unmanaged, precisely positioned X11 surface.
+        window.connect_realize(|window| {
+            if let Some(surface) = window.window() {
+                surface.set_override_redirect(true);
+            }
+        });
+    }
     if wayland {
         window.init_layer_shell();
         window.set_namespace(namespace);
         window.set_layer(Layer::Overlay);
-        window.set_keyboard_mode(KeyboardMode::None);
+        window.set_keyboard_mode(if interactive {
+            KeyboardMode::OnDemand
+        } else {
+            KeyboardMode::None
+        });
         window.set_exclusive_zone(-1);
         window.set_anchor(Edge::Left, true);
         window.set_anchor(Edge::Top, true);
@@ -429,15 +467,16 @@ pub fn focus_floating_on_click(window: &gtk::Window, timestamp: u32) {
     // GDK's surface.focus() sends _NET_ACTIVE_WINDOW to the window manager,
     // which ignores override-redirect popups. Focus these directly instead.
     // Call only in response to user interaction, never when presenting a notification.
-    if !session::is_wayland() {
+    if !floating_is_layer() {
         window.set_accept_focus(true);
         let Some(xid) = x11_xid(window) else {
             return;
         };
         let focus = || -> Result<()> {
+            window.display().flush();
             let (conn, _) = screen::x11_connect()?;
-            conn.set_input_focus(InputFocus::PARENT, xid, timestamp)?;
-            conn.flush()?;
+            conn.set_input_focus(InputFocus::PARENT, xid, timestamp)?
+                .check()?;
             Ok(())
         };
         if let Err(error) = focus() {
