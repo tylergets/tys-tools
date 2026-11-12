@@ -10,8 +10,10 @@ The layout puts a 24px icon beside the text, with an app header, a separate titl
 buttons have extra spacing to keep controls distinct. Hover truncated text to
 read it in a tooltip; history retains the full text.
 Each card has its own native popup window, with no shared scrolling viewport or
-backing panel between notifications. Excess notifications queue when they reach
-the visible limit (four by default) or do not fit the monitor's available height.
+backing panel between notifications. By default, the stack fills the monitor's
+available height (`limit: 0`), leaving room for margins and the footer. Excess
+notifications queue when the screen is full. Set a positive `limit` for an
+additional cap on the number of visible cards.
 A separate footer shows the queue count; queued notifications keep their timeouts
 until displayed. Existing cards retain their stack order when another notification
 arrives or an application replaces a card, including changes to urgency. Urgency
@@ -256,7 +258,7 @@ width: 480
 margin: 18
 top: 48
 gap: 12
-limit: 4
+limit: 0
 history_limit: 200
 timeout_ms: 20000
 low_timeout_ms: 5000
@@ -268,7 +270,8 @@ critical: '#e78284'
 #   font: Iosevka
 ```
 
-Timeout `0` means sticky. Colors must be `#RRGGBB`. `limit` is 1–10;
+Timeout `0` means sticky. Colors must be `#RRGGBB`. `limit` is 0–512
+(0 fills the available screen height; positive values also cap the card count);
 `history_limit` is 0–10000 (0 disables history), width is 200–1600 logical pixels,
 and offsets/gap are 0–1000. Shared `env` and `appearance.font` settings work as in
 the other ty tools.

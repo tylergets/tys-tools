@@ -45,7 +45,7 @@ impl Default for Config {
             margin: 18,
             top: 48,
             gap: 12,
-            limit: 4,
+            limit: 0,
             history_limit: 200,
             timeout_ms: 20000,
             low_timeout_ms: 5000,
@@ -79,7 +79,10 @@ impl Config {
             (200..=1600).contains(&self.width),
             "width must be 200..1600"
         );
-        ensure!((1..=10).contains(&self.limit), "limit must be 1..10");
+        ensure!(
+            self.limit <= 512,
+            "limit must be 0..512 (0 fills the available screen height)"
+        );
         ensure!(
             self.history_limit <= 10000,
             "history_limit must be <= 10000"

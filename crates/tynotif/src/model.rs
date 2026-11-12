@@ -175,7 +175,9 @@ impl State {
             Some(index) => (0, index),
             None => (1, usize::from(2 - n.urgency)),
         });
-        notifications.truncate(self.config.limit);
+        if self.config.limit != 0 {
+            notifications.truncate(self.config.limit);
+        }
         notifications.into_iter().cloned().collect()
     }
 

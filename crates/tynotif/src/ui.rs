@@ -225,13 +225,21 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
                 if y + height > budget_bottom && !presented.is_empty() {
                     entry.window.hide();
                     hover.borrow_mut().over.remove(&id);
-                    continue;
+                    // The remaining cards stay queued in order. Do not construct
+                    // hundreds of off-screen widgets when the count is unlimited.
+                    break;
                 }
                 place(&entry.window, x, y, width, height);
                 entry.window.show();
                 entry.window.queue_draw();
                 presented.push(id);
                 y += height + config.gap;
+            }
+            for (id, card) in &cards {
+                if !presented.contains(id) {
+                    card.window.hide();
+                    hover.borrow_mut().over.remove(id);
+                }
             }
             waiting = total.saturating_sub(presented.len());
             state.lock().unwrap().displayed.clone_from(&presented);
