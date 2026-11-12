@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -34,22 +35,48 @@ pub fn connect() -> Result<gio::DBusConnection> {
     )?)
 }
 
-pub fn serve(state: Shared) -> Result<gio::DBusConnection> {
+pub fn serve(state: Shared, replace: bool, force: bool) -> Result<gio::DBusConnection> {
     let connection = connect()?;
-    // DO_NOT_QUEUE: running a trial must not replace or wait behind the current daemon.
-    let reply = connection.call_sync(
+    // Subscribe before requesting the name so a rapid subsequent takeover isn't missed.
+    // GIO dispatches this on the registering thread's main context (the GTK thread).
+    connection.signal_subscribe(
         Some("org.freedesktop.DBus"),
-        "/org/freedesktop/DBus",
-        "org.freedesktop.DBus",
-        "RequestName",
-        Some(&(NAME, 4u32).to_variant()),
-        None,
-        gio::DBusCallFlags::NONE,
-        5000,
-        gio::Cancellable::NONE,
-    )?;
+        Some("org.freedesktop.DBus"),
+        Some("NameLost"),
+        Some("/org/freedesktop/DBus"),
+        Some(NAME),
+        gio::DBusSignalFlags::NONE,
+        |_, _, _, _, _, _| {
+            eprintln!("tynotif was replaced by another notification daemon; exiting");
+            gtk::main_quit();
+        },
+    );
+    // ALLOW_REPLACEMENT | DO_NOT_QUEUE, optionally REPLACE_EXISTING. Never leave
+    // a hidden daemon queued to unexpectedly acquire the name later.
+    let flags = 1u32 | 4u32 | if replace || force { 2u32 } else { 0u32 };
+    let request = || {
+        connection.call_sync(
+            Some("org.freedesktop.DBus"),
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            "RequestName",
+            Some(&(NAME, flags).to_variant()),
+            None,
+            gio::DBusCallFlags::NONE,
+            5000,
+            gio::Cancellable::NONE,
+        )
+    };
+    let mut reply = request()?;
+    if reply.get::<(u32,)>() != Some((1,)) && force {
+        stop_dunst_owner(&connection)?;
+        reply = request()?;
+    }
     if reply.get::<(u32,)>() != Some((1,)) {
-        bail!("another notification daemon owns {NAME}; stop it before running tynotif");
+        if replace || force {
+            bail!("the current owner of {NAME} does not allow replacement; stop it first (for Dunst: systemctl --user stop dunst.service), then rerun tynotif");
+        }
+        bail!("another notification daemon owns {NAME}; use tynotif run --force for Dunst, --replace for a replaceable daemon, or stop it first");
     }
     let node = gio::DBusNodeInfo::for_xml(XML)?;
     for interface in [NAME, CONTROL] {
@@ -83,6 +110,61 @@ pub fn serve(state: Shared) -> Result<gio::DBusConnection> {
         )?;
     }
     Ok(connection)
+}
+
+fn stop_dunst_owner(connection: &gio::DBusConnection) -> Result<()> {
+    let owner = connection.call_sync(
+        Some("org.freedesktop.DBus"),
+        "/org/freedesktop/DBus",
+        "org.freedesktop.DBus",
+        "GetNameOwner",
+        Some(&(NAME,).to_variant()),
+        None,
+        gio::DBusCallFlags::NONE,
+        5000,
+        gio::Cancellable::NONE,
+    )?;
+    let (owner,) = owner
+        .get::<(String,)>()
+        .context("invalid name owner reply")?;
+    let pid = connection.call_sync(
+        Some("org.freedesktop.DBus"),
+        "/org/freedesktop/DBus",
+        "org.freedesktop.DBus",
+        "GetConnectionUnixProcessID",
+        Some(&(owner,).to_variant()),
+        None,
+        gio::DBusCallFlags::NONE,
+        5000,
+        gio::Cancellable::NONE,
+    )?;
+    let (pid,) = pid.get::<(u32,)>().context("invalid owner PID reply")?;
+    let unit = Command::new("systemctl")
+        .args([
+            "--user",
+            "show",
+            "dunst.service",
+            "--property=MainPID",
+            "--value",
+        ])
+        .output()
+        .context("--force needs systemctl to stop the Dunst user service")?;
+    let service_pid = String::from_utf8_lossy(&unit.stdout)
+        .trim()
+        .parse::<u32>()
+        .ok();
+    if !unit.status.success() || service_pid != Some(pid) || pid == 0 {
+        bail!("the notification owner is not the running dunst.service; stop your notification daemon manually, then rerun tynotif");
+    }
+    eprintln!("Stopping dunst.service to take over notifications");
+    let status = Command::new("systemctl")
+        .args(["--user", "stop", "dunst.service"])
+        .status()
+        .context("failed to stop dunst.service")?;
+    if !status.success() {
+        bail!("could not stop dunst.service ({status})");
+    }
+    Ok(())
 }
 
 type NotifyArgs = (

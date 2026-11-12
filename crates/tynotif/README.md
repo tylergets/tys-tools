@@ -8,18 +8,27 @@ and progress bars. Popups use the primary monitor (first monitor if none is prim
 
 ## Try it
 
-Stop your current notification daemon first, then run:
+Replace your current notification daemon, then send a notification:
 
 ```sh
-nix run .#tynotif -- run
+nix run .#tynotif -- run --force
 # In another terminal:
 notify-send 'Hello' 'This is tynotif'
 notify-send -A open=Open 'Action example' 'Click Open'
 notify-send -h int:value:65 -h string:x-dunst-stack-tag:volume 'Volume'
 ```
 
-Only one daemon can own the notification service. tynotif fails with an error if
-another daemon owns it. Stop tynotif and restart your usual daemon to switch back.
+Only one daemon can own the notification service. `--replace` requests D-Bus
+ownership from a daemon that permits replacement. Dunst does not, so use `--force`:
+it first tries replacement, then stops `dunst.service` if that service's MainPID
+matches the current notification owner's PID. This requires a systemd user session
+and `systemctl` (included in the Nix wrapper). Other daemons or manually launched
+Dunst processes must be stopped manually. Notifications are not duplicated.
+Without this flag, tynotif fails if another daemon owns the service. tynotif allows
+subsequent replacement and exits cleanly when replaced, so its `Restart=on-failure`
+service does not fight the new owner. Stop tynotif and restart your usual daemon to
+switch back (`systemctl --user start dunst.service` for Dunst); a stopped service is
+not automatically restarted. Existing notifications/history are not transferred.
 There is no D-Bus activation file, so installing the package alone cannot select it
 as your notification daemon.
 
@@ -27,6 +36,8 @@ as your notification daemon.
 
 ```sh
 tynotif run                      # default command
+tynotif run --replace            # take over from a replaceable daemon
+tynotif run --force              # also stop Dunst's owning user service if needed
 tynotif status                   # JSON: paused, active count, history count
 tynotif list                     # JSON array of active/queued notifications
 tynotif close [ID]               # dismiss ID, or the first visible notification

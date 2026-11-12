@@ -9,10 +9,10 @@ use gtk::{gdk, gio, glib};
 use crate::bus::{self, Shared};
 use crate::model::Notification;
 
-pub fn run(state: Shared) -> Result<()> {
+pub fn run(state: Shared, replace: bool, force: bool) -> Result<()> {
     gtk::init()?;
     ty_common::appearance::apply_gtk();
-    let connection = bus::serve(state.clone())?;
+    let connection = bus::serve(state.clone(), replace, force)?;
     let config = state.lock().unwrap().config.clone();
     let screen = gdk::Screen::default().context("no screen")?;
     let css = gtk::CssProvider::new();

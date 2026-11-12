@@ -17,6 +17,12 @@ use clap::{Parser, Subcommand, ValueEnum};
 struct Cli {
     #[arg(long, global = true)]
     config: Option<PathBuf>,
+    /// Replace the current notification daemon if it allows D-Bus replacement.
+    #[arg(long, global = true)]
+    replace: bool,
+    /// Take over, stopping the owning Dunst user service if replacement is refused.
+    #[arg(long, global = true)]
+    force: bool,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -55,7 +61,11 @@ fn main() -> Result<()> {
                 println!("Config is valid");
                 return Ok(());
             }
-            ui::run(Arc::new(Mutex::new(model::State::new(config))))
+            ui::run(
+                Arc::new(Mutex::new(model::State::new(config))),
+                cli.replace,
+                cli.force,
+            )
         }
         Command::Status => bus::command("status", ""),
         Command::List => bus::command("list", ""),

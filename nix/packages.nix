@@ -176,6 +176,7 @@ in {
   tynotif = mkTool {
     name = "tynotif";
     description = "Desktop notifications with actions, history and do-not-disturb";
+    runtimeDeps = [pkgs.systemd]; # --force can stop the owning Dunst user service.
   };
 
   tyboard = mkTool {
