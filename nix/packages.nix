@@ -1,6 +1,5 @@
-# Builds the whole Cargo workspace once with crane, then exposes each tool as a thin wrapper
-# that adds its runtime PATH/libraries. Every tool shares one dependency build (`cargoArtifacts`)
-# and one workspace compile, so Cargo feature unification never forces per-tool rebuilds.
+# Each tool has its own crane dependency cache and package build, plus a runtime wrapper.
+# The full workspace build is only used by the explicit aggregate and workspace-wide checks.
 {
   lib,
   pkgs,
@@ -49,6 +48,47 @@
 
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
+  # Preserve every workspace member for Cargo's lockfile resolution, but stub unrelated
+  # crates. mkDummySrc depends on manifests/targets, not their Rust implementation, so
+  # editing another tool does not invalidate this tool's source or dependency cache.
+  dummySrc = craneLib.mkDummySrc {inherit src;};
+  cargoVendorDir = craneLib.vendorCargoDeps {inherit src;};
+  toolSource = name: let
+    tool = ../crates + "/${name}";
+    realSrc = lib.fileset.toSource {
+      inherit root;
+      fileset = lib.fileset.unions [
+        ../Cargo.toml
+        ../Cargo.lock
+        (craneLib.fileset.commonCargoSources tool)
+        (craneLib.fileset.commonCargoSources ../crates/ty-common)
+        (lib.fileset.fileFilter (file: file.hasExt "svg") tool)
+        (lib.fileset.fileFilter (file: file.hasExt "svg") ../crates/ty-common)
+      ];
+    };
+  in
+    pkgs.runCommand "${name}-source" {} ''
+      cp -r ${dummySrc} $out
+      chmod -R u+w $out
+      rm -rf $out/crates/${name} $out/crates/ty-common
+      cp -r ${realSrc}/. $out/
+    '';
+
+  buildTool = name: let
+    args = commonArgs // {
+      pname = name;
+      inherit cargoVendorDir;
+      cargoExtraArgs = "--locked --package ${name}";
+      doCheck = false;
+    };
+    artifacts = craneLib.buildDepsOnly args;
+  in
+    craneLib.buildPackage (args
+      // {
+        src = toolSource name;
+        cargoArtifacts = artifacts;
+      });
+
   workspace = craneLib.buildPackage (commonArgs
     // {
       inherit cargoArtifacts;
@@ -78,7 +118,7 @@
       terminal = false;
     };
 
-  # Wrap `bins` from the workspace build with GTK env (icons, GSettings schemas),
+  # Wrap `bins` from the selected tool's build with GTK env (icons, GSettings schemas),
   # LD_LIBRARY_PATH for the dlopen'd appindicator, and `runtimeDeps` on PATH.
   # Installs one desktop entry running the tool's default command, plus `desktopEntries`.
   mkTool = {
@@ -90,6 +130,7 @@
     # Extra install commands (files under $out).
     extraInstall ? "",
   }: let
+    unwrapped = buildTool name;
     items = map (desktopItem name) ([
         {
           desktopName = name;
@@ -101,7 +142,7 @@
   in
     pkgs.stdenv.mkDerivation {
       pname = name;
-      inherit (workspace) version;
+      inherit (unwrapped) version;
       dontUnpack = true;
       strictDeps = true;
       nativeBuildInputs = with pkgs; [makeWrapper wrapGAppsHook3];
@@ -115,13 +156,13 @@
         ${extraInstall}
       '';
       postFixup = lib.concatMapStrings (bin: ''
-        makeWrapper ${workspace}/bin/${bin} $out/bin/${bin} \
+        makeWrapper ${unwrapped}/bin/${bin} $out/bin/${bin} \
           "''${gappsWrapperArgs[@]}" \
           --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath guiLibs} \
           --suffix PATH : ${lib.makeBinPath ([pkgs.libnotify pkgs.xdg-utils] ++ runtimeDeps)}
       '')
       bins;
-      passthru = {inherit workspace;};
+      passthru = {inherit unwrapped;};
       meta = {
         inherit description;
         mainProgram = name;

@@ -135,6 +135,15 @@ In Home Manager that is `programs.<tool>.appearance.font`.
 
 ## Development
 
+Build a single app with `nix build .#tynotif` (or another tool name). Each app has its
+own Cargo build and dependency cache; only that app and its dependencies are compiled.
+Changes to another app's Rust source do not invalidate its build. Shared code, manifests,
+and the lockfile can still invalidate multiple apps. Multi-binary tools such as tyboard
+build all of their own binaries together.
+
+`nix build` installs all wrapped apps; `nix build .#workspace` builds the entire
+unwrapped workspace. CI still checks all apps.
+
 ```sh
 nix develop
 cargo test --workspace

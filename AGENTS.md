@@ -11,8 +11,11 @@ Monorepo for the ty* X11 desktop tools. One Cargo workspace, one Nix flake.
   If two tools need the same thing, it goes here, not in both. Tools should not talk to X11
   or Wayland directly.
 - `crates/<tool>` — tyboard, tykey, tycapture, tyshot, tyspeak.
-- `nix/packages.nix` — one crane build of the whole workspace + a thin wrapper per tool
-  (runtime PATH / GTK env). Add a tool's runtime programs to its `runtimeDeps` there.
+- `nix/packages.nix` — a separate crane build and dependency cache per tool + a thin
+  wrapper (runtime PATH / GTK env). Sources include the selected tool and `ty-common`,
+  with unrelated workspace members stubbed for Cargo resolution. The explicit `workspace`
+  package and workspace-wide checks still build everything. Add runtime programs to the
+  tool's `runtimeDeps` there.
 - `nix/modules/lib.nix` — shared Home Manager module builder; `nix/modules/<tool>.nix` per tool.
 
 ## Environment
