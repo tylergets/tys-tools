@@ -41,14 +41,14 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
     let css = gtk::CssProvider::new();
     css.load_from_data(format!(
         r#"
-        #tynotif, #tynotif decoration, #tynotif viewport, #tynotif scrolledwindow,
+        #tynotif, #tynotif decoration, #tynotif eventbox, #tynotif viewport, #tynotif scrolledwindow,
         #tynotif scrolledwindow undershoot, #tynotif scrolledwindow overshoot {{
             background: transparent; border: none; outline: none; box-shadow: none;
         }}
         #tynotif .notification, #tynotif .queue {{
             background: {background}; color: {foreground};
             border: 1px solid alpha({border}, 0.65); border-image: none;
-            box-shadow: none; border-radius: 10px; padding: 14px 16px;
+            box-shadow: none; border-radius: 10px; padding: 10px 16px;
         }}
         #tynotif .notification.critical {{ border-color: {critical}; }}
         #tynotif label, #tynotif image {{ color: inherit; text-shadow: none; }}
@@ -69,7 +69,7 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
         #tynotif button:disabled {{ opacity: 0.4; }}
         #tynotif button.dismiss {{
             background: transparent; border-color: transparent;
-            min-width: 24px; min-height: 24px; padding: 0;
+            min-width: 24px; min-height: 18px; padding: 0;
         }}
         #tynotif button.dismiss image {{ opacity: 0.65; }}
         #tynotif button.dismiss:hover {{ background: alpha(currentColor, 0.12); }}
@@ -384,7 +384,7 @@ fn popup(width: i32, id: u32, hover: &Rc<RefCell<Hover>>) -> gtk::Window {
     if let Some(visual) = gdk::Screen::default().and_then(|screen| screen.rgba_visual()) {
         window.set_visual(Some(&visual));
     }
-    window.connect_draw(|window, cr| {
+    window.connect_draw(move |window, cr| {
         let _ = cr.save();
         cr.set_operator(gtk::cairo::Operator::Clear);
         let _ = cr.paint();
@@ -392,7 +392,24 @@ fn popup(width: i32, id: u32, hover: &Rc<RefCell<Hover>>) -> gtk::Window {
         // Draw only our child over the cleared ARGB surface. GtkWindow's default
         // draw handler can paint theme decoration underneath the rounded card.
         if let Some(child) = window.child() {
+            let _ = cr.save();
+            if id != 0 {
+                // Clip child/theme painting too: clearing the surface alone does
+                // not prevent a rectangular child background filling the corners.
+                let width = f64::from(window.allocated_width());
+                let height = f64::from(window.allocated_height());
+                let radius = 10.0_f64.min(width / 2.0).min(height / 2.0);
+                let quarter = std::f64::consts::FRAC_PI_2;
+                cr.new_sub_path();
+                cr.arc(width - radius, radius, radius, -quarter, 0.0);
+                cr.arc(width - radius, height - radius, radius, 0.0, quarter);
+                cr.arc(radius, height - radius, radius, quarter, 2.0 * quarter);
+                cr.arc(radius, radius, radius, 2.0 * quarter, 3.0 * quarter);
+                cr.close_path();
+                cr.clip();
+            }
             window.propagate_draw(&child, cr);
+            let _ = cr.restore();
         }
         glib::Propagation::Stop
     });
