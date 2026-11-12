@@ -40,8 +40,60 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
     let screen = gdk::Screen::default().context("no screen")?;
     let css = gtk::CssProvider::new();
     css.load_from_data(format!(
-        "#tynotif, #tynotif viewport, #tynotif scrolledwindow, #tynotif scrolledwindow undershoot, #tynotif scrolledwindow overshoot {{ background: transparent; border: none; outline: none; box-shadow: none; }} #tynotif .notification, #tynotif .queue {{ background: {}; color: {}; border: 1px solid alpha({}, 0.65); border-image: none; box-shadow: none; border-radius: 10px; padding: 12px 14px; }} #tynotif .notification.critical {{ border-color: {}; }} #tynotif .notification label {{ color: {}; }} .app {{ opacity: 0.65; }} .summary {{ font-weight: bold; }} #tynotif button.dismiss {{ background: transparent; background-image: none; border: none; box-shadow: none; min-width: 18px; min-height: 18px; padding: 0; }} #tynotif button.dismiss:hover {{ background: alpha(currentColor, 0.12); }} #tynotif .actions button {{ min-height: 18px; padding: 6px 12px; }} #tynotif .actions flowboxchild {{ padding: 0; }} #tynotif button.dismiss-all {{ background: {}; color: {}; border: 1px solid {}; border-radius: 8px; box-shadow: none; min-height: 20px; padding: 4px 10px; }} #tynotif button.dismiss-all:hover {{ border-color: currentColor; }}",
-        config.background, config.foreground, config.border, config.critical, config.foreground, config.background, config.foreground, config.border
+        r#"
+        #tynotif, #tynotif viewport, #tynotif scrolledwindow,
+        #tynotif scrolledwindow undershoot, #tynotif scrolledwindow overshoot {{
+            background: transparent; border: none; outline: none; box-shadow: none;
+        }}
+        #tynotif .notification, #tynotif .queue {{
+            background: {background}; color: {foreground};
+            border: 1px solid alpha({border}, 0.65); border-image: none;
+            box-shadow: none; border-radius: 10px; padding: 14px 16px;
+        }}
+        #tynotif .notification.critical {{ border-color: {critical}; }}
+        #tynotif label, #tynotif image {{ color: inherit; text-shadow: none; }}
+        #tynotif .app {{ opacity: 0.65; font-size: 0.9em; }}
+        #tynotif .summary {{ font-weight: bold; }}
+        #tynotif button, #tynotif entry {{
+            background: alpha(currentColor, 0.06); background-image: none;
+            color: inherit; border: 1px solid alpha(currentColor, 0.16);
+            border-image: none; border-radius: 6px;
+            box-shadow: none; text-shadow: none; -gtk-icon-shadow: none;
+            min-height: 20px; padding: 5px 10px;
+        }}
+        #tynotif button:hover {{ background: alpha(currentColor, 0.12); }}
+        #tynotif button:active {{ background: alpha(currentColor, 0.20); }}
+        #tynotif button:focus, #tynotif entry:focus {{
+            border-color: alpha(currentColor, 0.5);
+        }}
+        #tynotif button:disabled {{ opacity: 0.4; }}
+        #tynotif button.dismiss {{
+            background: transparent; border-color: transparent;
+            min-width: 24px; min-height: 24px; padding: 0;
+        }}
+        #tynotif button.dismiss image {{ opacity: 0.65; }}
+        #tynotif button.dismiss:hover {{ background: alpha(currentColor, 0.12); }}
+        #tynotif button.dismiss:focus {{ border-color: alpha(currentColor, 0.5); }}
+        #tynotif .actions flowboxchild {{ padding: 0; }}
+        #tynotif button.dismiss-all {{
+            background: {background}; color: {foreground};
+            border-color: {border}; padding: 6px 12px;
+        }}
+        #tynotif button.dismiss-all:hover {{
+            background: shade({background}, 1.15); border-color: {foreground};
+        }}
+        #tynotif progressbar trough {{
+            background: alpha(currentColor, 0.10); border: none;
+            min-height: 4px; border-radius: 2px;
+        }}
+        #tynotif progressbar progress {{
+            background: {border}; border: none; min-height: 4px; border-radius: 2px;
+        }}
+        "#,
+        background = config.background,
+        foreground = config.foreground,
+        border = config.border,
+        critical = config.critical,
     ).as_bytes())?;
     gtk::StyleContext::add_provider_for_screen(
         &screen,
@@ -422,7 +474,7 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
         }
         glib::Propagation::Stop
     });
-    let card = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    let card = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     events.add(&card);
     card.style_context().add_class("notification");
     if n.urgency == 2 {
@@ -432,7 +484,7 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
         image.set_valign(gtk::Align::Start);
         card.pack_start(&image, false, false, 0);
     }
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 4);
     card.pack_start(&text, true, true, 0);
     let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     let indicators = if config.show_indicators {
@@ -454,10 +506,18 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
     app.set_max_width_chars(40);
     app.set_tooltip_text(Some(&n.app));
     header.pack_start(&app, true, true, 0);
-    let dismiss = gtk::Button::with_label("×");
+    let dismiss = gtk::Button::new();
+    let close_icon = gtk::Image::from_icon_name(
+        Some("window-close-symbolic"),
+        gtk::IconSize::Menu,
+    );
+    close_icon.set_pixel_size(12);
+    dismiss.add(&close_icon);
     dismiss.style_context().add_class("dismiss");
     dismiss.set_valign(gtk::Align::Start);
-    dismiss.set_tooltip_text(Some("Dismiss notification"));
+    if let Some(accessible) = dismiss.accessible() {
+        accessible.set_name("Dismiss notification");
+    }
     let model = state.clone();
     let bus = connection.clone();
     let id = n.id;
@@ -508,6 +568,7 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
     for pair in n.actions.chunks_exact(2) {
         if pair[0] == "inline-reply" {
             let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+            row.set_margin_top(8);
             let entry = gtk::Entry::new();
             entry.set_width_chars(12);
             entry.set_placeholder_text(Some(if n.reply_placeholder.is_empty() {
@@ -564,7 +625,9 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
             continue;
         }
         let button = gtk::Button::new();
-        button.add(&label(&pair[1], "action"));
+        let action_label = label(&pair[1], "action");
+        action_label.set_xalign(0.5);
+        button.add(&action_label);
         let key = pair[0].clone();
         let model = state.clone();
         let bus = connection.clone();
@@ -654,7 +717,7 @@ fn apply_colors(card: &gtk::Box, n: &Notification) {
     }
     if let Some(color) = &n.colors.foreground {
         css.push_str(&format!(
-            ".notification, .notification label {{ color: {color}; }}"
+            ".notification {{ color: {color}; }}"
         ));
     }
     if let Some(color) = &n.colors.frame {
