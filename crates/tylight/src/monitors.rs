@@ -20,8 +20,6 @@ pub const MANUAL_FADE: Duration = Duration::from_millis(250);
 const BACKLIGHT_FRAME: Duration = Duration::from_millis(12);
 #[cfg(test)]
 const BACKLIGHT_STEPS: u32 = 20;
-/// DDC writes take ~100ms each, so external monitors get only a few steps.
-const DDC_STEPS: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq)]
 enum Device {
@@ -113,8 +111,9 @@ impl Monitors {
             })
     }
 
-    /// Apply `change` to every display, fading over `fade` (backlights; DDC takes a few
-    /// steps). `ddc: false` leaves external monitors alone. Returns the new percent.
+    /// Apply `change` to every display, fading backlights over `fade` and sending DDC
+    /// monitors straight to the target. `ddc: false` leaves external monitors alone.
+    /// Returns the new percent.
     pub fn change(&mut self, change: Change, fade: Duration, ddc: bool) -> Result<u8> {
         if self.devices.is_empty() {
             bail!("no controllable displays (no backlight, and ddcutil found no monitors)");
@@ -125,7 +124,7 @@ impl Monitors {
             bail!("no backlight to adjust");
         }
         let target = change.resolve(self.percent());
-        // Fade every display at once.
+        // Adjust every display at once.
         let errors: Vec<String> = thread::scope(|scope| {
             let fades: Vec<_> = self
                 .devices
@@ -138,8 +137,8 @@ impl Monitors {
                             fade_backlight(name, from_percent(target.max(1), *max).max(1), fade)
                         }
                         Device::Ddc { bus, max, percent } => {
-                            fade_ddc(*bus, *max, *percent, target)?;
-                            // Keep each monitor's last successful value, including on partial failure.
+                            set_ddc(*bus, from_percent(target, *max))?;
+                            // Cache the last successfully sent value for each monitor.
                             *percent = target;
                             Ok(())
                         }
@@ -259,16 +258,6 @@ fn set_backlight(conn: Option<&dbus::blocking::Connection>, name: &str, raw: u32
     }
 }
 
-/// DDC steps pace themselves: each write takes about as long as a frame of the fade.
-fn fade_ddc(bus: u32, max: u32, from: u8, target: u8) -> Result<()> {
-    let to = from_percent(target, max);
-    let steps = fade_steps(from_percent(from, max), to, DDC_STEPS);
-    for value in steps {
-        set_ddc(bus, value)?;
-    }
-    Ok(())
-}
-
 fn ddcutil(args: &[&str]) -> Result<String> {
     let output = Command::new("ddcutil")
         .args(args)
@@ -343,7 +332,9 @@ fn get_ddc(bus: u32) -> Result<(u32, u32)> {
 
 fn set_ddc(bus: u32, value: u32) -> Result<()> {
     let (bus, value) = (bus.to_string(), value.to_string());
-    ddcutil(&["--bus", &bus, "setvcp", VCP_BRIGHTNESS, &value])?;
+    // Monitors can apply brightness slowly and smooth the change themselves. Send one
+    // target without a verification read, which adds latency and can see an old value.
+    ddcutil(&["--bus", &bus, "--noverify", "setvcp", VCP_BRIGHTNESS, &value])?;
     Ok(())
 }
 
@@ -387,8 +378,8 @@ mod tests {
         let up = fade_steps(10, 200, BACKLIGHT_STEPS);
         assert_eq!(*up.last().unwrap(), 200);
         assert!(up.windows(2).all(|w| w[0] < w[1]));
-        let down = fade_steps(90, 30, DDC_STEPS);
-        assert_eq!(down.len(), 3);
+        let down = fade_steps(90, 30, BACKLIGHT_STEPS);
+        assert!(down.windows(2).all(|w| w[0] > w[1]));
         assert_eq!(*down.last().unwrap(), 30);
         assert_eq!(fade_steps(5, 5, 20), vec![5]);
         assert_eq!(fade_steps(5, 6, 20), vec![5, 6]);

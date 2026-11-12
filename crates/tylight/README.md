@@ -16,6 +16,8 @@ wlroots Wayland compositors (Sway, Hyprland, river, niri, labwc, ...).
 - **Monitor brightness**: laptop backlights (through logind, no root needed) and external
   monitors over DDC/CI (through `ddcutil`). All detected monitors adjust together; external
   monitors are addressed by I²C bus, including multiple monitors of the same model.
+  Each DDC adjustment sends one target without read-back verification, letting the monitor
+  handle its own transition instead of waiting through extra software fade steps.
 - **Auto brightness** from the ambient light sensor, tuned not to jump around (see below).
 - **Presets**: named temperature, dimming and monitor brightness, picked from the tray or
   with `tylight preset <name>`.
