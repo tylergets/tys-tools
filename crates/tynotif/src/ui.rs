@@ -391,6 +391,7 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
                     .and_then(|w| w.downcast::<gtk::Window>().ok())
                 {
                     ty_common::overlay::focus_floating_on_click(&window, event.time());
+                    entry.grab_focus();
                 }
                 glib::Propagation::Proceed
             });

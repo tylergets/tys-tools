@@ -19,7 +19,7 @@ use gtk::prelude::*;
 use gtk::{cairo, gdk, glib};
 use gtk_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use x11rb::connection::Connection;
-use x11rb::protocol::xproto::{ConfigureWindowAux, ConnectionExt, StackMode};
+use x11rb::protocol::xproto::{ConfigureWindowAux, ConnectionExt, InputFocus, StackMode};
 
 use crate::screen;
 use crate::session;
@@ -415,8 +415,8 @@ pub fn floating_window(namespace: &str, x: i32, y: i32, width: i32, height: i32)
     window
 }
 
-/// Let a [`floating_window`] take keyboard focus when clicked. Only possible on Wayland: on
-/// X11 it is an override-redirect window, which the window manager never focuses.
+/// Let a [`floating_window`] take keyboard focus when clicked on Wayland.
+/// X11 also needs [`focus_floating_on_click`] because the popup is override-redirect.
 pub fn set_floating_focusable(window: &gtk::Window) {
     if floating_is_layer() {
         window.set_accept_focus(true);
@@ -426,12 +426,22 @@ pub fn set_floating_focusable(window: &gtk::Window) {
 
 /// Focus an X11 floating window after a click; Wayland uses on-demand focus.
 pub fn focus_floating_on_click(window: &gtk::Window, timestamp: u32) {
-    // Override-redirect X11 popups need an explicit focus request. Call only in
-    // response to user interaction, never when presenting a notification.
-    if !floating_is_layer() {
+    // GDK's surface.focus() sends _NET_ACTIVE_WINDOW to the window manager,
+    // which ignores override-redirect popups. Focus these directly instead.
+    // Call only in response to user interaction, never when presenting a notification.
+    if !session::is_wayland() {
         window.set_accept_focus(true);
-        if let Some(surface) = window.window() {
-            surface.focus(timestamp);
+        let Some(xid) = x11_xid(window) else {
+            return;
+        };
+        let focus = || -> Result<()> {
+            let (conn, _) = screen::x11_connect()?;
+            conn.set_input_focus(InputFocus::PARENT, xid, timestamp)?;
+            conn.flush()?;
+            Ok(())
+        };
+        if let Err(error) = focus() {
+            eprintln!("Cannot focus floating window: {error:#}");
         }
     }
 }
