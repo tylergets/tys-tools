@@ -18,6 +18,7 @@ its own. If two tools need the same thing, it belongs here.
 | `screen` | Screen bounds, monitors, scale and screenshots (X11, or `grim` on Wayland) |
 | `wm`     | Windows, the focused window, staging a window for recording, the pointer (X11/i3, sway, Hyprland) |
 | `overlay` | Full-screen input overlay for picking regions and windows (layer-shell on Wayland) |
+| `screenlock` | Locking every monitor and taking all input until the caller unlocks (`ext-session-lock-v1` on Wayland, grabs on X11) |
 | `clipboard` | Read, write and watch the clipboard (GTK on X11, wl-clipboard on Wayland) |
 | `input`  | Type text and keys (XTest / `wtype`) and listen to every key press (XRecord / `/dev/input`) |
 

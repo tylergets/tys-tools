@@ -201,6 +201,23 @@ impl Overlay {
         }
     }
 
+    /// Repaint only the canvas rectangle from (`x0`, `y0`) to (`x1`, `y1`): much less work
+    /// than [`Overlay::queue_draw`] on a large screen, for small changes such as typing.
+    pub fn queue_draw_area(&self, x0: f64, y0: f64, x1: f64, y1: f64) {
+        for surface in &self.inner.surfaces {
+            let (dx, dy) = surface.origin;
+            let left = (x0 - dx).floor() as i32 - 1;
+            let top = (y0 - dy).floor() as i32 - 1;
+            let right = (x1 - dx).ceil() as i32 + 1;
+            let bottom = (y1 - dy).ceil() as i32 + 1;
+            if right > left && bottom > top {
+                surface
+                    .window
+                    .queue_draw_area(left, top, right - left, bottom - top);
+            }
+        }
+    }
+
     pub fn set_cursor(&self, cursor: gdk::CursorType) {
         for surface in &self.inner.surfaces {
             if let Some(gdk_window) = surface.window.window() {

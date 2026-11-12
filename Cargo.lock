@@ -1212,6 +1212,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "memmap2"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43a5a03cefb0d953ec0be133036f14e109412fa594edc2f77227249db66cc3ed"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "memoffset"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1297,6 +1306,32 @@ dependencies = [
  "glib-sys",
  "gobject-sys",
  "libc",
+ "system-deps 6.2.2",
+]
+
+[[package]]
+name = "pangocairo"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57036589a9cfcacf83f9e606d15813fc6bf03f0e9e69aa2b5e3bb85af86b38a5"
+dependencies = [
+ "cairo-rs",
+ "glib",
+ "libc",
+ "pango",
+ "pangocairo-sys",
+]
+
+[[package]]
+name = "pangocairo-sys"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc3c8ff676a37e7a72ec1d5fc029f91c407278083d2752784ff9f5188c108833"
+dependencies = [
+ "cairo-sys-rs",
+ "glib-sys",
+ "libc",
+ "pango-sys",
  "system-deps 6.2.2",
 ]
 
@@ -1983,6 +2018,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml_ng",
+ "wayland-client",
+ "wayland-protocols",
  "x11rb",
  "xkbcommon",
 ]
@@ -2071,6 +2108,22 @@ dependencies = [
  "wayland-client",
  "wayland-protocols-wlr",
  "x11rb",
+]
+
+[[package]]
+name = "tylock"
+version = "0.9.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "dbus",
+ "dirs",
+ "gtk",
+ "libc",
+ "pangocairo",
+ "serde",
+ "ty-common",
 ]
 
 [[package]]
@@ -2674,6 +2727,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13867d259930edc7091a6c41b4ce6eee464328c6ff9659b7e4c668ca20d4c91e"
 dependencies = [
  "libc",
+ "memmap2",
  "xkeysym",
 ]
 

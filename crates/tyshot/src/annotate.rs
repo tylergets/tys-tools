@@ -5,6 +5,8 @@
 //!
 //! Annotation coordinates are logical (overlay) pixels, absolute on the screen.
 
+use std::cell::RefCell;
+
 use anyhow::{Context, Result};
 use gtk::cairo;
 use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
@@ -77,6 +79,12 @@ pub struct Canvas {
     pub snapshot: Pixbuf,
     surface: cairo::ImageSurface,
     blurred: Option<cairo::ImageSurface>,
+    /// Copies of `surface` and `blurred` kept in the X server, made the first time the
+    /// overlay paints them. Painting an image onto an X11 window uploads all of it, every
+    /// frame: at 4K that is a 33 MB upload per keystroke, which a GPU-backed X server
+    /// can't keep up with, so typing and drawing lag behind. From a server-side copy each
+    /// repaint is a copy within the server.
+    on_server: RefCell<ServerCopies>,
     /// Device pixels per logical pixel.
     scale: f64,
     /// In device pixels.
@@ -100,6 +108,7 @@ impl Canvas {
             snapshot,
             surface,
             blurred: None,
+            on_server: RefCell::default(),
             scale,
             blur_radius,
         })
@@ -149,8 +158,66 @@ impl Canvas {
 
     /// Paint the plain snapshot onto a logical-pixel `cr`.
     pub fn paint_snapshot(&self, cr: &cairo::Context) {
-        paint_surface(cr, &self.surface);
+        self.paint_cached(cr, &self.surface, |copies| &mut copies.plain);
     }
+
+    /// Paint the blurred snapshot (if prepared) onto a logical-pixel `cr`.
+    fn paint_blurred(&self, cr: &cairo::Context) {
+        if let Some(blurred) = &self.blurred {
+            self.paint_cached(cr, blurred, |copies| &mut copies.blurred);
+        }
+    }
+
+    /// Paint `image`, from its server-side copy when `cr` draws to an X11 window.
+    fn paint_cached(
+        &self,
+        cr: &cairo::Context,
+        image: &cairo::ImageSurface,
+        slot: impl FnOnce(&mut ServerCopies) -> &mut Option<cairo::Surface>,
+    ) {
+        let target = cr.target();
+        if target.type_() != cairo::SurfaceType::Xlib {
+            paint_surface(cr, image);
+            return;
+        }
+        let mut copies = self.on_server.borrow_mut();
+        let slot = slot(&mut copies);
+        if slot.is_none() {
+            *slot = server_copy(&target, image, self.scale);
+        }
+        match slot {
+            Some(copy) => paint_surface(cr, copy),
+            None => paint_surface(cr, image),
+        }
+    }
+}
+
+#[derive(Default)]
+struct ServerCopies {
+    plain: Option<cairo::Surface>,
+    blurred: Option<cairo::Surface>,
+}
+
+/// A surface like `target` (in the X server) holding `image`, whose device scale is
+/// `scale`; `None` if the server can't make one.
+fn server_copy(
+    target: &cairo::Surface,
+    image: &cairo::ImageSurface,
+    scale: f64,
+) -> Option<cairo::Surface> {
+    // In logical pixels, as `image` is painted: the copy is what each frame showed.
+    let width = (f64::from(image.width()) / scale).ceil() as i32;
+    let height = (f64::from(image.height()) / scale).ceil() as i32;
+    let copy = target
+        .create_similar(cairo::Content::Color, width, height)
+        .ok()?;
+    {
+        let cr = cairo::Context::new(&copy).ok()?;
+        cr.set_operator(cairo::Operator::Source);
+        paint_surface(&cr, image);
+    }
+    copy.flush();
+    Some(copy)
 }
 
 /// Paint the snapshot and `annotations` (in order) onto `cr`, whose user space is logical
@@ -276,10 +343,10 @@ pub fn paint_annotation(
             }
         }
         Annotation::Blur(rect) => {
-            if let Some(blurred) = &canvas.blurred {
+            if canvas.blurred.is_some() {
                 cr.rectangle(rect.x0, rect.y0, rect.width(), rect.height());
                 cr.clip();
-                paint_surface(cr, blurred);
+                canvas.paint_blurred(cr);
             }
         }
     }
@@ -318,6 +385,31 @@ pub fn text_caret(
     )
 }
 
+/// A rectangle (logical pixels) covering `text` placed at `at` and its caret, with some
+/// slack: what needs repainting when the text changes.
+pub fn text_bounds(at: (f64, f64), text: &str, font_size: f64) -> Rect {
+    let widest = cairo::ImageSurface::create(cairo::Format::ARgb32, 1, 1)
+        .ok()
+        .and_then(|surface| cairo::Context::new(&surface).ok())
+        .map(|cr| {
+            set_text_font(&cr, font_size);
+            text.split('\n')
+                .filter_map(|line| cr.text_extents(line).ok())
+                .map(|e| e.x_advance().max(e.x_bearing() + e.width()))
+                .fold(0.0, f64::max)
+        })
+        // Without a context, assume generously wide glyphs.
+        .unwrap_or(text.chars().count() as f64 * font_size);
+    let lines = text.matches('\n').count() as f64 + 1.0;
+    let slack = font_size * 0.5;
+    Rect {
+        x0: at.0 - slack,
+        y0: at.1 - slack,
+        x1: at.0 + widest + 2.0 * slack,
+        y1: at.1 + lines * font_size * LINE_SPACING + 2.0 * slack,
+    }
+}
+
 /// Stroke a smooth freehand line (round caps and joins) through `points`; one point is a dot.
 fn stroke_freehand(cr: &cairo::Context, points: &[(f64, f64)], width: f64) {
     let Some(&(x, y)) = points.first() else {
@@ -337,7 +429,7 @@ fn stroke_freehand(cr: &cairo::Context, points: &[(f64, f64)], width: f64) {
     let _ = cr.stroke();
 }
 
-fn paint_surface(cr: &cairo::Context, surface: &cairo::ImageSurface) {
+fn paint_surface(cr: &cairo::Context, surface: &cairo::Surface) {
     if cr.set_source_surface(surface, 0.0, 0.0).is_ok() {
         let _ = cr.paint();
     }

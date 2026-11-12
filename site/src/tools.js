@@ -412,6 +412,35 @@ typk validate-config`,
 show_details: false
 dim_screen: false`,
   },
+  {
+    name: "tylock",
+    tagline: "A lock screen with your wallpaper, a clock and your finger.",
+    summary:
+      "A screen locker for X11 and Wayland: your wallpaper with a large clock, unlocked " +
+      "with your password or a finger through PAM, sharp on 1080p and 4K alike.",
+    features: [
+      "Fingerprint and password side by side: touch the reader or start typing",
+      "Unlocks through PAM, with the reader's and PAM's own messages",
+      "Your wallpaper, dimmed and optionally blurred, on every monitor",
+      "Drawn at each monitor's real resolution, the layout scaled to its size",
+      "Caps Lock warning and a hidden cursor",
+      "Works with xss-lock (holds sleep until locked) and swayidle (--daemonize)",
+    ],
+    wayland:
+      "Locks with ext-session-lock-v1 (sway, Hyprland, river, niri, KDE): the compositor keeps the session locked even if tylock crashes.",
+    requirements: [
+      "PAM services tylock and, for fingers, tylock-fingerprint",
+      "fprintd with enrolled prints, for fingerprints (optional)",
+    ],
+    usage: `tylock                  # lock until unlocked
+tylock --daemonize      # return once locked (swayidle before-sleep)
+tylock validate-config`,
+    config: `wallpaper: ~/.background-image
+blur: 0
+dim: 0.3
+time_format: "%H:%M"
+fingerprint: true`,
+  },
 ];
 
 export const findTool = (name) => tools.find((t) => t.name === name);

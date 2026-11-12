@@ -40,6 +40,7 @@
         libxi
         libinput
         libxtst
+        linux-pam
         udev
         xdotool
       ]);
@@ -257,5 +258,11 @@ in {
     extraInstall = ''
       install -Dm644 ${../crates/typk/typk.policy} $out/share/polkit-1/actions/tools.tys.typk.policy
     '';
+  };
+
+  # PAM and the session's display only; the PAM services are system configuration.
+  tylock = mkTool {
+    name = "tylock";
+    description = "Screen locker for X11 and Wayland: wallpaper, clock, password or fingerprint";
   };
 }

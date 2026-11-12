@@ -1,6 +1,6 @@
-//! Shared plumbing for the ty* desktop tools (tyboard, tycapture, tykey, tyshot, tyspeak, tylight, tygesture, typort, tyci, typk).
+//! Shared plumbing for the ty* desktop tools (tyboard, tycapture, tykey, tyshot, tyspeak, tylight, tygesture, typort, tyci, typk, tylock).
 //!
-//! The display layer (`session`, `screen`, `wm`, `overlay`, `clipboard`, `input`) hides the
+//! The display layer (`session`, `screen`, `screenlock`, `wm`, `overlay`, `clipboard`, `input`) hides the
 //! difference between X11 and Wayland, so the tools themselves don't need to care.
 
 pub mod appearance;
@@ -20,6 +20,8 @@ pub mod notify;
 pub mod overlay;
 #[cfg(target_os = "linux")]
 pub mod screen;
+#[cfg(target_os = "linux")]
+pub mod screenlock;
 pub mod session;
 pub mod status;
 #[cfg(target_os = "linux")]

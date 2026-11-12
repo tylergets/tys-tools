@@ -1,0 +1,18 @@
+[package]
+name = "tylock"
+description = "Screen locker for X11 and Wayland: your wallpaper, a clock, and a password or fingerprint to unlock."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ty-common.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+dbus.workspace = true
+dirs.workspace = true
+gtk.workspace = true
+libc.workspace = true
+pangocairo.workspace = true
+serde.workspace = true

@@ -772,6 +772,8 @@ fn edit_text(
     let Some(edit) = &mut s.editing else {
         return false;
     };
+    // Typing repaints only around the text, so it keeps up on big screens.
+    let before = annotate::text_bounds(edit.at, &edit.text, s.style.font_size);
     if ctrl {
         s.commit_text();
         window.queue_draw();
@@ -791,7 +793,19 @@ fn edit_text(
             _ => return true,
         },
     }
-    window.queue_draw();
+    match &s.editing {
+        Some(edit) => {
+            let after = annotate::text_bounds(edit.at, &edit.text, s.style.font_size);
+            window.queue_draw_area(
+                before.x0.min(after.x0),
+                before.y0.min(after.y0),
+                before.x1.max(after.x1),
+                before.y1.max(after.y1),
+            );
+        }
+        // Committed or thrown away: the rest of the overlay (toolbar state) may change.
+        None => window.queue_draw(),
+    }
     true
 }
 

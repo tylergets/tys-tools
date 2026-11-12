@@ -73,14 +73,14 @@ impl Key {
 
 /// The server's keycode → keysyms table (core protocol layout: group 1 levels 1–2, group 2
 /// levels 1–2, then group 1 levels 3–4).
-struct Keymap {
+pub(crate) struct Keymap {
     min: u8,
     per: usize,
     syms: Vec<u32>,
 }
 
 impl Keymap {
-    fn fetch(conn: &RustConnection) -> Result<Self> {
+    pub(crate) fn fetch(conn: &RustConnection) -> Result<Self> {
         let setup = conn.setup();
         let (min, max) = (setup.min_keycode, setup.max_keycode);
         let reply = conn.get_keyboard_mapping(min, max - min + 1)?.reply()?;
@@ -95,7 +95,7 @@ impl Keymap {
         (0..self.syms.len() / self.per.max(1)).map(|i| self.min + i as u8)
     }
 
-    fn get(&self, keycode: u8, index: usize) -> u32 {
+    pub(crate) fn get(&self, keycode: u8, index: usize) -> u32 {
         if index >= self.per || keycode < self.min {
             return NO_SYMBOL;
         }
@@ -124,7 +124,7 @@ impl Keymap {
 
     /// The character a press produces, following the core protocol's rules for Shift,
     /// Caps Lock and the level-3 shift (AltGr).
-    fn text(&self, keycode: u8, shift: bool, caps: bool, level3: bool) -> Option<char> {
+    pub(crate) fn text(&self, keycode: u8, shift: bool, caps: bool, level3: bool) -> Option<char> {
         let base = if level3 && self.get(keycode, 4) != NO_SYMBOL {
             4
         } else {

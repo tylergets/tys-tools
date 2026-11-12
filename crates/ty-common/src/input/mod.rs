@@ -9,7 +9,7 @@
 //!   the `XKB_DEFAULT_*` environment variables for the layout.
 
 mod evdev;
-mod x11;
+pub(crate) mod x11;
 
 use std::process::Command;
 use std::sync::Mutex;

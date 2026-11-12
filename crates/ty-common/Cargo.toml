@@ -20,5 +20,7 @@ gtk.workspace = true
 gtk-layer-shell.workspace = true
 libappindicator.workspace = true
 libc.workspace = true
-x11rb = { workspace = true, features = ["record", "xtest"] }
-xkbcommon.workspace = true
+wayland-client.workspace = true
+wayland-protocols.workspace = true
+x11rb = { workspace = true, features = ["randr", "record", "shm", "xtest"] }
+xkbcommon = { workspace = true, features = ["wayland"] }

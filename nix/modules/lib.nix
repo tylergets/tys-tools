@@ -8,11 +8,15 @@
 #     service.enable = true;       # systemd user service bound to graphical-session.target
 #   };
 #
+# Tools that aren't long-running (`hasService = false`, e.g. a screen locker) get no
+# `service` option and no service.
+#
 # Tools can add typed options (`extraOptions`) that are merged under `settings`
 # (`toSettings`), and extra config such as assertions (`extraConfig`).
 {self}: {
   name,
   description,
+  hasService ? true,
   serviceArgs ? "run",
   serviceDescription ? description,
   settingsExample ? {},
@@ -64,7 +68,8 @@ in {
           `appearance.font` config key). Null follows the GTK font.
         '';
       };
-
+    }
+    // lib.optionalAttrs hasService {
       service.enable = lib.mkOption {
         type = lib.types.bool;
         default = true;
@@ -81,7 +86,7 @@ in {
       # config as the service.
       xdg.configFile."${name}/config.yaml".source = configFile;
 
-      systemd.user.services.${name} = lib.mkIf cfg.service.enable {
+      systemd.user.services.${name} = lib.mkIf (hasService && cfg.service.enable) {
         Unit = {
           Description = serviceDescription;
           After = ["graphical-session.target"];
