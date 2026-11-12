@@ -138,11 +138,20 @@ impl State {
         notifications.into_iter().cloned().collect()
     }
 
-    pub fn tick(&mut self, elapsed_ms: u64) -> Vec<Notification> {
-        let visible = self.visible();
+    #[cfg(test)]
+    fn tick(&mut self, elapsed_ms: u64) -> Vec<Notification> {
+        let visible: Vec<_> = self.visible().iter().map(|n| n.id).collect();
+        self.tick_visible(elapsed_ms, &visible)
+    }
+
+    /// Only notifications actually placed on the monitor consume their timeout.
+    pub fn tick_visible(&mut self, elapsed_ms: u64, visible: &[u32]) -> Vec<Notification> {
+        if self.paused {
+            return Vec::new();
+        }
         let mut expired = Vec::new();
         for n in &mut self.active {
-            if visible.iter().any(|v| v.id == n.id) {
+            if visible.contains(&n.id) {
                 if let Some(remaining) = &mut n.remaining {
                     *remaining = remaining.saturating_sub(elapsed_ms);
                     if *remaining == 0 {
@@ -195,6 +204,19 @@ mod tests {
             transient: false,
             remaining: Some(100),
         }
+    }
+
+    #[test]
+    fn screen_overflow_does_not_expire_unshown_notifications() {
+        let mut state = State::new(Config::default());
+        let first = state.notify(notification(), 0).unwrap();
+        let second = state.notify(notification(), 0).unwrap();
+        assert_eq!(state.tick_visible(100, &[first])[0].id, first);
+        assert_eq!(state.active[0].id, second);
+        assert_eq!(state.active[0].remaining, Some(100));
+        state.set_paused(true);
+        assert!(state.tick_visible(100, &[second]).is_empty());
+        assert_eq!(state.active[0].remaining, Some(100));
     }
 
     #[test]

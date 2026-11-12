@@ -84,7 +84,9 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
         let monitor =
             gdk::Display::default().and_then(|d| d.primary_monitor().or_else(|| d.monitor(0)));
         let Some(monitor) = monitor else {
-            for card in cards.values() { card.window.hide(); }
+            for card in cards.values() {
+                card.window.hide();
+            }
             footer.hide();
             presented.clear();
             *hover.borrow_mut() = Hover::default();
@@ -108,18 +110,25 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
                 }
                 keep
             });
-            let width = config.width.min((area.width() - 2 * config.margin).max(200));
+            let width = config
+                .width
+                .min((area.width() - 2 * config.margin).max(200));
             let origin = ty_common::screen::bounds().ok();
-            let x = area.x() - origin.map(|r| r.x).unwrap_or(0) + area.width() - width - config.margin;
+            let x =
+                area.x() - origin.map(|r| r.x).unwrap_or(0) + area.width() - width - config.margin;
             let mut y = area.y() - origin.map(|r| r.y).unwrap_or(0) + config.top;
-            let bottom = area.y() - origin.map(|r| r.y).unwrap_or(0) + area.height() - config.margin;
+            let bottom =
+                area.y() - origin.map(|r| r.y).unwrap_or(0) + area.height() - config.margin;
             dismiss_all.set_label(&format!("Dismiss all ({total})"));
             // Keep room for a queue badge and hover control at the bottom. Measure
             // their full height, not the revealer's animated height.
             queued.set_text("More notifications queued");
             queued.show();
-            let footer_height = dismiss_all.preferred_height_for_width(width).1
-                .max(queued.preferred_height_for_width(width).1).max(36);
+            let footer_height = dismiss_all
+                .preferred_height_for_width(width)
+                .1
+                .max(queued.preferred_height_for_width(width).1)
+                .max(36);
             let budget_bottom = bottom - footer_height - config.gap;
             presented.clear();
             for notification in notifications {
@@ -128,7 +137,11 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
                     let window = popup(width, id, &hover);
                     let child = card(&notification, &state, &connection);
                     window.add(&child);
-                    Card { window, child, notification: notification.clone() }
+                    Card {
+                        window,
+                        child,
+                        notification: notification.clone(),
+                    }
                 });
                 if !same_content(&entry.notification, &notification) {
                     entry.window.remove(&entry.child);
@@ -152,12 +165,25 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
             waiting = total.saturating_sub(presented.len());
             queued.set_text(&format!("+{waiting} more queued"));
             queued.set_visible(waiting > 0);
-            place(&footer, x, y.min(bottom - footer_height), width, footer_height);
-            if presented.is_empty() { *hover.borrow_mut() = Hover::default(); }
-        } else { drop(model); }
+            place(
+                &footer,
+                x,
+                y.min(bottom - footer_height),
+                width,
+                footer_height,
+            );
+            if presented.is_empty() {
+                *hover.borrow_mut() = Hover::default();
+            }
+        } else {
+            drop(model);
+        }
         let show_control = total > 1 && !paused && hover.borrow().active();
         reveal.set_reveal_child(show_control);
-        if !paused && !presented.is_empty() && (waiting > 0 || show_control || reveal.is_child_revealed()) {
+        if !paused
+            && !presented.is_empty()
+            && (waiting > 0 || show_control || reveal.is_child_revealed())
+        {
             footer.show();
         } else {
             footer.hide();
@@ -184,7 +210,10 @@ struct Hover {
 
 impl Hover {
     fn active(&self) -> bool {
-        !self.over.is_empty() || self.left_at.is_some_and(|t| t.elapsed() < Duration::from_millis(250))
+        !self.over.is_empty()
+            || self
+                .left_at
+                .is_some_and(|t| t.elapsed() < Duration::from_millis(250))
     }
 }
 
@@ -196,7 +225,7 @@ fn popup(width: i32, id: u32, hover: &Rc<RefCell<Hover>>) -> gtk::Window {
     window.set_decorated(false);
     window.set_skip_taskbar_hint(true);
     window.set_skip_pager_hint(true);
-    if let Some(visual) = window.screen().and_then(|screen| screen.rgba_visual()) {
+    if let Some(visual) = gdk::Screen::default().and_then(|screen| screen.rgba_visual()) {
         window.set_visual(Some(&visual));
     }
     window.connect_draw(|_, cr| {
@@ -216,7 +245,9 @@ fn popup(width: i32, id: u32, hover: &Rc<RefCell<Hover>>) -> gtk::Window {
     window.connect_leave_notify_event(move |_, event| {
         if event.detail() != gdk::NotifyType::Inferior {
             let mut state = state.borrow_mut();
-            if state.over.remove(&id) { state.left_at = Some(Instant::now()); }
+            if state.over.remove(&id) {
+                state.left_at = Some(Instant::now());
+            }
         }
         glib::Propagation::Proceed
     });

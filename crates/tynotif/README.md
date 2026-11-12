@@ -9,14 +9,17 @@ The layout puts a 24px icon beside the text, with an app header, a separate titl
 (up to two lines), and up to three body lines. Progress bars and wrapping action
 buttons have extra spacing to keep controls distinct. Hover truncated text to
 read it in a tooltip; history retains the full text.
-Cards have opaque backgrounds with transparent gaps between them, and a footer shows how many notifications are
-queued beyond the visible limit (four by default). Existing cards stay in place
-when another notification arrives.
+Each card has its own native popup window, with no shared scrolling viewport or
+backing panel between notifications. Excess notifications queue when they reach
+the visible limit (four by default) or do not fit the monitor's available height.
+A separate footer shows the queue count; queued notifications keep their timeouts
+until displayed. Existing cards stay in place when another notification arrives.
 When more than one notification is active, hovering the stack slides in a
 **Dismiss all (N)** button below the cards. It dismisses both visible and queued
 notifications, using the same history and close signals as `tynotif close-all`.
-The toolbar's space stays fixed during the animation so the button is easy to hit;
-single notifications keep their individual dismiss button.
+The footer appears separately without shifting the cards. A short hover grace
+period lets you cross the gaps to reach the control; single notifications keep
+their individual dismiss button.
 
 On X11 the popup declares the notification window type and `Tynotif` WM_CLASS.
 Compositors should blend its alpha over underlying windows and leave its corners
