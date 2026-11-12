@@ -1,0 +1,13 @@
+[package]
+name = "tynotif"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+gtk.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ty-common.workspace = true

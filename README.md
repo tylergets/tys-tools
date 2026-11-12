@@ -9,6 +9,7 @@ Website: <https://tys.tools> (with every tool's [dependencies](https://tys.tools
 
 | Tool | What it does |
 | --- | --- |
+| [tynotif](crates/tynotif) | Desktop notification daemon with actions, history and do-not-disturb. Opt-in alternative to Dunst. |
 | [tyboard](crates/tyboard) | Clipboard history in your tray, with a rofi picker. |
 | [tykey](crates/tykey) | Text expansion in every app. |
 | [tycapture](crates/tycapture) | Screen recording of the screen, a region or one window, with zoom on clicks. |

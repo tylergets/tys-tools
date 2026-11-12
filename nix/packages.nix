@@ -132,6 +132,11 @@
 in {
   inherit workspace cargoArtifacts commonArgs craneLib src;
 
+  tynotif = mkTool {
+    name = "tynotif";
+    description = "Desktop notifications with actions, history and do-not-disturb";
+  };
+
   tyboard = mkTool {
     name = "tyboard";
     description = "Clipboard history tray daemon";

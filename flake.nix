@@ -15,7 +15,7 @@
     systems = ["x86_64-linux" "aarch64-linux"];
     forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
 
-    tools = ["tyboard" "tykey" "tycapture" "tyshot" "tyspeak" "tylight" "tygesture" "typort" "tyci" "typk"];
+    tools = ["tyboard" "tykey" "tycapture" "tyshot" "tyspeak" "tylight" "tygesture" "typort" "tyci" "typk" "tynotif"];
 
     # Called directly on legacyPackages (no nixpkgs re-instantiation) for fast evaluation.
     mkPackages = pkgs:
