@@ -237,13 +237,13 @@ fn notification_call(
             } else {
                 timeout as u64
             };
-            let string_hint = |name| {
+            let string_hint = |name: &str| {
                 hints
                     .get(name)
                     .and_then(|v| v.get::<String>())
                     .unwrap_or_default()
             };
-            let bool_hint = |name| {
+            let bool_hint = |name: &str| {
                 hints
                     .get(name)
                     .and_then(|v| v.get::<bool>().or_else(|| integer_hint(v).map(|v| v != 0)))
