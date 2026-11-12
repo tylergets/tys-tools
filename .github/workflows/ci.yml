@@ -12,5 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
+      - name: Check generated crate graph
+        run: |
+          nix shell --inputs-from . nixpkgs#crate2nix nixpkgs#cargo --command crate2nix generate
+          git diff --exit-code -- Cargo.nix Cargo.lock
       - name: Build, test, clippy, fmt
         run: nix flake check -L

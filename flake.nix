@@ -68,11 +68,14 @@
       built = mkPackages pkgs;
     in {
       default = built.craneLib.devShell {
-        inputsFrom = [built.workspace];
+        # The workspace package is now only a symlink join; Cargo still needs
+        # the native libraries used by all workspace members in its shell.
+        inputsFrom = [built.cargoArtifacts];
         packages = with pkgs; [
           rust-analyzer
           cargo-nextest
           cargo-edit
+          crate2nix
           ffmpeg-full
           pulseaudio
           xdotool

@@ -1,5 +1,5 @@
-# Each tool has its own crane dependency cache and package build, plus a runtime wrapper.
-# The full workspace build is only used by the explicit aggregate and workspace-wide checks.
+# Package builds use one derivation per Rust crate, shared between tools.
+# Crane supplies the Cargo-based development shell and workspace-wide checks.
 {
   lib,
   pkgs,
@@ -49,58 +49,106 @@
 
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
-  # Preserve every workspace member for Cargo's lockfile resolution, but stub unrelated
-  # crates. mkDummySrc depends on manifests/targets, not their Rust implementation, so
-  # editing another tool does not invalidate this tool's source or dependency cache.
-  dummySrc = craneLib.mkDummySrc {inherit src;};
-  cargoVendorDir = craneLib.vendorCargoDeps {inherit src;};
-  toolSource = name: let
-    tool = ../crates + "/${name}";
-    realSrc = lib.fileset.toSource {
-      inherit root;
-      fileset = lib.fileset.unions [
-        ../Cargo.toml
-        ../Cargo.lock
-        (craneLib.fileset.commonCargoSources tool)
-        (craneLib.fileset.commonCargoSources ../crates/ty-common)
-        (lib.fileset.fileFilter (file: file.hasExt "svg") tool)
-        (lib.fileset.fileFilter (file: file.hasExt "svg") ../crates/ty-common)
-      ];
-    };
-  in
-    pkgs.runCommand "${name}-source" {} ''
-      cp -r ${dummySrc} $out
-      chmod -R u+w $out
-      rm -rf $out/crates/${name} $out/crates/ty-common
-      cp -r ${realSrc}/. $out/
-    '';
-
-  buildTool = name: let
-    args = commonArgs // {
-      pname = name;
-      inherit cargoVendorDir;
-      cargoExtraArgs = "--locked --package ${name}";
-      doCheck = false;
-    };
-    artifacts = craneLib.buildDepsOnly args;
-  in
-    craneLib.buildPackage (args
+  # Proc macros read Cargo.toml even though rustc builds each crate directly.
+  # Resolve workspace inheritance so those manifests work in isolated sources.
+  workspaceManifest = (lib.importTOML ../Cargo.toml).workspace;
+  resolveDependencies = lib.mapAttrs (name: dep:
+    if builtins.isAttrs dep && (dep.workspace or false)
+    then let
+      inherited = workspaceManifest.dependencies.${name};
+      base =
+        if builtins.isString inherited
+        then {version = inherited;}
+        else inherited;
+    in
+      base
+      // (removeAttrs dep ["workspace"])
+      // lib.optionalAttrs (base ? features || dep ? features) {
+        features = lib.unique ((base.features or []) ++ (dep.features or []));
+      }
+    else dep);
+  resolveTables = lib.mapAttrs (name: value:
+    if lib.elem name ["dependencies" "build-dependencies" "dev-dependencies"]
+    then resolveDependencies value
+    else value);
+  localCrateOverride = name: _: let
+    manifest = lib.importTOML (../crates + "/${name}/Cargo.toml");
+    standalone =
+      (resolveTables manifest)
       // {
-        src = toolSource name;
-        cargoArtifacts = artifacts;
-      });
-
-  workspace = craneLib.buildPackage (commonArgs
-    // {
-      inherit cargoArtifacts;
-      # Tests run in `checks` (they need no display), not on every package build.
-      doCheck = false;
-      meta = {
-        description = "All ty* desktop tools (unwrapped binaries)";
-        license = lib.licenses.mit;
-        platforms = lib.platforms.linux;
+        package = lib.mapAttrs (key: value:
+          if builtins.isAttrs value && (value.workspace or false)
+          then workspaceManifest.package.${key}
+          else value)
+        manifest.package;
+      }
+      // lib.optionalAttrs (manifest ? target) {
+        target = lib.mapAttrs (_: resolveTables) manifest.target;
       };
-    });
+  in {
+    extraRustcOpts = ["-Clto=thin"];
+    postPatch = ''
+      cp ${(pkgs.formats.toml {}).generate "${name}-Cargo.toml" standalone} Cargo.toml
+    '';
+  };
+
+  # Committed metadata avoids import-from-derivation during evaluation. Each local
+  # crate's source is filtered independently by crate2nix, including its SVG assets.
+  crates = import ../Cargo.nix {
+    inherit pkgs;
+    # Match Cargo's release codegen default. rustc retains library bitcode by
+    # default; enable the workspace's thin LTO when linking our own binaries.
+    buildRustCrateForPkgs = p: p.buildRustCrate.override {defaultCodegenUnits = 16;};
+    defaultCrateOverrides =
+      pkgs.defaultCrateOverrides
+      // lib.genAttrs (builtins.attrNames (builtins.readDir ../crates)) localCrateOverride
+      // {
+        gtk-layer-shell-sys = _: {
+          nativeBuildInputs = [pkgs.pkg-config];
+          buildInputs = [pkgs.gtk-layer-shell];
+        };
+        input-sys = _: {
+          nativeBuildInputs = [pkgs.pkg-config];
+          buildInputs = [pkgs.libinput];
+          extraLinkFlags = ["-L${lib.getLib pkgs.libinput}/lib"];
+        };
+        xkbcommon = _: {
+          buildInputs = [pkgs.libxkbcommon];
+          extraLinkFlags = ["-L${lib.getLib pkgs.libxkbcommon}/lib"];
+        };
+        transcribe-cpp-sys = attrs: {
+          nativeBuildInputs =
+            [pkgs.cmake]
+            ++ lib.optional (lib.elem "vulkan" attrs.features) pkgs.shaderc;
+          buildInputs =
+            lib.optionals (lib.elem "vulkan" attrs.features)
+            [pkgs.vulkan-headers pkgs.vulkan-loader];
+          dontUseCmakeConfigure = true;
+          TRANSCRIBE_CMAKE_ARGS = transcribeCmakeArgs;
+        };
+        tylock = attrs:
+          (localCrateOverride "tylock" attrs)
+          // {
+            buildInputs = [pkgs.linux-pam];
+            extraLinkFlags = ["-L${lib.getLib pkgs.linux-pam}/lib"];
+          };
+      };
+  };
+
+  buildTool = name: crates.workspaceMembers.${name}.build;
+
+  workspace = pkgs.symlinkJoin {
+    name = "tys-tools-${commonArgs.version}";
+    inherit (commonArgs) version;
+    paths =
+      lib.mapAttrsToList (name: _: buildTool name)
+      (removeAttrs crates.workspaceMembers ["ty-common"]);
+    meta = {
+      description = "All ty* desktop tools (unwrapped binaries)";
+      license = lib.licenses.mit;
+      platforms = lib.platforms.linux;
+    };
+  };
 
   # Programs the shared display layer (ty-common) runs on Wayland; tools add their own on top.
   waylandDeps = with pkgs; [wl-clipboard];
@@ -156,13 +204,14 @@
         ${lib.concatMapStrings (item: "ln -s ${item}/share/applications/* $out/share/applications/\n") items}
         ${extraInstall}
       '';
-      postFixup = lib.concatMapStrings (bin: ''
-        makeWrapper ${unwrapped}/bin/${bin} $out/bin/${bin} \
-          "''${gappsWrapperArgs[@]}" \
-          --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath guiLibs} \
-          --suffix PATH : ${lib.makeBinPath ([pkgs.libnotify pkgs.xdg-utils] ++ runtimeDeps)}
-      '')
-      bins;
+      postFixup =
+        lib.concatMapStrings (bin: ''
+          makeWrapper ${unwrapped}/bin/${bin} $out/bin/${bin} \
+            "''${gappsWrapperArgs[@]}" \
+            --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath guiLibs} \
+            --suffix PATH : ${lib.makeBinPath ([pkgs.libnotify pkgs.xdg-utils] ++ runtimeDeps)}
+        '')
+        bins;
       passthru = {inherit unwrapped;};
       meta = {
         inherit description;

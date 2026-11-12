@@ -137,11 +137,12 @@ In Home Manager that is `programs.<tool>.appearance.font`.
 
 ## Development
 
-Build a single app with `nix build .#tynotif` (or another tool name). Each app has its
-own Cargo build and dependency cache; only that app and its dependencies are compiled.
-Changes to another app's Rust source do not invalidate its build. Shared code, manifests,
-and the lockfile can still invalidate multiple apps. Multi-binary tools such as tyboard
-build all of their own binaries together.
+Build a single app with `nix build .#tynotif` (or another tool name). `crate2nix` gives
+each Rust crate its own derivation, including `ty-common`. Apps reuse dependencies
+with matching versions, features, and build settings instead of compiling a separate
+dependency cache per app. Different feature sets can still produce separate builds.
+Changes to another app's Rust source do not invalidate its build. Multi-binary tools
+such as tyboard build all of their own binaries together.
 
 `nix build` installs all wrapped apps; `nix build .#workspace` builds the entire
 unwrapped workspace. CI still checks all apps.
@@ -150,8 +151,16 @@ unwrapped workspace. CI still checks all apps.
 nix develop
 cargo test --workspace
 cargo run -p tyboard -- run
+crate2nix generate   # regenerate Cargo.nix after manifest/lockfile/version changes
 nix flake check      # build all tools, run tests, clippy and rustfmt
 ```
+
+Commit the generated `Cargo.nix` alongside dependency changes. Generation can also
+run without entering the development shell:
+`nix shell --inputs-from . nixpkgs#crate2nix nixpkgs#cargo --command crate2nix generate`.
+The committed graph keeps package evaluation free of import-from-derivation.
+Native-library overrides live in `nix/packages.nix`; Crane still runs Cargo tests,
+Clippy, and formatting checks.
 
 Shared code (tray applet, single-instance lock, config loading, notifications, `status`
 output) lives in [`crates/ty-common`](crates/ty-common). The project website is in
