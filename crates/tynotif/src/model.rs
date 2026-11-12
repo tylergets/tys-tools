@@ -7,6 +7,14 @@ use crate::config::Config;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Notification {
+    #[serde(skip)]
+    pub generation: u64,
+    pub category: String,
+    pub desktop_entry: String,
+    #[serde(skip)]
+    pub image: Option<RawImage>,
+    #[serde(skip)]
+    pub colors: Colors,
     pub id: u32,
     pub app: String,
     pub summary: String,
@@ -34,7 +42,25 @@ pub struct Notification {
     pub remaining: Option<u64>,
 }
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Colors {
+    pub foreground: Option<String>,
+    pub background: Option<String>,
+    pub frame: Option<String>,
+    pub highlight: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RawImage {
+    pub width: i32,
+    pub height: i32,
+    pub stride: i32,
+    pub alpha: bool,
+    pub pixels: std::sync::Arc<Vec<u8>>,
+}
+
 pub struct State {
+    pub interactions: VecDeque<(Option<u32>, Vec<crate::config::MouseAction>)>,
     pub config: Config,
     pub active: Vec<Notification>,
     pub history: VecDeque<Notification>,
@@ -47,6 +73,7 @@ pub struct State {
 impl State {
     pub fn new(config: Config) -> Self {
         Self {
+            interactions: VecDeque::new(),
             config,
             active: Vec::new(),
             history: VecDeque::new(),
@@ -62,6 +89,7 @@ impl State {
         mut notification: Notification,
         replaces: u32,
     ) -> Result<u32, &'static str> {
+        notification.generation = self.revision.wrapping_add(1);
         let existing = self.active.iter().position(|n| {
             n.id == replaces
                 || (!notification.tag.is_empty()
@@ -190,11 +218,16 @@ impl State {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
-    fn notification() -> Notification {
+    pub(crate) fn notification() -> Notification {
         Notification {
+            generation: 0,
+            category: String::new(),
+            desktop_entry: String::new(),
+            image: None,
+            colors: Colors::default(),
             id: 0,
             app: "test".into(),
             summary: "hello".into(),
@@ -267,7 +300,9 @@ mod tests {
         let mut state = State::new(Config::default());
         let id = state.notify(notification(), 0).unwrap();
         state.tick(90);
+        let generation = state.active[0].generation;
         assert_eq!(state.notify(notification(), id).unwrap(), id);
+        assert_ne!(state.active[0].generation, generation);
         assert!(state.tick(90).is_empty());
         assert_eq!(state.tick(10)[0].id, id);
         assert_eq!(state.history.len(), 1);

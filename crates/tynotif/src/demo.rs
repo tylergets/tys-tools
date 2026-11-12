@@ -52,6 +52,22 @@ fn examples(delay: Duration) -> VecDeque<Example> {
         "Click a button; the invoked action is printed in the terminal.",
     );
     actions.actions = vec!["default", "Open", "reply", "Reply"];
+    let mut menu = Example::new(
+        "Context menu",
+        "Left/right-click the card to choose an action or URL: https://example.org",
+    );
+    menu.actions = vec!["open", "Open", "ignore", "Ignore"];
+    let pixels: Vec<u8> = (0..32u8)
+        .flat_map(|y| (0..32u8).flat_map(move |x| [x * 8, y * 8, 160, 255]))
+        .collect();
+    let image = Example::new(
+        "Raw image",
+        "A generated RGBA image sent through the image-data hint.",
+    )
+    .hint(
+        "image-data",
+        (32i32, 32i32, 128i32, true, 8i32, 4i32, pixels),
+    );
     let mut reply = Example::new(
         "Inline reply",
         "Type a reply and press Enter; the reply is printed in the terminal.",
@@ -89,6 +105,12 @@ fn examples(delay: Duration) -> VecDeque<Example> {
         critical,
         Example::new("Long body", "This longer notification demonstrates word wrapping within the popup card.\nIt also includes a second paragraph, with Unicode: café — 日本語 — 🔔."),
         actions,
+        menu,
+        Example::new("Rich text", "<b>Bold</b>, <i>italic</i>, <u>underline</u>, <s>strikethrough</s>\n<a href='https://example.org'>Link available in the context menu</a>"),
+        image,
+        Example::new("Color hints", "Per-notification colors and an unsigned progress value.")
+            .hint("bgcolor", "#243040").hint("fgcolor", "#eef0f6").hint("frcolor", "#8bd5ca")
+            .hint("hlcolor", vec!["#8bd5ca", "#c6a0f6"]).hint("value", 65u32),
         reply,
         resident,
         Example::new("Transient notification", "This notification will not be saved in history.").hint("transient", true),

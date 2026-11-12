@@ -1,6 +1,8 @@
 mod bus;
 mod config;
+mod content;
 mod demo;
+mod interaction;
 mod model;
 mod tray;
 mod ui;
@@ -58,8 +60,17 @@ enum Command {
         minutes: u64,
     },
     Action {
-        id: u32,
-        key: String,
+        id: Option<u32>,
+        #[arg(requires = "id")]
+        key: Option<String>,
+    },
+    /// Open actions and URLs for one notification, or all visible notifications.
+    Context {
+        id: Option<u32>,
+    },
+    /// Open a notification's URL, or choose from its URLs.
+    OpenUrl {
+        id: Option<u32>,
     },
 }
 
@@ -110,6 +121,19 @@ fn main() -> Result<()> {
                 Paused::Toggle => "toggle",
             },
         ),
-        Command::Action { id, key } => bus::command("action", &format!("{id}:{key}")),
+        Command::Action { id, key } => bus::command(
+            "action",
+            &match (id, key) {
+                (Some(id), Some(key)) => format!("{id}:{key}"),
+                (Some(id), None) => id.to_string(),
+                _ => String::new(),
+            },
+        ),
+        Command::Context { id } => {
+            bus::command("context", &id.map(|v| v.to_string()).unwrap_or_default())
+        }
+        Command::OpenUrl { id } => {
+            bus::command("open-url", &id.map(|v| v.to_string()).unwrap_or_default())
+        }
     }
 }

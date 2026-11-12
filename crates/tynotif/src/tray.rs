@@ -45,9 +45,10 @@ impl Tray {
                 Action::Snooze(minutes) => state.snooze(Duration::from_secs(minutes * 60)),
                 Action::History(id) => {
                     let notification = state.history.iter().find(|n| n.id == id).cloned();
+                    let markup = state.config.markup;
                     drop(state);
                     if let Some(notification) = notification {
-                        show_history(&notification);
+                        show_history(&notification, markup);
                     }
                 }
                 Action::ClearHistory => state.clear_history(),
@@ -106,7 +107,15 @@ fn spec(state: &State) -> TraySpec<Action> {
             .history
             .iter()
             .map(|n| MenuEntry::Action {
-                label: title(&format!("{} — {}", n.app, n.summary)),
+                label: title(&format!(
+                    "{} — {}",
+                    n.app,
+                    if state.config.markup == crate::config::Markup::No {
+                        n.summary.clone()
+                    } else {
+                        crate::content::plain(&n.summary)
+                    }
+                )),
                 enabled: true,
                 action: Action::History(n.id),
             })
@@ -160,7 +169,7 @@ fn spec(state: &State) -> TraySpec<Action> {
     }
 }
 
-fn show_history(notification: &crate::model::Notification) {
+fn show_history(notification: &crate::model::Notification, markup: crate::config::Markup) {
     let window = ty_common::overlay::dialog_window("tynotif-history", "Notification history");
     window.set_default_size(520, 360);
     window.set_resizable(true);
@@ -171,6 +180,11 @@ fn show_history(notification: &crate::model::Notification) {
         "{} — {}",
         notification.app, notification.summary
     )));
+    heading.set_markup(&format!(
+        "{} — {}",
+        crate::content::escape(&notification.app),
+        crate::content::render(&notification.summary, markup)
+    ));
     heading.set_xalign(0.0);
     heading.set_line_wrap(true);
     heading.set_line_wrap_mode(gtk::pango::WrapMode::WordChar);
@@ -178,6 +192,7 @@ fn show_history(notification: &crate::model::Notification) {
     heading.set_selectable(true);
     details.pack_start(&heading, false, false, 0);
     let body = gtk::Label::new(Some(&notification.body));
+    body.set_markup(&crate::content::render(&notification.body, markup));
     body.set_selectable(true);
     body.set_line_wrap(true);
     body.set_line_wrap_mode(gtk::pango::WrapMode::WordChar);

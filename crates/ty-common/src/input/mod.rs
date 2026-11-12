@@ -9,7 +9,10 @@
 //!   the `XKB_DEFAULT_*` environment variables for the layout.
 
 mod evdev;
+mod shortcuts;
 pub(crate) mod x11;
+
+pub use shortcuts::{global_shortcuts, validate_shortcut};
 
 use std::process::Command;
 use std::sync::Mutex;

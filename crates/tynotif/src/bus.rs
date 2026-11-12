@@ -7,7 +7,8 @@ use anyhow::{bail, Context, Result};
 use glib::variant::ToVariant;
 use gtk::{gio, glib};
 
-use crate::model::{Notification, State};
+use crate::config::{Markup, MouseAction};
+use crate::model::{Colors, Notification, RawImage, State};
 
 pub const NAME: &str = "org.freedesktop.Notifications";
 pub const PATH: &str = "/org/freedesktop/Notifications";
@@ -188,7 +189,17 @@ fn notification_call(
 ) -> Result<glib::Variant, String> {
     match method {
         "GetCapabilities" => {
-            Ok((vec!["body", "actions", "persistence", "inline-reply"],).to_variant())
+            let mut caps = vec![
+                "body",
+                "actions",
+                "persistence",
+                "inline-reply",
+                "icon-static",
+            ];
+            if state.config.markup == Markup::Full {
+                caps.push("body-markup");
+            }
+            Ok((caps,).to_variant())
         }
         "GetServerInformation" => {
             Ok(("tynotif", "tys-tools", env!("CARGO_PKG_VERSION"), "1.2").to_variant())
@@ -235,15 +246,60 @@ fn notification_call(
             let bool_hint = |name| {
                 hints
                     .get(name)
-                    .and_then(|v| v.get::<bool>())
+                    .and_then(|v| v.get::<bool>().or_else(|| integer_hint(v).map(|v| v != 0)))
                     .unwrap_or(false)
             };
-            let mut tag = string_hint("x-dunst-stack-tag");
-            if tag.is_empty() {
-                tag = string_hint("x-canonical-private-synchronous");
-            }
-            let image = string_hint("image-path");
+            let tag = [
+                "x-dunst-stack-tag",
+                "x-canonical-private-synchronous",
+                "synchronous",
+                "private-synchronous",
+            ]
+            .iter()
+            .map(|name| string_hint(name))
+            .find(|s| !s.is_empty())
+            .unwrap_or_default();
+            let image = ["image-path", "image_path"]
+                .iter()
+                .map(|name| string_hint(name))
+                .find(|s| !s.is_empty())
+                .unwrap_or_default();
+            let raw = ["image-data", "image_data"]
+                .iter()
+                .find_map(|key| hints.get(*key).and_then(raw_image))
+                .or_else(|| {
+                    if image.is_empty() && icon.is_empty() {
+                        hints.get("icon_data").and_then(raw_image)
+                    } else {
+                        None
+                    }
+                });
+            let highlight = hints
+                .get("hlcolor")
+                .map(|v| {
+                    v.get::<Vec<String>>()
+                        .unwrap_or_else(|| {
+                            string_hint("hlcolor")
+                                .split(',')
+                                .map(|s| s.trim().to_string())
+                                .collect()
+                        })
+                        .iter()
+                        .filter_map(|s| crate::content::color(s))
+                        .collect()
+                })
+                .unwrap_or_default();
             let notification = Notification {
+                generation: 0,
+                category: string_hint("category"),
+                desktop_entry: string_hint("desktop-entry"),
+                image: raw,
+                colors: Colors {
+                    foreground: crate::content::color(&string_hint("fgcolor")),
+                    background: crate::content::color(&string_hint("bgcolor")),
+                    frame: crate::content::color(&string_hint("frcolor")),
+                    highlight,
+                },
                 id: 0,
                 app,
                 summary,
@@ -260,8 +316,8 @@ fn notification_call(
                 reply_submit_icon: string_hint("x-kde-reply-submit-button-icon-name"),
                 progress: hints
                     .get("value")
-                    .and_then(|v| v.get::<i32>())
-                    .map(|v| v.clamp(0, 100)),
+                    .and_then(integer_hint)
+                    .map(|v| v.clamp(0, 100) as i32),
                 sender: sender.into(),
                 tag,
                 resident: bool_hint("resident"),
@@ -409,12 +465,101 @@ fn command_call(
             return state.replay(id).map(|id| id.to_string()).map_err(str::to_string);
         }
         "action" => {
-            let (id, key) = value.split_once(':').ok_or("expected ID:KEY")?;
-            action(connection, state, id.parse().map_err(|_| "invalid id")?, key)?;
+            if let Some((id, key)) = value.split_once(':') {
+                action(connection, state, id.parse().map_err(|_| "invalid id")?, key)?;
+            } else {
+                enqueue(state, value, MouseAction::DoAction)?;
+            }
         }
+        "context" => enqueue(state, value, if value.is_empty() { MouseAction::ContextAll } else { MouseAction::Context })?,
+        "open-url" => enqueue(state, value, MouseAction::OpenUrl)?,
         _ => return Err("unknown command".into()),
     }
     Ok(String::new())
+}
+
+fn enqueue(state: &mut State, value: &str, action: MouseAction) -> Result<(), String> {
+    let id = if value.is_empty() {
+        None
+    } else {
+        let id = value.parse().map_err(|_| "invalid id")?;
+        if !state.active.iter().any(|n| n.id == id) {
+            return Err("notification not active".into());
+        }
+        Some(id)
+    };
+    if state.interactions.len() >= 64 {
+        return Err("interaction queue is full".into());
+    }
+    state.interactions.push_back((id, vec![action]));
+    Ok(())
+}
+
+fn integer_hint(v: &glib::Variant) -> Option<i64> {
+    v.get::<i32>()
+        .map(i64::from)
+        .or_else(|| v.get::<u32>().map(i64::from))
+        .or_else(|| v.get::<u8>().map(i64::from))
+}
+
+fn raw_image(v: &glib::Variant) -> Option<RawImage> {
+    let (width, height, stride, alpha, bits, channels, pixels) =
+        v.get::<(i32, i32, i32, bool, i32, i32, Vec<u8>)>()?;
+    // Validate before constructing a pixbuf: the final row need not include padding.
+    if width <= 0
+        || height <= 0
+        || width > 4096
+        || height > 4096
+        || bits != 8
+        || channels != if alpha { 4 } else { 3 }
+    {
+        return None;
+    }
+    let row = width.checked_mul(channels)?;
+    if stride < row {
+        return None;
+    }
+    let required = (height as usize - 1)
+        .checked_mul(stride as usize)?
+        .checked_add(row as usize)?;
+    if pixels.len() < required || pixels.len() > 16 * 1024 * 1024 {
+        return None;
+    }
+    Some(RawImage {
+        width,
+        height,
+        stride,
+        alpha,
+        pixels: Arc::new(pixels),
+    })
+}
+
+#[cfg(test)]
+mod hint_tests {
+    use super::*;
+    #[test]
+    fn raw_images_require_consistent_dimensions_and_backing_memory() {
+        assert!(
+            raw_image(&(2i32, 2i32, 8i32, true, 8i32, 4i32, vec![0u8; 16]).to_variant()).is_some()
+        );
+        assert!(
+            raw_image(&(2i32, 2i32, 8i32, true, 8i32, 4i32, vec![0u8; 15]).to_variant()).is_none()
+        );
+        assert!(
+            raw_image(&(2i32, 2i32, 4i32, true, 8i32, 4i32, vec![0u8; 16]).to_variant()).is_none()
+        );
+        assert!(
+            raw_image(&(i32::MAX, 2i32, 8i32, true, 8i32, 4i32, vec![0u8; 16]).to_variant())
+                .is_none()
+        );
+        assert!(
+            raw_image(&(1i32, 2i32, 4i32, false, 8i32, 3i32, vec![0u8; 7]).to_variant()).is_some()
+        );
+    }
+    #[test]
+    fn progress_accepts_unsigned_hints() {
+        assert_eq!(integer_hint(&100u32.to_variant()), Some(100));
+    }
 }
 
 pub fn command(command: &str, value: &str) -> Result<()> {

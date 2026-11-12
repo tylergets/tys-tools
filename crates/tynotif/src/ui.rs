@@ -23,6 +23,20 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
         }
     };
     let config = state.lock().unwrap().config.clone();
+    let shortcut_actions: Vec<_> = config.shortcuts.keys().cloned().collect();
+    let shortcuts = if config.shortcuts.is_empty() || ty_common::session::is_wayland() {
+        if !config.shortcuts.is_empty() {
+            eprintln!(
+                "Global shortcuts are X11-only; bind tynotif commands in your Wayland compositor"
+            );
+        }
+        None
+    } else {
+        Some(ty_common::input::global_shortcuts(
+            &config.shortcuts.values().cloned().collect::<Vec<_>>(),
+        )?)
+    };
+    let mut interaction = crate::interaction::Interaction::default();
     let screen = gdk::Screen::default().context("no screen")?;
     let css = gtk::CssProvider::new();
     css.load_from_data(format!(
@@ -71,9 +85,39 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
         let now = Instant::now();
         let elapsed = now.duration_since(last).as_millis().min(u64::MAX as u128) as u64;
         last = now;
+        if let Some(shortcuts) = &shortcuts {
+            for index in shortcuts.try_iter().take(64) {
+                let mut model = state.lock().unwrap();
+                match shortcut_actions[index].as_str() {
+                    "close" => {
+                        if let Some(id) = presented.first() {
+                            bus::close(&connection, &mut model, *id, 2);
+                        }
+                    }
+                    "close-all" => bus::close_all(&connection, &mut model),
+                    "history-pop" => {
+                        let _ = model.replay(0);
+                    }
+                    "context" if model.interactions.len() < 64 => model
+                        .interactions
+                        .push_back((None, vec![crate::config::MouseAction::ContextAll])),
+                    "action" if model.interactions.len() < 64 => model
+                        .interactions
+                        .push_back((None, vec![crate::config::MouseAction::DoAction])),
+                    _ => {}
+                }
+            }
+        }
+        let menu_parent = presented
+            .first()
+            .and_then(|id| cards.get(id))
+            .map(|card| &card.window);
+        interaction.poll(&state, &connection, &presented, menu_parent);
         let mut model = state.lock().unwrap();
         model.wake_if_due(std::time::SystemTime::now());
-        if !hover.borrow().active() && !cards.values().any(|card| card.window.has_toplevel_focus())
+        if !interaction.busy()
+            && !hover.borrow().active()
+            && !cards.values().any(|card| card.window.has_toplevel_focus())
         {
             for notification in model.tick_visible(elapsed, &presented) {
                 bus::closed(&connection, &notification, 1);
@@ -218,7 +262,7 @@ pub fn run(state: Shared, replace: bool, force: bool, test: Option<Duration>) ->
 
 struct Card {
     window: gtk::Window,
-    child: gtk::Box,
+    child: gtk::EventBox,
     notification: Notification,
 }
 
@@ -293,6 +337,11 @@ fn same_content(a: &Notification, b: &Notification) -> bool {
         && a.reply_submit_text == b.reply_submit_text
         && a.reply_submit_icon == b.reply_submit_icon
         && a.progress == b.progress
+        && a.image == b.image
+        && a.colors == b.colors
+        && a.category == b.category
+        && a.desktop_entry == b.desktop_entry
+        && a.tag == b.tag
 }
 
 fn label(text: &str, class: &str) -> gtk::Label {
@@ -305,31 +354,63 @@ fn label(text: &str, class: &str) -> gtk::Label {
     label
 }
 
-fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> gtk::Box {
+fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> gtk::EventBox {
+    let config = state.lock().unwrap().config.clone();
+    let events = gtk::EventBox::new();
+    events.set_visible_window(false);
+    events.add_events(gdk::EventMask::BUTTON_RELEASE_MASK);
+    let model = state.clone();
+    let id = n.id;
+    events.connect_button_release_event(move |_, event| {
+        let mut raw = event.clone();
+        if let Some(widget) = gtk::event_widget(&mut raw) {
+            if widget.is::<gtk::Button>()
+                || widget.is::<gtk::Entry>()
+                || widget.ancestor(gtk::Button::static_type()).is_some()
+                || widget.ancestor(gtk::Entry::static_type()).is_some()
+            {
+                return glib::Propagation::Proceed;
+            }
+        }
+        let mut model = model.lock().unwrap();
+        let actions = match event.button() {
+            1 => model.config.mouse_left_click.clone(),
+            2 => model.config.mouse_middle_click.clone(),
+            3 => model.config.mouse_right_click.clone(),
+            _ => return glib::Propagation::Proceed,
+        };
+        if model.interactions.len() < 64 {
+            model.interactions.push_back((Some(id), actions));
+        }
+        glib::Propagation::Stop
+    });
     let card = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    events.add(&card);
     card.style_context().add_class("notification");
     if n.urgency == 2 {
         card.style_context().add_class("critical");
     }
-    if !n.icon.is_empty() {
-        let image = if n.icon.starts_with('/') {
-            gtk::gdk_pixbuf::Pixbuf::from_file_at_scale(&n.icon, 24, 24, true)
-                .ok()
-                .map(|p| gtk::Image::from_pixbuf(Some(&p)))
-        } else {
-            let image = gtk::Image::from_icon_name(Some(&n.icon), gtk::IconSize::Dialog);
-            image.set_pixel_size(24);
-            Some(image)
-        };
-        if let Some(image) = image {
-            image.set_valign(gtk::Align::Start);
-            card.pack_start(&image, false, false, 0);
-        }
+    if let Some(image) = notification_image(n) {
+        image.set_valign(gtk::Align::Start);
+        card.pack_start(&image, false, false, 0);
     }
     let text = gtk::Box::new(gtk::Orientation::Vertical, 6);
     card.pack_start(&text, true, true, 0);
     let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    let app = label(&n.app, "app");
+    let indicators = if config.show_indicators {
+        format!(
+            "{}{}",
+            if n.actions.is_empty() { "" } else { "(A) " },
+            if crate::content::urls(n).is_empty() {
+                ""
+            } else {
+                "(U) "
+            }
+        )
+    } else {
+        String::new()
+    };
+    let app = label(&format!("{indicators}{}", n.app), "app");
     app.set_line_wrap(false);
     app.set_ellipsize(gtk::pango::EllipsizeMode::End);
     app.set_max_width_chars(40);
@@ -345,19 +426,30 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
     dismiss.connect_clicked(move |_| bus::close(&bus, &mut model.lock().unwrap(), id, 2));
     header.pack_end(&dismiss, false, false, 0);
     text.pack_start(&header, false, false, 0);
-    if !n.summary.is_empty() {
-        let summary = label(&n.summary, "summary");
-        summary.set_lines(2);
-        summary.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        summary.set_tooltip_text(Some(&n.summary));
-        text.pack_start(&summary, false, false, 0);
-    }
-    if !n.body.is_empty() {
-        let body = label(&n.body, "body");
-        body.set_lines(3);
-        body.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        body.set_tooltip_text(Some(&n.body));
-        text.pack_start(&body, false, false, 0);
+    if let Some(format) = &config.format {
+        let formatted = label("", "body");
+        formatted.set_markup(&crate::content::formatted(n, format, config.markup));
+        formatted.set_lines(6);
+        formatted.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        formatted.set_tooltip_text(Some(&formatted.text()));
+        text.pack_start(&formatted, false, false, 0);
+    } else {
+        if !n.summary.is_empty() {
+            let summary = label(&n.summary, "summary");
+            summary.set_markup(&crate::content::render(&n.summary, config.markup));
+            summary.set_lines(2);
+            summary.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            summary.set_tooltip_text(Some(&summary.text()));
+            text.pack_start(&summary, false, false, 0);
+        }
+        if !n.body.is_empty() {
+            let body = label(&n.body, "body");
+            body.set_markup(&crate::content::render(&n.body, config.markup));
+            body.set_lines(3);
+            body.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            body.set_tooltip_text(Some(&body.text()));
+            text.pack_start(&body, false, false, 0);
+        }
     }
     if let Some(value) = n.progress {
         let progress = gtk::ProgressBar::new();
@@ -448,5 +540,104 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
     if !actions.children().is_empty() {
         text.pack_start(&actions, false, false, 0);
     }
-    card
+    apply_colors(&card, n);
+    events
+}
+
+fn notification_image(n: &Notification) -> Option<gtk::Image> {
+    use gtk::gdk_pixbuf::{Colorspace, InterpType, Pixbuf};
+    if let Some(raw) = &n.image {
+        let bytes = glib::Bytes::from_owned(raw.pixels.as_ref().clone());
+        let pixbuf = Pixbuf::from_bytes(
+            &bytes,
+            Colorspace::Rgb,
+            raw.alpha,
+            8,
+            raw.width,
+            raw.height,
+            raw.stride,
+        );
+        let scale = (96.0 / f64::from(raw.width.max(raw.height))).min(1.0);
+        let pixbuf = pixbuf.scale_simple(
+            (f64::from(raw.width) * scale).round().max(1.0) as i32,
+            (f64::from(raw.height) * scale).round().max(1.0) as i32,
+            InterpType::Bilinear,
+        )?;
+        return Some(gtk::Image::from_pixbuf(Some(&pixbuf)));
+    }
+    if !n.icon.is_empty() {
+        let path = if n.icon.starts_with("file://") {
+            gio::File::for_uri(&n.icon).path()
+        } else if n.icon.starts_with('/') {
+            Some(n.icon.clone().into())
+        } else {
+            None
+        };
+        if let Some(path) = path {
+            if let Ok(pixbuf) = Pixbuf::from_file_at_scale(path, 24, 24, true) {
+                return Some(gtk::Image::from_pixbuf(Some(&pixbuf)));
+            }
+        } else {
+            let image = gtk::Image::from_icon_name(Some(&n.icon), gtk::IconSize::Dialog);
+            image.set_pixel_size(24);
+            return Some(image);
+        }
+    }
+    if !n.desktop_entry.is_empty() {
+        let desktop = if n.desktop_entry.ends_with(".desktop") {
+            n.desktop_entry.clone()
+        } else {
+            format!("{}.desktop", n.desktop_entry)
+        };
+        if let Some(icon) = gio::DesktopAppInfo::new(&desktop).and_then(|app| app.icon()) {
+            let image = gtk::Image::from_gicon(&icon, gtk::IconSize::Dialog);
+            image.set_pixel_size(24);
+            return Some(image);
+        }
+    }
+    None
+}
+
+fn apply_colors(card: &gtk::Box, n: &Notification) {
+    let mut css = String::new();
+    if let Some(color) = &n.colors.background {
+        css.push_str(&format!(".notification {{ background: {color}; }}"));
+    }
+    if let Some(color) = &n.colors.foreground {
+        css.push_str(&format!(
+            ".notification, .notification label {{ color: {color}; }}"
+        ));
+    }
+    if let Some(color) = &n.colors.frame {
+        css.push_str(&format!(".notification {{ border-color: {color}; }}"));
+    }
+    match n.colors.highlight.as_slice() {
+        [] => {}
+        [color] => css.push_str(&format!(
+            "progressbar progress {{ background-image: none; background-color: {color}; }}"
+        )),
+        colors => css.push_str(&format!(
+            "progressbar progress {{ background-image: linear-gradient(to right, {}); }}",
+            colors.join(", ")
+        )),
+    }
+    if css.is_empty() {
+        return;
+    }
+    let provider = gtk::CssProvider::new();
+    if let Err(error) = provider.load_from_data(css.as_bytes()) {
+        eprintln!("Notification colors: {error}");
+        return;
+    }
+    fn apply(widget: &gtk::Widget, provider: &gtk::CssProvider) {
+        widget
+            .style_context()
+            .add_provider(provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+        if let Some(container) = widget.downcast_ref::<gtk::Container>() {
+            for child in container.children() {
+                apply(&child, provider);
+            }
+        }
+    }
+    apply(card.upcast_ref(), &provider);
 }
