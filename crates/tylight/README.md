@@ -14,7 +14,8 @@ wlroots Wayland compositors (Sway, Hyprland, river, niri, labwc, ...).
 - **Smooth fades** when you toggle, disable or set a temperature.
 - **Disable for a while**: 30 minutes, 1 hour, 2 hours, or until morning.
 - **Monitor brightness**: laptop backlights (through logind, no root needed) and external
-  monitors over DDC/CI (through `ddcutil`).
+  monitors over DDC/CI (through `ddcutil`). All detected monitors adjust together; external
+  monitors are addressed by I²C bus, including multiple monitors of the same model.
 - **Auto brightness** from the ambient light sensor, tuned not to jump around (see below).
 - **Presets**: named temperature, dimming and monitor brightness, picked from the tray or
   with `tylight preset <name>`.

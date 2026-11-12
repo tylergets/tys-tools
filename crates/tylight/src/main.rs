@@ -128,7 +128,14 @@ fn brightness(config_path: Option<PathBuf>, value: Option<String>) -> Result<()>
     };
     let percent = match daemon {
         Ok(status) => status.monitor_brightness,
-        Err(_) => {
+        Err(err)
+            if err.downcast_ref::<std::io::Error>().is_some_and(|err| {
+                matches!(
+                    err.kind(),
+                    std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused
+                )
+            }) =>
+        {
             let config = load_config(config_path)?.config;
             let mut monitors = Monitors::detect(&config.monitor_brightness);
             match change {
@@ -136,6 +143,8 @@ fn brightness(config_path: Option<PathBuf>, value: Option<String>) -> Result<()>
                 None => monitors.percent(),
             }
         }
+        // A timeout or hardware error must not retry alongside the daemon's DDC writes.
+        Err(err) => return Err(err),
     };
     match percent {
         Some(percent) => println!("{percent}%"),

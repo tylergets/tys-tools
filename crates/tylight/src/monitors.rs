@@ -26,7 +26,7 @@ const DDC_STEPS: u32 = 3;
 #[derive(Debug, Clone, PartialEq)]
 enum Device {
     Backlight { name: String, max: u32 },
-    Ddc { display: u32, max: u32 },
+    Ddc { bus: u32, max: u32, percent: u8 },
 }
 
 /// A brightness request: an absolute percent or a relative step.
@@ -76,8 +76,6 @@ impl Change {
 #[derive(Debug, Default)]
 pub struct Monitors {
     devices: Vec<Device>,
-    /// Last DDC value read or written (DDC reads are slow).
-    ddc_percent: Option<u8>,
 }
 
 impl Monitors {
@@ -93,12 +91,7 @@ impl Monitors {
                 Err(err) => eprintln!("ddc: {err:#}"),
             }
         }
-        let mut monitors = Self {
-            devices,
-            ddc_percent: None,
-        };
-        monitors.ddc_percent = monitors.read_ddc();
-        monitors
+        Self { devices }
     }
 
     /// Current brightness in percent: the backlight if there is one (cheap to read, and
@@ -112,7 +105,12 @@ impl Monitors {
                 }
                 Device::Ddc { .. } => None,
             })
-            .or(self.ddc_percent)
+            .or_else(|| {
+                self.devices.iter().find_map(|device| match device {
+                    Device::Ddc { percent, .. } => Some(*percent),
+                    Device::Backlight { .. } => None,
+                })
+            })
     }
 
     /// Apply `change` to every display, fading over `fade` (backlights; DDC takes a few
@@ -127,12 +125,11 @@ impl Monitors {
             bail!("no backlight to adjust");
         }
         let target = change.resolve(self.percent());
-        let ddc_from = self.ddc_percent;
         // Fade every display at once.
         let errors: Vec<String> = thread::scope(|scope| {
             let fades: Vec<_> = self
                 .devices
-                .iter()
+                .iter_mut()
                 .filter(|device| included(device))
                 .map(|device| {
                     scope.spawn(move || match device {
@@ -140,7 +137,12 @@ impl Monitors {
                         Device::Backlight { name, max } => {
                             fade_backlight(name, from_percent(target.max(1), *max).max(1), fade)
                         }
-                        Device::Ddc { display, max } => fade_ddc(*display, *max, ddc_from, target),
+                        Device::Ddc { bus, max, percent } => {
+                            fade_ddc(*bus, *max, *percent, target)?;
+                            // Keep each monitor's last successful value, including on partial failure.
+                            *percent = target;
+                            Ok(())
+                        }
                     })
                 })
                 .collect();
@@ -153,14 +155,6 @@ impl Monitors {
                 })
                 .collect()
         });
-        if ddc
-            && self
-                .devices
-                .iter()
-                .any(|device| matches!(device, Device::Ddc { .. }))
-        {
-            self.ddc_percent = Some(target);
-        }
         if errors.len() == attempted {
             bail!("{}", errors.join("; "));
         }
@@ -168,15 +162,6 @@ impl Monitors {
             eprintln!("warning: {err}");
         }
         Ok(target)
-    }
-
-    fn read_ddc(&self) -> Option<u8> {
-        self.devices.iter().find_map(|device| match device {
-            Device::Ddc { display, .. } => get_ddc(*display)
-                .ok()
-                .map(|(cur, max)| to_percent(cur, max)),
-            Device::Backlight { .. } => None,
-        })
     }
 }
 
@@ -275,14 +260,11 @@ fn set_backlight(conn: Option<&dbus::blocking::Connection>, name: &str, raw: u32
 }
 
 /// DDC steps pace themselves: each write takes about as long as a frame of the fade.
-fn fade_ddc(display: u32, max: u32, from: Option<u8>, target: u8) -> Result<()> {
+fn fade_ddc(bus: u32, max: u32, from: u8, target: u8) -> Result<()> {
     let to = from_percent(target, max);
-    let steps = match from {
-        Some(from) => fade_steps(from_percent(from, max), to, DDC_STEPS),
-        None => vec![to],
-    };
+    let steps = fade_steps(from_percent(from, max), to, DDC_STEPS);
     for value in steps {
-        set_ddc(display, value)?;
+        set_ddc(bus, value)?;
     }
     Ok(())
 }
@@ -305,23 +287,43 @@ fn ddcutil(args: &[&str]) -> Result<String> {
 fn ddc_displays() -> Result<Vec<Device>> {
     let detected = ddcutil(&["detect", "--terse"])?;
     let mut devices = Vec::new();
-    for display in parse_detect(&detected) {
-        match get_ddc(display) {
-            Ok((_, max)) if max > 0 => devices.push(Device::Ddc { display, max }),
+    for bus in parse_detect(&detected) {
+        match get_ddc(bus) {
+            Ok((current, max)) if max > 0 => devices.push(Device::Ddc {
+                bus,
+                max,
+                percent: to_percent(current, max),
+            }),
             Ok(_) => {}
-            Err(err) => eprintln!("ddc: display {display}: {err:#}"),
+            Err(err) => eprintln!("ddc: bus {bus}: {err:#}"),
         }
     }
     Ok(devices)
 }
 
-/// Display numbers from `ddcutil detect --terse` (skips "Invalid display" entries).
+/// I²C buses from valid `ddcutil detect --terse` display blocks.
+/// Targeting a bus avoids rescanning (and locking) every monitor for each parallel write.
 fn parse_detect(output: &str) -> Vec<u32> {
-    output
-        .lines()
-        .filter_map(|line| line.strip_prefix("Display "))
-        .filter_map(|rest| rest.trim().parse().ok())
-        .collect()
+    let mut buses = Vec::new();
+    let mut valid = false;
+    for line in output.lines().map(str::trim) {
+        if let Some(number) = line.strip_prefix("Display ") {
+            valid = number.parse::<u32>().is_ok();
+        } else if line.starts_with("Invalid display") {
+            valid = false;
+        } else if valid {
+            if let Some(bus) = line
+                .strip_prefix("I2C bus:")
+                .and_then(|path| path.trim().strip_prefix("/dev/i2c-"))
+                .and_then(|number| number.parse().ok())
+            {
+                if !buses.contains(&bus) {
+                    buses.push(bus);
+                }
+            }
+        }
+    }
+    buses
 }
 
 /// `(current, max)` from `ddcutil getvcp 10 --terse`: `VCP 10 C 50 100`.
@@ -333,15 +335,15 @@ fn parse_getvcp(output: &str) -> Option<(u32, u32)> {
     }
 }
 
-fn get_ddc(display: u32) -> Result<(u32, u32)> {
-    let display = display.to_string();
-    let output = ddcutil(&["--display", &display, "getvcp", VCP_BRIGHTNESS, "--terse"])?;
+fn get_ddc(bus: u32) -> Result<(u32, u32)> {
+    let bus = bus.to_string();
+    let output = ddcutil(&["--bus", &bus, "getvcp", VCP_BRIGHTNESS, "--terse"])?;
     parse_getvcp(&output).with_context(|| format!("unexpected ddcutil output: {output}"))
 }
 
-fn set_ddc(display: u32, value: u32) -> Result<()> {
-    let (display, value) = (display.to_string(), value.to_string());
-    ddcutil(&["--display", &display, "setvcp", VCP_BRIGHTNESS, &value])?;
+fn set_ddc(bus: u32, value: u32) -> Result<()> {
+    let (bus, value) = (bus.to_string(), value.to_string());
+    ddcutil(&["--bus", &bus, "setvcp", VCP_BRIGHTNESS, &value])?;
     Ok(())
 }
 
@@ -372,8 +374,10 @@ mod tests {
 
     #[test]
     fn parses_ddcutil_output() {
-        let detect = "Display 1\n   I2C bus:  /dev/i2c-5\nInvalid display\n   I2C bus: /dev/i2c-7\nDisplay 2\n";
-        assert_eq!(parse_detect(detect), vec![1, 2]);
+        let detect = "Display 1\n   I2C bus:  /dev/i2c-6\n   Monitor: AUS:VG28UQL1A:\nInvalid display\n   I2C bus: /dev/i2c-7\nDisplay 2\n   I2C bus: /dev/i2c-8\n   Monitor: AUS:VG28UQL1A:\n";
+        assert_eq!(parse_detect(detect), vec![6, 8]);
+        assert!(parse_detect("Invalid display\n I2C bus: /dev/i2c-7\n").is_empty());
+        assert!(parse_detect("Display 1\n I2C bus: /dev/i2c-nope\n").is_empty());
         assert_eq!(parse_getvcp("VCP 10 C 50 100\n"), Some((50, 100)));
         assert_eq!(parse_getvcp("VCP 10 ERR\n"), None);
     }
