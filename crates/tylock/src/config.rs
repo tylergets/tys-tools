@@ -22,6 +22,8 @@ pub struct AppConfig {
     pub date_format: String,
     /// Font family for the clock. Unset: `appearance.font`.
     pub clock_font: Option<String>,
+    /// Executable and arguments; run once after locking. No shell expansion.
+    pub quote_command: Option<Vec<String>>,
     /// Unlock with a finger too, when fprintd has prints for you.
     pub fingerprint: bool,
     /// The PAM service that checks passwords. It must not include pam_fprintd, or a
@@ -41,6 +43,7 @@ impl Default for AppConfig {
             time_format: "%H:%M".into(),
             date_format: "%A, %B %-d".into(),
             clock_font: None,
+            quote_command: None,
             fingerprint: true,
             pam_service: "tylock".into(),
             fingerprint_pam_service: "tylock-fingerprint".into(),
@@ -146,6 +149,11 @@ impl AppConfig {
     }
 
     pub fn validate(&self) -> Result<()> {
+        if let Some(command) = &self.quote_command {
+            if command.is_empty() || command[0].trim().is_empty() {
+                bail!("quote_command must contain an executable");
+            }
+        }
         if !(0.0..=1.0).contains(&self.dim) {
             bail!("dim must be between 0 and 1");
         }

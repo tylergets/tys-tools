@@ -2172,6 +2172,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tyquote"
+version = "0.10.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "dirs",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "tyshot"
 version = "0.10.0"
 dependencies = [

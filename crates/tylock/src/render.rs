@@ -53,6 +53,7 @@ pub enum Auth<'a> {
 }
 
 pub struct Renderer {
+    quote: String,
     palette: Palette,
     dim: f64,
     blur: f64,
@@ -77,6 +78,7 @@ impl Renderer {
         });
         let ui_font = ty_common::appearance::font_family();
         Ok(Self {
+            quote: String::new(),
             palette: config.colors.palette()?,
             dim: config.dim,
             blur: config.blur,
@@ -87,6 +89,11 @@ impl Renderer {
             fingerprint: svgpath::path_data(FINGERPRINT_SVG),
             shown: Vec::new(),
         })
+    }
+
+    pub fn set_quote(&mut self, quote: String) {
+        self.quote = quote;
+        self.shown.clear();
     }
 
     /// Draw `view`; returns the band that changed when the rest is as last drawn.
@@ -214,6 +221,21 @@ impl Renderer {
         let cx = w / 2.0;
         let p = &self.palette;
         let max_width = (w - 80.0 * u).max(100.0);
+        if !self.quote.is_empty() {
+            let layout = pangocairo::functions::create_layout(cr);
+            layout.set_font_description(Some(&font(&self.ui_font, Weight::Normal, 22.0 * u)));
+            layout.set_text(&self.quote);
+            let width = max_width.min(1100.0 * u);
+            layout.set_width((width * f64::from(pango::SCALE)) as i32);
+            layout.set_wrap(pango::WrapMode::WordChar);
+            layout.set_height(-4);
+            layout.set_ellipsize(pango::EllipsizeMode::End);
+            layout.set_alignment(pango::Alignment::Center);
+            let (_, height) = layout.pixel_size();
+            cr.move_to(cx - width / 2.0, h - 55.0 * u - f64::from(height));
+            set_color(cr, p.text, 0.9);
+            pangocairo::functions::show_layout(cr, &layout);
+        }
         // The auth block stays within the damage rectangle (see `draw`).
         let auth_width = max_width.min(2.0 * (AUTH_HALF_WIDTH - 30.0) * u);
 

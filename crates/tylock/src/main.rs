@@ -3,6 +3,7 @@ mod auth;
 mod cli;
 mod config;
 mod pam;
+mod quote;
 mod render;
 
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};

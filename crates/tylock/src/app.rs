@@ -32,6 +32,8 @@ const FRAME: Duration = Duration::from_millis(16);
 pub struct App {
     renderer: Renderer,
     state: State,
+    quote_command: Option<Vec<String>>,
+    quote: Option<Receiver<String>>,
 }
 
 /// Which auth block is on screen.
@@ -120,7 +122,7 @@ impl App {
             shown_clock: (String::new(), String::new()),
             on_locked: Some(on_locked),
         };
-        Self { renderer, state }
+        Self { renderer, state, quote_command: config.quote_command.clone(), quote: None }
     }
 }
 
@@ -397,9 +399,28 @@ impl Handler for App {
         if let Some(on_locked) = self.state.on_locked.take() {
             on_locked();
         }
+        if let Some(command) = self.quote_command.take() {
+            self.quote = Some(crate::quote::spawn(command));
+        }
     }
 
     fn control(&mut self) -> Control {
-        self.state.control()
+        if let Some(receiver) = &self.quote {
+            match receiver.try_recv() {
+                Ok(text) => {
+                    self.renderer.set_quote(text);
+                    self.state.dirty = true;
+                    self.quote = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => self.quote = None,
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        let mut control = self.state.control();
+        if self.quote.is_some() {
+            let poll = Instant::now() + Duration::from_millis(100);
+            control.wake_at = Some(control.wake_at.map_or(poll, |at| at.min(poll)));
+        }
+        control
     }
 }

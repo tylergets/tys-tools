@@ -8,6 +8,7 @@ import ./lib.nix {inherit self;} {
     blur = 12;
     dim = 0.35;
     time_format = "%-I:%M";
+    quote_command = ["tyquote" "today"];
     colors.accent = "#88c0d0";
   };
   extraOptions = {lib, ...}: {

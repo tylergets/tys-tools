@@ -88,6 +88,7 @@ dim: 0.3                 # darken the wallpaper, 0–1
 time_format: "%H:%M"     # strftime (chrono), e.g. "%-I:%M" for 12-hour
 date_format: "%A, %B %-d"
 clock_font: null         # font for the clock; unset uses appearance.font
+quote_command: null      # e.g. [tyquote, today]; executable and arguments, no shell
 fingerprint: true        # also unlock with a finger, when fprintd has your prints
 pam_service: tylock
 fingerprint_pam_service: tylock-fingerprint
@@ -104,6 +105,11 @@ appearance:
 ```
 
 ## Home Manager
+
+`quote_command` runs once after the screen is locked. Its plain-text stdout is shown
+below the unlock controls (wrapped, up to four lines). Commands have a three-second
+timeout and a 16 KiB output limit; failure leaves the quote blank. It never blocks
+locking or authentication. Use an absolute executable path when configuring Nix.
 
 ```nix
 programs.tylock = {

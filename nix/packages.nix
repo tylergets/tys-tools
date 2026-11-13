@@ -222,6 +222,7 @@
     };
 in {
   inherit workspace cargoArtifacts commonArgs craneLib src;
+  tyquote = buildTool "tyquote";
 
   tynotif = mkTool {
     name = "tynotif";

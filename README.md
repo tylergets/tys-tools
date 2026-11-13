@@ -9,6 +9,7 @@ Website: <https://tys.tools> (with every tool's [dependencies](https://tys.tools
 
 | Tool | What it does |
 | --- | --- |
+| [tyquote](crates/tyquote) | Syncthing-friendly personal quotes: random, latest, or today's quote; integrates with tylock. |
 | [tynotif](crates/tynotif) | Desktop notification daemon with actions, history and do-not-disturb. Opt-in alternative to Dunst. |
 | [tyboard](crates/tyboard) | Clipboard history in your tray, with a rofi picker. |
 | [tykey](crates/tykey) | Text expansion in every app. |

@@ -153,6 +153,16 @@ rec {
       # File a bug if you depend on any for non-debug work!
       debug = internal.debugCrate { inherit packageId; };
     };
+    "tyquote" = rec {
+      packageId = "tyquote";
+      build = internal.buildRustCrateWithFeatures {
+        packageId = "tyquote";
+      };
+
+      # Debug support which might change between releases.
+      # File a bug if you depend on any for non-debug work!
+      debug = internal.debugCrate { inherit packageId; };
+    };
     "tyshot" = rec {
       packageId = "tyshot";
       build = internal.buildRustCrateWithFeatures {
@@ -6709,6 +6719,53 @@ rec {
           {
             name = "ty-common";
             packageId = "ty-common";
+          }
+        ];
+
+      };
+      "tyquote" = rec {
+        crateName = "tyquote";
+        version = "0.10.0";
+        edition = "2021";
+        crateBin = [
+          {
+            name = "tyquote";
+            path = "src/main.rs";
+            requiredFeatures = [ ];
+          }
+        ];
+        src = lib.cleanSourceWith { filter = sourceFilter;  src = ./crates/tyquote; };
+        dependencies = [
+          {
+            name = "anyhow";
+            packageId = "anyhow";
+          }
+          {
+            name = "chrono";
+            packageId = "chrono";
+            features = [ "serde" ];
+          }
+          {
+            name = "clap";
+            packageId = "clap";
+            features = [ "derive" ];
+          }
+          {
+            name = "dirs";
+            packageId = "dirs";
+          }
+          {
+            name = "serde";
+            packageId = "serde";
+            features = [ "derive" ];
+          }
+          {
+            name = "serde_json";
+            packageId = "serde_json";
+          }
+          {
+            name = "sha2";
+            packageId = "sha2";
           }
         ];
 

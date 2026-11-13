@@ -490,7 +490,7 @@ pub fn round_floating_window(window: &gtk::Window, radius: i32) {
             }
         }
         surface.shape_combine_region(Some(&region), 0, 0);
-        surface.input_shape_combine_region(Some(&region), 0, 0);
+        surface.input_shape_combine_region(&region, 0, 0);
     }
 
     window.connect_realize(move |window| update(window, radius));
