@@ -13,6 +13,7 @@ wlroots Wayland compositors (Sway, Hyprland, river, niri, labwc, ...).
   location in the config overrides GeoClue.
 - **Smooth fades** when you toggle, disable or set a temperature.
 - **Disable for a while**: 30 minutes, 1 hour, 2 hours, or until morning.
+- **App whitelist**: pause night colors while a listed app is running, then resume automatically.
 - **Monitor brightness**: laptop backlights (through logind, no root needed) and external
   monitors over DDC/CI (through `ddcutil`). All detected monitors adjust together; external
   monitors are addressed by I²C bus, including multiple monitors of the same model.
@@ -98,6 +99,7 @@ gamma: 1.0
 fade_seconds: 2      # 0 switches instantly
 backend: auto        # auto | x11 | wayland
 tray: true
+app_whitelist: []     # e.g. [steam]; pause night colors while any listed app runs
 monitor_brightness:
   backlight: true    # /sys/class/backlight panels
   ddc: true          # external monitors via ddcutil
@@ -121,6 +123,26 @@ presets:             # setting this replaces the defaults; omitted fields follow
   reading: {temperature: 5000}
   evening: {temperature: 3400, brightness: 0.9}
   late-night: {temperature: 2400, brightness: 0.75, monitor_brightness: 15}
+```
+
+### App whitelist
+
+Set `app_whitelist: [steam]` to pause night colors while Steam is running, including when
+minimized or closed to the tray. Entries match exact process names (`/proc/<pid>/comm`)
+or executable basenames, case-insensitively, for your user. Use names, not paths or globs.
+Processes are checked every five seconds; the usual fade applies when pausing and resuming.
+Temperature, gamma dimming and gamma correction return to neutral while paused.
+The tray and status show `Paused · steam` (JSON includes `suspended_by`).
+
+The previous schedule or manual preset resumes when all listed apps exit. Your explicit
+enable/disable preference and timed disable are preserved; disabling while an app is
+running keeps night colors off after it exits. Hardware brightness and auto brightness
+continue independently.
+
+With Home Manager:
+
+```nix
+programs.tylight.settings.app_whitelist = ["steam"];
 ```
 
 ### Auto brightness without jumping around

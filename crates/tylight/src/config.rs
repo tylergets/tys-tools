@@ -27,6 +27,8 @@ pub struct AppConfig {
     pub fade_seconds: f64,
     pub backend: BackendKind,
     pub tray: bool,
+    /// Pause night colors while any of these process names/executable basenames run.
+    pub app_whitelist: Vec<String>,
     pub monitor_brightness: MonitorBrightness,
     /// Read the ambient light sensor (if any) and show its value in the tray.
     pub ambient_light: bool,
@@ -45,6 +47,7 @@ impl Default for AppConfig {
             fade_seconds: 2.0,
             backend: BackendKind::Auto,
             tray: true,
+            app_whitelist: Vec::new(),
             monitor_brightness: MonitorBrightness::default(),
             ambient_light: true,
             auto_brightness: AutoBrightness::default(),
@@ -239,6 +242,15 @@ impl AppConfig {
         if !(1..=100).contains(&self.monitor_brightness.step) {
             bail!("monitor_brightness.step must be between 1 and 100");
         }
+        for app in &self.app_whitelist {
+            if app.is_empty()
+                || app.trim() != app
+                || app.contains('/')
+                || app.chars().any(char::is_control)
+            {
+                bail!("app_whitelist entries must be process names or executable basenames");
+            }
+        }
         self.auto_brightness.validate()?;
         for (name, preset) in &self.presets {
             if name.is_empty() || name.contains(char::is_whitespace) {
@@ -362,6 +374,9 @@ mod tests {
         assert!(bad("presets: {x: {temperature: 100}}"));
         assert!(bad("auto_brightness: {curve: [[10, 50], [5, 60]]}"));
         assert!(bad("auto_brightness: {curve: [[10, 50]]}"));
+        assert!(bad("app_whitelist: ['']"));
+        assert!(bad("app_whitelist: ['/usr/bin/steam']"));
+        assert!(bad("app_whitelist: [' steam']"));
     }
 
     #[test]

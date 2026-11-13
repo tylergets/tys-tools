@@ -1,5 +1,6 @@
 mod adaptive;
 mod ambient;
+mod apps;
 mod backend;
 mod cli;
 mod color;
