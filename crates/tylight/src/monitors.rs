@@ -334,7 +334,14 @@ fn set_ddc(bus: u32, value: u32) -> Result<()> {
     let (bus, value) = (bus.to_string(), value.to_string());
     // Monitors can apply brightness slowly and smooth the change themselves. Send one
     // target without a verification read, which adds latency and can see an old value.
-    ddcutil(&["--bus", &bus, "--noverify", "setvcp", VCP_BRIGHTNESS, &value])?;
+    ddcutil(&[
+        "--bus",
+        &bus,
+        "--noverify",
+        "setvcp",
+        VCP_BRIGHTNESS,
+        &value,
+    ])?;
     Ok(())
 }
 

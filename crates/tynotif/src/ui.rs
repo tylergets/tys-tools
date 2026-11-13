@@ -539,10 +539,7 @@ fn card(n: &Notification, state: &Shared, connection: &gio::DBusConnection) -> g
     app.set_tooltip_text(Some(&n.app));
     text.pack_start(&app, false, false, 0);
     let dismiss = gtk::Button::new();
-    let close_icon = gtk::Image::from_icon_name(
-        Some("window-close-symbolic"),
-        gtk::IconSize::Menu,
-    );
+    let close_icon = gtk::Image::from_icon_name(Some("window-close-symbolic"), gtk::IconSize::Menu);
     close_icon.set_pixel_size(12);
     dismiss.add(&close_icon);
     dismiss.style_context().add_class("dismiss");
@@ -746,9 +743,7 @@ fn apply_colors(card: &gtk::Box, n: &Notification) {
         css.push_str(&format!(".notification {{ background: {color}; }}"));
     }
     if let Some(color) = &n.colors.foreground {
-        css.push_str(&format!(
-            ".notification {{ color: {color}; }}"
-        ));
+        css.push_str(&format!(".notification {{ color: {color}; }}"));
     }
     if let Some(color) = &n.colors.frame {
         css.push_str(&format!(".notification {{ border-color: {color}; }}"));
