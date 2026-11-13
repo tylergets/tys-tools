@@ -561,6 +561,7 @@ quote_command = [ "tyquote" "today" ];`,
       "One independently named JSON file per quote, with atomic writes",
       "Sync concurrent additions with Syncthing, without a shared database",
       "Plain-text output for tylock and other scripts",
+      "Configurable storage, default author, attribution, and local or UTC daily rollover",
     ],
     requirements: ["Linux", "Syncthing (optional, for syncing between machines)"],
     usage: `tyquote add "Keep going." --author "A reminder"
@@ -568,11 +569,20 @@ tyquote add - --author "Author" < quote.txt
 tyquote random
 tyquote latest
 tyquote today
-tyquote --directory ~/Quotes today`,
-    configTool: "tylock",
-    config: `# In tylock's config; install tyquote separately.
-quote_command: [tyquote, today]`,
-    nixConfig: `imports = [
+tyquote --directory ~/Quotes today
+tyquote --config ~/other-quotes.yaml today
+tyquote validate-config`,
+    config: `directory: ~/.local/share/tyquote/quotes
+default_author: null
+show_author: true
+author_prefix: "— "
+day_boundary: utc   # local (default) | utc`,
+    nixSettings: `directory = "~/.local/share/tyquote/quotes";
+default_author = null;
+show_author = true;
+author_prefix = "— ";
+day_boundary = "utc";`,
+    integration: `imports = [
   inputs.tys-tools.homeManagerModules.tyquote
   inputs.tys-tools.homeManagerModules.tylock
 ];
@@ -587,8 +597,9 @@ programs.tylock = {
       "Quotes live in $XDG_DATA_HOME/tyquote/quotes (normally ~/.local/share/tyquote/quotes). " +
       "Sync that folder with Syncthing and ignore .tyquote-*.tmp. Edit or delete the JSON files " +
       "to change your collection. Each file contains text, an optional author, and created_at. " +
-      "There is no YAML config file; use --directory to choose another folder. " +
-      "Syncing additions or deletions can change today's selection, and local dates may differ across time zones.",
+      "Use directory in your config or --directory to choose another folder. " +
+      "Syncing additions or deletions can change today's selection. Set day_boundary to utc on " +
+      "every machine for a shared midnight, or use local (the default) to follow each machine's date.",
   },
 ];
 

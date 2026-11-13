@@ -1,0 +1,6 @@
+# Copy to ~/.config/tyquote/config.yaml, or use tyquote --config <path>.
+directory: null         # default: $XDG_DATA_HOME/tyquote/quotes
+default_author: null    # used by add unless --author is supplied
+show_author: true
+author_prefix: "— "
+day_boundary: local    # use utc for the same daily rollover on every machine

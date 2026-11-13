@@ -36,6 +36,7 @@ Include its icon in `crates/ty-common/icons/`. Provide `config` (YAML) and
 to Nix; `nixConfig` can override the whole Nix snippet for integrations. For tools
 without their own config file, use `configTool` to name the integration target and
 `storage` to explain where their data lives.
+Use `integration` for a separate Nix example connecting a tool to tylock.
 
 ## Dependencies page
 

@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -11,7 +11,10 @@ use sha2::{Digest, Sha256};
 #[derive(Parser)]
 #[command(version, about = "A personal, syncable quote collection")]
 struct Cli {
-    /// Quote folder (default: $XDG_DATA_HOME/tyquote/quotes).
+    /// Config file (default: ./tyquote.yaml, then ~/.config/tyquote/config.yaml).
+    #[arg(short, long, global = true)]
+    config: Option<PathBuf>,
+    /// Quote folder; overrides config (default: $XDG_DATA_HOME/tyquote/quotes).
     #[arg(long, global = true)]
     directory: Option<PathBuf>,
     #[command(subcommand)]
@@ -32,6 +35,8 @@ enum Command {
     Latest,
     /// Print the same quote for the same local date and collection on every machine.
     Today,
+    /// Validate settings without reading or writing the quote collection.
+    ValidateConfig,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -84,10 +89,17 @@ fn today<'a>(quotes: &'a [(String, Quote)], date: &str) -> Option<&'a Quote> {
 }
 
 fn run(cli: Cli) -> Result<()> {
-    let directory = cli
-        .directory
-        .or_else(|| dirs::data_dir().map(|p| p.join("tyquote/quotes")))
-        .context("cannot locate data directory; pass --directory")?;
+    let loaded = ty_common::config::load::<config::Config>("tyquote", cli.config)?;
+    let config = loaded.config;
+    config.validate()?;
+    if matches!(cli.command, Command::ValidateConfig) {
+        match loaded.path {
+            Some(path) => println!("Config is valid: {}", path.display()),
+            None => println!("No config file found; defaults are valid"),
+        }
+        return Ok(());
+    }
+    let directory = config.directory(cli.directory)?;
     if let Command::Add { mut text, author } = cli.command {
         if text == "-" {
             text.clear();
@@ -100,6 +112,7 @@ fn run(cli: Cli) -> Result<()> {
         let quote = Quote {
             text,
             author: author
+                .or_else(|| config.default_author.clone())
                 .map(|s| s.trim().to_owned())
                 .filter(|s| !s.is_empty()),
             created_at: Utc::now(),
@@ -140,13 +153,10 @@ fn run(cli: Cli) -> Result<()> {
                 .unwrap()
                 .1
         }
-        Command::Today => today(&quotes, &Local::now().format("%Y-%m-%d").to_string()).unwrap(),
-        Command::Add { .. } => unreachable!(),
+        Command::Today => today(&quotes, &config.date(Utc::now())).unwrap(),
+        Command::Add { .. } | Command::ValidateConfig => unreachable!(),
     };
-    println!("{}", quote.text);
-    if let Some(author) = &quote.author {
-        println!("— {author}");
-    }
+    println!("{}", config.display(&quote.text, quote.author.as_deref()));
     Ok(())
 }
 
@@ -183,3 +193,4 @@ mod tests {
             .any(|day| today(&quotes, &format!("2026-11-{day:02}")).unwrap().text != selected));
     }
 }
+mod config;

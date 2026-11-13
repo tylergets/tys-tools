@@ -66,6 +66,12 @@ watch(() => props.name, () => { configFormat.value = "nix"; });
       />
     </div>
 
+    <template v-if="tool.integration">
+      <h2>tylock integration</h2>
+      <p>Show today's quote on your lock screen. tyquote reads its own config when run by tylock.</p>
+      <CodeBlock :code="tool.integration" lang="nix" />
+    </template>
+
     <h2>Install</h2>
     <CodeBlock :code="`nix run github:tylergets/tys-tools#${tool.name}`" lang="shell" />
     <p>Home Manager:</p>
