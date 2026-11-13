@@ -48,6 +48,15 @@ pub fn run(handler: &mut dyn Handler, wake: WakeSource) -> Result<()> {
         bail!("unsupported X screen format (depth {depth}, {bpp:?} bits per pixel)");
     }
     let root = screen.root;
+    // Compositors can show ARGB notifications without a VisibilityNotify on the
+    // lock window. Watch root children as well, including override-redirect
+    // popups (Dunst, tynotif, menus, and OSDs). SUBSTRUCTURE_NOTIFY observes them
+    // without taking over the window manager's SUBSTRUCTURE_REDIRECT selection.
+    conn.change_window_attributes(
+        root,
+        &xproto::ChangeWindowAttributesAux::new().event_mask(EventMask::SUBSTRUCTURE_NOTIFY),
+    )?
+    .check()?;
     let has_randr = conn
         .extension_information(randr::X11_EXTENSION_NAME)?
         .is_some();
@@ -118,6 +127,7 @@ pub fn run(handler: &mut dyn Handler, wake: WakeSource) -> Result<()> {
             events.push(event);
         }
         let mut rebuild = false;
+        let mut restack = false;
         for event in events {
             match event {
                 Event::KeyPress(press) => {
@@ -140,12 +150,30 @@ pub fn run(handler: &mut dyn Handler, wake: WakeSource) -> Result<()> {
                 }
                 Event::MappingNotify(_) => keymap = Keymap::fetch(&conn)?,
                 Event::VisibilityNotify(notify) if notify.state != Visibility::UNOBSCURED => {
-                    raise(&conn, window)?;
+                    restack = true;
+                }
+                Event::MapNotify(notify) if notify.event == root && notify.window != window => {
+                    restack = true;
+                }
+                Event::ConfigureNotify(notify)
+                    if notify.event == root && notify.window != window =>
+                {
+                    restack = true;
+                }
+                Event::CirculateNotify(notify)
+                    if notify.event == root && notify.window != window =>
+                {
+                    restack = true;
                 }
                 Event::RandrScreenChangeNotify(_) => rebuild = true,
                 Event::Error(err) => eprintln!("warning: X11 error: {err:?}"),
                 _ => {}
             }
+        }
+        // Ignore our own configure notifications above to avoid a restacking
+        // loop, and raise only once for a batch of other windows' changes.
+        if restack {
+            raise(&conn, window)?;
         }
         if rebuild {
             canvas.rebuild(&conn)?;

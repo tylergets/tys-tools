@@ -24,6 +24,8 @@ password or a finger to unlock. It works on X11 and on Wayland compositors with
 - The password field grows with long passwords.
 - Caps Lock warning, PAM's own messages (e.g. pam_faillock's) on failure, and a hidden
   cursor.
+- Keeps Dunst, tynotif, menus, and other desktop popups behind the lock screen,
+  including composited X11 notifications that do not report the locker as obscured.
 - Safe: on Wayland the compositor keeps the session locked even if tylock crashes. On X11,
   tylock grabs the keyboard and pointer and keeps its window on top.
 
@@ -130,7 +132,10 @@ shown above. The PAM services are system configuration (see [PAM](#pam)).
 The screen is locked by `ty-common`'s `screenlock` layer: on Wayland an
 `ext-session-lock-v1` lock with one lock surface per output, drawn into shared-memory
 buffers; on X11 an override-redirect window over the root window with the keyboard and
-pointer grabbed, raised again whenever something covers it, and redrawn on RandR changes.
+pointer grabbed, raised again whenever something covers it or another root window is
+mapped or restacked, and redrawn on RandR changes. Notifications stay behind the locker;
+their daemon's pause state is unchanged. On Wayland the compositor isolates lock surfaces
+from ordinary desktop windows.
 tylock draws each monitor with cairo and pango. A password thread runs `pam_authenticate`
 for each password you submit, and a fingerprint thread keeps a fingerprint-only PAM
 transaction running, restarting it after timeouts and failed scans.
