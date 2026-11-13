@@ -22,6 +22,7 @@ use crate::polkit::{self, Bus, Request, AGENT_PATH};
 pub fn run(config: AppConfig) -> Result<()> {
     let lock = InstanceLock::acquire(APP_NAME)?;
     session::require(APP_NAME)?;
+    glib::set_prgname(Some(APP_NAME));
     gtk::init().context("failed to initialize GTK")?;
 
     let mut channel =

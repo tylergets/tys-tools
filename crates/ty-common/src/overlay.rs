@@ -695,7 +695,7 @@ pub fn dim_screen(namespace: &str, alpha: f64) -> Dim {
 /// dialog: always on top, centered, and holding the keyboard as soon as it is shown. On
 /// Wayland it is a layer-shell surface on the overlay layer with exclusive keyboard focus,
 /// on the monitor the compositor considers focused; on X11 (and without layer-shell) a
-/// dialog-type toplevel, which window managers float, place by the pointer and focus. Not
+/// dialog-type toplevel, which window managers float, center on the screen and focus. Not
 /// shown yet.
 pub fn dialog_window(namespace: &str, title: &str) -> gtk::Window {
     let window = gtk::Window::new(gtk::WindowType::Toplevel);
@@ -709,7 +709,7 @@ pub fn dialog_window(namespace: &str, title: &str) -> gtk::Window {
         // No anchors: the compositor centers the surface on its monitor.
     } else {
         window.set_type_hint(gdk::WindowTypeHint::Dialog);
-        window.set_position(gtk::WindowPosition::Mouse);
+        window.set_position(gtk::WindowPosition::Center);
         window.set_keep_above(true);
         // Follows workspace switches.
         window.stick();

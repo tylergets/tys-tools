@@ -133,7 +133,11 @@ pub enum Period {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Status {
     pub running: bool,
+    /// The user's enable/disable preference, retained during app suspension.
     pub enabled: bool,
+    /// Running whitelisted apps that temporarily pause night colors.
+    #[serde(default)]
+    pub suspended_by: Vec<String>,
     /// Unix seconds when tylight turns itself back on.
     pub disabled_until: Option<u64>,
     /// Temperature held by `set`.
@@ -187,6 +191,9 @@ impl Status {
                 None => "Off".into(),
             };
         }
+        if !self.suspended_by.is_empty() {
+            return format!("Paused · {}", self.suspended_by.join(", "));
+        }
         let what = match (&self.preset, self.manual, self.period) {
             (Some(preset), _, _) => preset.as_str(),
             (None, Some(_), _) => "manual",
@@ -224,6 +231,7 @@ impl Report for Status {
         match (self.running, self.enabled) {
             (false, _) => String::new(),
             (true, false) => "off".into(),
+            (true, true) if !self.suspended_by.is_empty() => "paused".into(),
             (true, true) => format!("{}K", self.temperature),
         }
     }

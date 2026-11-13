@@ -19,8 +19,9 @@ Run it in your session and polkit sends those requests to it.
 - The asking program is the headline, with its icon when it has a desktop entry, and a
   quiet **Kill <app>** button ends it and refuses.
 - Optionally darkens the rest of the screen while the prompt is open (`dim_screen`).
-- Always on top and focused: a layer-shell overlay on Wayland, a floating sticky dialog on
-  X11 (it opens on the current workspace and follows you if you switch).
+- Centered on the screen, always on top and focused: a layer-shell overlay on Wayland,
+  a floating sticky dialog on X11 (it opens on the current workspace and follows you if
+  you switch).
 - Nothing polls: idle, it sleeps on the system bus socket.
 
 ## Requirements

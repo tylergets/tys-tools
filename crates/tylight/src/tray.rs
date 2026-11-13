@@ -185,7 +185,7 @@ fn spec(status: &Status, step: i32, presets: &[String]) -> TraySpec<Command> {
     menu.push(MenuEntry::Separator);
     menu.push(action("Show graph…", Command::ShowGraph));
 
-    let warm = status.enabled && status.temperature < 6400;
+    let warm = status.enabled && status.suspended_by.is_empty() && status.temperature < 6400;
     TraySpec {
         icon: if warm {
             IconState::Busy

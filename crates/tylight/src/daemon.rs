@@ -23,7 +23,7 @@ use crate::monitors::{Change, Monitors, MANUAL_FADE};
 use crate::protocol::{Command, Status};
 use crate::schedule::{self, History, Sample, Scheduled};
 use crate::solar::{self, Location};
-use crate::{control, geoclue};
+use crate::{apps, control, geoclue};
 
 /// How often the sun position (and outputs) are re-checked.
 const IDLE_TICK: Duration = Duration::from_secs(5);
@@ -204,9 +204,12 @@ struct Daemon {
     backend: Box<dyn Backend>,
     location: Option<(Location, &'static str)>,
     enabled: bool,
+    suspended_by: Vec<String>,
+    last_app_check: Option<Instant>,
     disabled_until: Option<u64>,
     manual: Option<Override>,
     applied: Option<Setting>,
+    applied_gamma: Option<f64>,
     fade: Option<Fade>,
     shared: Shared,
 }
@@ -258,9 +261,12 @@ pub fn run(config: AppConfig) -> Result<()> {
         backend,
         location,
         enabled: true,
+        suspended_by: Vec::new(),
+        last_app_check: None,
         disabled_until: None,
         manual: None,
         applied: None,
+        applied_gamma: None,
         fade: None,
         shared,
     };
@@ -432,7 +438,7 @@ impl Daemon {
         let scheduled = schedule::scheduled(&self.config, location, now);
         let base = scheduled.setting;
         let setting = match &self.manual {
-            _ if !self.enabled => Setting::NEUTRAL,
+            _ if !self.enabled || !self.suspended_by.is_empty() => Setting::NEUTRAL,
             Some(manual) => Setting {
                 temperature: manual.temperature.map_or(base.temperature, f64::from),
                 brightness: manual.brightness.unwrap_or(base.brightness),
@@ -444,6 +450,17 @@ impl Daemon {
 
     fn update(&mut self) -> Result<()> {
         let now = unix_now();
+        if !self.config.app_whitelist.is_empty()
+            && self
+                .last_app_check
+                .is_none_or(|last| last.elapsed() >= IDLE_TICK)
+        {
+            self.last_app_check = Some(Instant::now());
+            match apps::running(&self.config.app_whitelist) {
+                Ok(apps) => self.suspended_by = apps,
+                Err(err) => eprintln!("app whitelist: {err:#}"),
+            }
+        }
         if self.disabled_until.is_some_and(|until| now >= until as f64) {
             self.enable();
         }
@@ -478,13 +495,21 @@ impl Daemon {
             None => target,
         };
 
-        if reapply
+        let gamma = if self.suspended_by.is_empty() {
+            self.config.gamma
+        } else {
+            1.0
+        };
+        // Once neutral, leave games' own gamma adjustments alone while suspended.
+        if (reapply && self.suspended_by.is_empty())
+            || self.applied_gamma != Some(gamma)
             || self
                 .applied
                 .is_none_or(|applied| !applied.close_to(setting))
         {
-            self.backend.apply(setting, self.config.gamma)?;
+            self.backend.apply(setting, gamma)?;
             self.applied = Some(setting);
+            self.applied_gamma = Some(gamma);
         }
 
         let monitor_brightness = self
@@ -502,6 +527,7 @@ impl Daemon {
         let next = Status {
             running: true,
             enabled: self.enabled,
+            suspended_by: self.suspended_by.clone(),
             disabled_until: self.disabled_until,
             manual: self
                 .manual
@@ -543,5 +569,88 @@ impl Daemon {
             .expect("history lock")
             .record(sample);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Default)]
+    struct RecordingBackend(Arc<Mutex<Vec<(Setting, f64)>>>);
+
+    impl Backend for RecordingBackend {
+        fn name(&self) -> &'static str {
+            "test"
+        }
+
+        fn apply(&mut self, setting: Setting, gamma: f64) -> Result<()> {
+            self.0.lock().unwrap().push((setting, gamma));
+            Ok(())
+        }
+
+        fn poll(&mut self) -> Result<bool> {
+            Ok(true)
+        }
+
+        fn restore(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn app_pause_restores_preset_and_preserves_explicit_disable() {
+        let config = AppConfig {
+            fade_seconds: 0.0,
+            gamma: 1.2,
+            ..AppConfig::default()
+        };
+        let (mut shared, _wakeups) = Shared::new(config.clone());
+        shared.history = Arc::default();
+        let backend = RecordingBackend::default();
+        let applied = backend.0.clone();
+        let mut daemon = Daemon {
+            config,
+            backend: Box::new(backend),
+            location: None,
+            enabled: true,
+            suspended_by: Vec::new(),
+            last_app_check: None,
+            disabled_until: None,
+            manual: None,
+            applied: None,
+            applied_gamma: None,
+            fade: None,
+            shared,
+        };
+        daemon.handle(Command::Preset("evening".into())).unwrap();
+        daemon.update().unwrap();
+        let preset = *applied.lock().unwrap().last().unwrap();
+
+        daemon.suspended_by = vec!["steam".into()];
+        daemon.update().unwrap();
+        assert_eq!(
+            applied.lock().unwrap().last(),
+            Some(&(Setting::NEUTRAL, 1.0))
+        );
+        assert_eq!(daemon.shared.status().summary(), "Paused · steam");
+        let count = applied.lock().unwrap().len();
+        daemon.update().unwrap();
+        assert_eq!(applied.lock().unwrap().len(), count);
+
+        daemon.suspended_by.clear();
+        daemon.update().unwrap();
+        assert_eq!(applied.lock().unwrap().last(), Some(&preset));
+        assert_eq!(daemon.shared.status().preset.as_deref(), Some("evening"));
+
+        daemon.suspended_by = vec!["steam".into()];
+        daemon.handle(Command::Disable(Some(600))).unwrap();
+        let until = daemon.disabled_until;
+        daemon.update().unwrap();
+        daemon.suspended_by.clear();
+        daemon.update().unwrap();
+        assert!(!daemon.shared.status().enabled);
+        assert_eq!(daemon.disabled_until, until);
+        assert_eq!(daemon.target(unix_now()).0, Setting::NEUTRAL);
     }
 }

@@ -26,5 +26,6 @@ import ./lib.nix {inherit self;} {
       longitude = -84.5;
     };
     fade_seconds = 2;
+    app_whitelist = ["steam"];
   };
 }
