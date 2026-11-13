@@ -222,7 +222,14 @@
     };
 in {
   inherit workspace cargoArtifacts commonArgs craneLib src;
-  tyquote = buildTool "tyquote";
+  tyquote = (buildTool "tyquote").overrideAttrs (old: {
+    meta =
+      (old.meta or {})
+      // {
+        description = "Personal quotes in Syncthing-friendly files";
+        mainProgram = "tyquote";
+      };
+  });
 
   tynotif = mkTool {
     name = "tynotif";

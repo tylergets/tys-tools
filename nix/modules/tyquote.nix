@@ -1,4 +1,9 @@
-{self}: {config, lib, pkgs, ...}: let
+{self}: {
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
   cfg = config.programs.tyquote;
 in {
   options.programs.tyquote = {

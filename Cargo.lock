@@ -479,9 +479,9 @@ checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
 
 [[package]]
 name = "errno"
-version = "0.3.14"
+version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
+checksum = "e35d6e78f4cebb90e51d543db8fe41528851d6deeef6ef21ebd4bfdc1e784776"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
@@ -1570,9 +1570,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.16"
+version = "0.103.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281"
+checksum = "e3a0760a887c14823fca5a1c970b01d47c328c696c0c64829d1df50e8f853fd5"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -1994,9 +1994,9 @@ dependencies = [
 
 [[package]]
 name = "transcribe-cpp-sys"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23a837974fdb873998a59a21ad2bf5a4b7bbf721c20d03d2a3ab8c221726a444"
+checksum = "32f94fb1e9a3033101bbd500d02993cfc95e315f24417038fd42f1fd80e1059a"
 dependencies = [
  "cmake",
  "serde_json",
@@ -2004,7 +2004,7 @@ dependencies = [
 
 [[package]]
 name = "ty-common"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -2026,7 +2026,7 @@ dependencies = [
 
 [[package]]
 name = "tyboard"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2040,7 +2040,7 @@ dependencies = [
 
 [[package]]
 name = "tycapture"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2054,7 +2054,7 @@ dependencies = [
 
 [[package]]
 name = "tyci"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2067,7 +2067,7 @@ dependencies = [
 
 [[package]]
 name = "tygesture"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2080,7 +2080,7 @@ dependencies = [
 
 [[package]]
 name = "tykey"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2093,7 +2093,7 @@ dependencies = [
 
 [[package]]
 name = "tylight"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2112,7 +2112,7 @@ dependencies = [
 
 [[package]]
 name = "tylock"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2128,7 +2128,7 @@ dependencies = [
 
 [[package]]
 name = "tynotif"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2146,7 +2146,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "typk"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2160,7 +2160,7 @@ dependencies = [
 
 [[package]]
 name = "typort"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2173,7 +2173,7 @@ dependencies = [
 
 [[package]]
 name = "tyquote"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2186,7 +2186,7 @@ dependencies = [
 
 [[package]]
 name = "tyshot"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2201,7 +2201,7 @@ dependencies = [
 
 [[package]]
 name = "tyspeak"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "clap",

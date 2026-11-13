@@ -122,7 +122,12 @@ impl App {
             shown_clock: (String::new(), String::new()),
             on_locked: Some(on_locked),
         };
-        Self { renderer, state, quote_command: config.quote_command.clone(), quote: None }
+        Self {
+            renderer,
+            state,
+            quote_command: config.quote_command.clone(),
+            quote: None,
+        }
     }
 }
 

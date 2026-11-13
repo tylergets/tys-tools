@@ -1511,9 +1511,9 @@ rec {
       };
       "errno" = rec {
         crateName = "errno";
-        version = "0.3.14";
+        version = "0.3.15";
         edition = "2018";
-        sha256 = "1szgccmh8vgryqyadg8xd58mnwwicf39zmin3bsn63df2wbbgjir";
+        sha256 = "0xj7g0gdrgylxchyzxpfvvb5322j87zbhgal3pjr1fyfyiw6wpg3";
         authors = [
           "Chris Wong <lambda.fairy@gmail.com>"
           "Dan Gohman <dev@sunfishcode.online>"
@@ -4886,9 +4886,9 @@ rec {
       };
       "rustls-webpki" = rec {
         crateName = "rustls-webpki";
-        version = "0.103.16";
+        version = "0.103.17";
         edition = "2021";
-        sha256 = "10djm2f00xzi5qlbcfqjhhn2smk2h9aw8b4l74qncz4xsfvb2hs4";
+        sha256 = "1m9zhn7hxx8xkn16833cd6634z6l045rf72sr8zq453wi057d873";
         libName = "webpki";
         dependencies = [
           {
@@ -6088,10 +6088,10 @@ rec {
       };
       "transcribe-cpp-sys" = rec {
         crateName = "transcribe-cpp-sys";
-        version = "0.4.1";
+        version = "0.4.2";
         edition = "2021";
         links = "transcribe";
-        sha256 = "0i544qbj535blg9063f247vvpdx4ylmss8cslnc3k1yv9ybkga13";
+        sha256 = "16h5w60gvwa2zlw70h94bwqmxjfgjclx006mpc0k20x3x6qlzy9j";
         build = "bindings/rust/sys/build.rs";
         libName = "transcribe_cpp_sys";
         libPath = "bindings/rust/sys/src/lib.rs";
@@ -6113,7 +6113,7 @@ rec {
       };
       "ty-common" = rec {
         crateName = "ty-common";
-        version = "0.10.1";
+        version = "0.11.0";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./crates/ty-common; };
         libName = "ty_common";
@@ -6203,7 +6203,7 @@ rec {
       };
       "tyboard" = rec {
         crateName = "tyboard";
-        version = "0.10.1";
+        version = "0.11.0";
         edition = "2021";
         crateBin = [
           {
@@ -6258,7 +6258,7 @@ rec {
       };
       "tycapture" = rec {
         crateName = "tycapture";
-        version = "0.10.1";
+        version = "0.11.0";
         edition = "2021";
         crateBin = [
           {
@@ -6308,7 +6308,7 @@ rec {
       };
       "tyci" = rec {
         crateName = "tyci";
-        version = "0.10.1";
+        version = "0.11.0";
         edition = "2021";
         crateBin = [
           {
@@ -6355,7 +6355,7 @@ rec {
       };
       "tygesture" = rec {
         crateName = "tygesture";
-        version = "0.10.1";
+        version = "0.11.0";
         edition = "2021";
         crateBin = [
           {
@@ -6401,7 +6401,7 @@ rec {
       };
       "tykey" = rec {
         crateName = "tykey";
-        version = "0.10.1";
+        version = "0.11.0";
         edition = "2021";
         crateBin = [
           {
@@ -6447,7 +6447,7 @@ rec {
       };
       "tylight" = rec {
         crateName = "tylight";
-        version = "0.10.1";
+        version = "0.11.0";
         edition = "2021";
         crateBin = [
           {
@@ -6519,7 +6519,7 @@ rec {
       };
       "tylock" = rec {
         crateName = "tylock";
-        version = "0.10.1";
+        version = "0.11.0";
         edition = "2021";
         crateBin = [
           {
@@ -6577,7 +6577,7 @@ rec {
       };
       "tynotif" = rec {
         crateName = "tynotif";
-        version = "0.10.1";
+        version = "0.11.0";
         edition = "2021";
         crateBin = [
           {
@@ -6629,7 +6629,7 @@ rec {
       };
       "typk" = rec {
         crateName = "typk";
-        version = "0.10.1";
+        version = "0.11.0";
         edition = "2021";
         crateBin = [
           {
@@ -6679,7 +6679,7 @@ rec {
       };
       "typort" = rec {
         crateName = "typort";
-        version = "0.10.1";
+        version = "0.11.0";
         edition = "2021";
         crateBin = [
           {
@@ -6725,7 +6725,7 @@ rec {
       };
       "tyquote" = rec {
         crateName = "tyquote";
-        version = "0.10.0";
+        version = "0.11.0";
         edition = "2021";
         crateBin = [
           {
@@ -6772,7 +6772,7 @@ rec {
       };
       "tyshot" = rec {
         crateName = "tyshot";
-        version = "0.10.1";
+        version = "0.11.0";
         edition = "2021";
         crateBin = [
           {
@@ -6828,7 +6828,7 @@ rec {
       };
       "tyspeak" = rec {
         crateName = "tyspeak";
-        version = "0.10.1";
+        version = "0.11.0";
         edition = "2021";
         crateBin = [
           {
