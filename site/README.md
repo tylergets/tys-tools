@@ -31,6 +31,11 @@ npm run preview   # serve dist/
 ## Adding a tool
 
 Add an entry to `src/tools.js`. The card and `/<tool>` page appear automatically.
+Include its icon in `crates/ty-common/icons/`. Provide `config` (YAML) and
+`nixSettings` (the equivalent Home Manager settings). The config switcher defaults
+to Nix; `nixConfig` can override the whole Nix snippet for integrations. For tools
+without their own config file, use `configTool` to name the integration target and
+`storage` to explain where their data lives.
 
 ## Dependencies page
 

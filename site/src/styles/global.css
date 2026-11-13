@@ -182,6 +182,32 @@ code {
 }
 
 /* Highlighted code (CodeBlock.vue) */
+.config-switcher {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.config-switcher button {
+  border: var(--rule);
+  padding: 6px 16px;
+  font: inherit;
+  font-weight: 700;
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.config-switcher button[aria-pressed="true"] {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.config-switcher button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
 .lang-yaml .tok-key,
 .lang-nix .tok-key {
   color: var(--tok-key);

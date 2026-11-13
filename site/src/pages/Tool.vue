@@ -1,11 +1,13 @@
 <script setup>
-import { computed } from "vue";
-import { findTool, repo } from "../tools.js";
+import { computed, ref, watch } from "vue";
+import { findTool, nixConfig, repo } from "../tools.js";
 import ToolIcon from "../ToolIcon.vue";
 import CodeBlock from "../CodeBlock.vue";
 
 const props = defineProps({ name: { type: String, required: true } });
 const tool = computed(() => findTool(props.name));
+const configFormat = ref("nix");
+watch(() => props.name, () => { configFormat.value = "nix"; });
 </script>
 
 <template>
@@ -33,12 +35,36 @@ const tool = computed(() => findTool(props.name));
     <h2>Usage</h2>
     <CodeBlock :code="tool.usage" lang="shell" />
 
-    <h2>Config</h2>
-    <p>
-      YAML, read from <code>./{{ tool.name }}.yaml</code> or
-      <code>~/.config/{{ tool.name }}/config.yaml</code>.
+    <template v-if="tool.storage">
+      <h2>Storage and sync</h2>
+      <p>{{ tool.storage }}</p>
+    </template>
+
+    <h2>{{ tool.configTool ? `${tool.configTool} integration` : "Config" }}</h2>
+    <div class="config-switcher" role="group" aria-label="Configuration format">
+      <button
+        v-for="format in ['nix', 'yaml']"
+        :key="format"
+        type="button"
+        :aria-pressed="configFormat === format"
+        aria-controls="config-example"
+        @click="configFormat = format"
+      >{{ format === "nix" ? "Nix" : "YAML" }}</button>
+    </div>
+    <p v-if="configFormat === 'nix'">
+      Home Manager configuration. Add <code>inputs</code> and <code>config</code> to your module arguments;
+      the module writes the YAML config for you.
     </p>
-    <CodeBlock :code="tool.config" lang="yaml" />
+    <p v-else>
+      YAML, read from <code>./{{ tool.configTool ?? tool.name }}.yaml</code> or
+      <code>~/.config/{{ tool.configTool ?? tool.name }}/config.yaml</code>.
+    </p>
+    <div id="config-example">
+      <CodeBlock
+        :code="configFormat === 'nix' ? nixConfig(tool) : tool.config"
+        :lang="configFormat"
+      />
+    </div>
 
     <h2>Install</h2>
     <CodeBlock :code="`nix run github:tylergets/tys-tools#${tool.name}`" lang="shell" />

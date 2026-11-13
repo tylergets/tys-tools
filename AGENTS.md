@@ -28,6 +28,11 @@ Monorepo for the ty* X11 desktop tools. One Cargo workspace, one Nix flake.
 - When you create a new file, stage it immediately with `git add <path>` (flakes only see tracked files).
 - When a tool's config format changes, update its README and, if it has typed options,
   `nix/modules/<tool>.nix`.
+- Always update the website alongside user-facing changes: new tools, features, CLI
+  commands, configuration, requirements, and integrations belong in `site/src/tools.js`
+  and any affected pages. New tools need a listing, usage, requirements, and an icon
+  in `crates/ty-common/icons/`. Keep both Nix and YAML examples current, with Nix
+  selected by default; never document a config file a tool does not actually support.
 - Shared dependencies are declared once in the root `Cargo.toml` `[workspace.dependencies]`;
   crates use `dep.workspace = true`.
 - Those versions are pinned exactly (`"=1.2.3"`), so `cargo update` won't move them. To

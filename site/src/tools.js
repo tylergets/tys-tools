@@ -38,6 +38,10 @@ tynotif status`,
 limit: 4
 timeout_ms: 20000
 history_limit: 200`,
+    nixSettings: `width = 480;
+limit = 4;
+timeout_ms = 20000;
+history_limit = 200;`,
   },
   {
     name: "tyboard",
@@ -75,6 +79,13 @@ tyboard-rofi                # pick an entry and restore it`,
       kind: auto        # auto | disabled | command
     blacklist:
       - keepassxc`,
+    nixSettings: `clipboard = {
+  backend = "auto";
+  active_window = {
+    backend.kind = "auto";
+    blacklist = [ "keepassxc" ];
+  };
+};`,
   },
   {
     name: "tykey",
@@ -114,6 +125,16 @@ expansions:
 snippets:
   - title: "Ship status"
     content: "Shipped {{EMOJI:rocket}}"`,
+    nixSettings: `match_behavior = "immediate";
+watch = true;
+globals.SIGNOFF = "Thanks,{{KEY:ENTER}}Ty";
+expansions = [
+  { trigger = "sig;"; expansion = "{{SIGNOFF}}"; }
+  { trigger = "date;"; expansion = "{{DATE}}"; }
+];
+snippets = [
+  { title = "Ship status"; content = "Shipped {{EMOJI:rocket}}"; }
+];`,
   },
   {
     name: "tycapture",
@@ -156,6 +177,16 @@ audio:
   system_audio: false
 zoom:
   enabled: true`,
+    nixSettings: `recording = {
+  format = "mp4";
+  quality = "high";
+  encoder = "auto";
+};
+audio = {
+  microphone = true;
+  system_audio = false;
+};
+zoom.enabled = true;`,
   },
   {
     name: "tyshot",
@@ -199,6 +230,16 @@ annotation:
   blur_radius: 10
 opencode:
   submit: false`,
+    nixSettings: `save.output_dir = "~/Pictures/tyshot";
+overlay = {
+  color = "#e5484d";
+  dim = 0.5;
+};
+annotation = {
+  line_width = 3;
+  blur_radius = 10;
+};
+opencode.submit = false;`,
   },
   {
     name: "tyspeak",
@@ -238,6 +279,15 @@ audio:
 output:
   mode: type          # type | clipboard | both | none
   trailing_space: true`,
+    nixSettings: `model = "parakeet-unified-en";
+audio = {
+  source = "default";
+  max_duration = 300;
+};
+output = {
+  mode = "type";
+  trailing_space = true;
+};`,
   },
   {
     name: "tylight",
@@ -288,6 +338,18 @@ backend: auto        # auto | x11 | wayland
 monitor_brightness:
   backlight: true
   ddc: true`,
+    nixSettings: `temperature = {
+  day = 6500;
+  night = 4000;
+};
+# Set a location to skip GeoClue:
+# location = { latitude = 39.10; longitude = -84.51; };
+fade_seconds = 2;
+backend = "auto";
+monitor_brightness = {
+  backlight = true;
+  ddc = true;
+};`,
   },
   {
     name: "tygesture",
@@ -324,6 +386,21 @@ tygesture status --follow --json  # for bars`,
     right: i3-msg workspace next
 pinch:
   2: { in: xdotool key ctrl+minus, out: xdotool key ctrl+plus }`,
+    nixSettings: `swipe = {
+  "3" = {
+    left = "xdotool key alt+Right";
+    right = "xdotool key alt+Left";
+    up = { command = "pactl set-sink-volume @DEFAULT_SINK@ +5%"; repeat = true; };
+  };
+  "4" = {
+    left = "i3-msg workspace prev";
+    right = "i3-msg workspace next";
+  };
+};
+pinch."2" = {
+  "in" = "xdotool key ctrl+minus";
+  out = "xdotool key ctrl+plus";
+};`,
   },
   {
     name: "typort",
@@ -350,6 +427,10 @@ typort status --follow --format polybar`,
 ignore_processes: [kdeconnectd]
 https_ports: [8443]
 browser: [firefox, --new-tab]   # default xdg-open`,
+    nixSettings: `ignore_ports = [ 631 ];
+ignore_processes = [ "kdeconnectd" ];
+https_ports = [ 8443 ];
+browser = [ "firefox" "--new-tab" ];`,
   },
   {
     name: "tyci",
@@ -384,6 +465,16 @@ pull_requests:
   max_age_days: 14
 notifications:
   on_finish: true`,
+    nixSettings: `poll_seconds = 60;
+repos = {
+  include = [ "tylergets" "my-org/api-*" ];
+  exclude = [ "tylergets/old-thing" ];
+};
+pull_requests = {
+  query = "involves:@me";
+  max_age_days = 14;
+};
+notifications.on_finish = true;`,
   },
   {
     name: "typk",
@@ -415,6 +506,9 @@ typk validate-config`,
     config: `max_attempts: 3
 show_details: false
 dim_screen: false`,
+    nixSettings: `max_attempts = 3;
+show_details = false;
+dim_screen = false;`,
   },
   {
     name: "tylock",
@@ -429,6 +523,7 @@ dim_screen: false`,
       "Drawn at each monitor's real resolution, the layout scaled to its size",
       "Caps Lock warning and a hidden cursor",
       "Works with xss-lock (holds sleep until locked) and swayidle (--daemonize)",
+      "Show a quote from tyquote or any command, without delaying locking or authentication",
     ],
     wayland:
       "Locks with ext-session-lock-v1 (sway, Hyprland, river, niri, KDE): the compositor keeps the session locked even if tylock crashes.",
@@ -443,8 +538,67 @@ tylock validate-config`,
 blur: 0
 dim: 0.3
 time_format: "%H:%M"
-fingerprint: true`,
+fingerprint: true
+quote_command: [tyquote, today]  # optional; install tyquote too`,
+    nixSettings: `wallpaper = "~/.background-image";
+blur = 0;
+dim = 0.3;
+time_format = "%H:%M";
+fingerprint = true;
+# Optional: enable programs.tyquote too (see its page).
+quote_command = [ "tyquote" "today" ];`,
+  },
+  {
+    name: "tyquote",
+    tagline: "Your quotes, on every machine.",
+    summary:
+      "A personal quote collection stored as plain JSON files. Add a thought, pick one at random, " +
+      "or show today's quote on your lock screen. Sync the folder with Syncthing; no daemon needed.",
+    features: [
+      "Add quotes with optional authors, from an argument or stdin",
+      "Random picks, the latest addition, or a consistent quote for today",
+      "Same collection and local date, same daily quote on every machine",
+      "One independently named JSON file per quote, with atomic writes",
+      "Sync concurrent additions with Syncthing, without a shared database",
+      "Plain-text output for tylock and other scripts",
+    ],
+    requirements: ["Linux", "Syncthing (optional, for syncing between machines)"],
+    usage: `tyquote add "Keep going." --author "A reminder"
+tyquote add - --author "Author" < quote.txt
+tyquote random
+tyquote latest
+tyquote today
+tyquote --directory ~/Quotes today`,
+    configTool: "tylock",
+    config: `# In tylock's config; install tyquote separately.
+quote_command: [tyquote, today]`,
+    nixConfig: `imports = [
+  inputs.tys-tools.homeManagerModules.tyquote
+  inputs.tys-tools.homeManagerModules.tylock
+];
+programs.tyquote.enable = true;
+programs.tylock = {
+  enable = true;
+  settings.quote_command = [
+    "\${config.programs.tyquote.package}/bin/tyquote" "today"
+  ];
+};`,
+    storage:
+      "Quotes live in $XDG_DATA_HOME/tyquote/quotes (normally ~/.local/share/tyquote/quotes). " +
+      "Sync that folder with Syncthing and ignore .tyquote-*.tmp. Edit or delete the JSON files " +
+      "to change your collection. Each file contains text, an optional author, and created_at. " +
+      "There is no YAML config file; use --directory to choose another folder. " +
+      "Syncing additions or deletions can change today's selection, and local dates may differ across time zones.",
   },
 ];
 
 export const findTool = (name) => tools.find((t) => t.name === name);
+
+export const nixConfig = (tool) => tool.nixConfig ??
+  `imports = [ inputs.tys-tools.homeManagerModules.${tool.name} ];
+programs.${tool.name} = {
+  enable = true;
+  settings = {
+${tool.nixSettings.split("\n").map((line) => `    ${line}`).join("\n")}
+  };
+};`;
