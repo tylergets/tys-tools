@@ -162,11 +162,46 @@ pub fn fetch(
         return Ok(path);
     }
 
+    for attempt in 0..2 {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(Cancelled.into());
+        }
+        let digest = fetch_partial(model, &partial, progress, cancel)?;
+        if digest == model.sha256 {
+            fs::rename(&partial, &path)
+                .with_context(|| format!("failed to move download to {}", path.display()))?;
+            return Ok(path);
+        }
+        fs::remove_file(&partial)
+            .with_context(|| format!("failed to remove corrupt download {}", partial.display()))?;
+        progress.done.store(0, Ordering::Relaxed);
+        if attempt == 1 {
+            bail!(
+                "checksum mismatch for {} after a fresh download (got {digest}, expected {})",
+                model.filename,
+                model.sha256
+            );
+        }
+        eprintln!(
+            "checksum mismatch for {}; retrying from scratch",
+            model.filename
+        );
+    }
+    unreachable!("each verified download returns or fails after two attempts")
+}
+
+/// Resume a partial download and return its digest. The caller owns the file lock.
+fn fetch_partial(
+    model: &ModelInfo,
+    partial: &Path,
+    progress: &Progress,
+    cancel: &AtomicBool,
+) -> Result<String> {
     // Resume: hash what is already on disk, then ask for the rest.
     let mut hasher = Sha256::new();
-    let mut have = hash_existing(&partial, &mut hasher, progress, cancel)?;
+    let mut have = hash_existing(partial, &mut hasher, progress, cancel)?;
     if have > model.bytes {
-        fs::remove_file(&partial)?;
+        fs::remove_file(partial)?;
         hasher = Sha256::new();
         have = 0;
     }
@@ -188,12 +223,12 @@ pub fn fetch(
             .with_context(|| format!("failed to reach {}", model.url()))?;
         let status = response.status().as_u16();
         let mut file = match status {
-            206 if have > 0 => OpenOptions::new().append(true).open(&partial)?,
+            206 if have > 0 => OpenOptions::new().append(true).open(partial)?,
             200 => {
                 // The server ignored the range; start over.
                 hasher = Sha256::new();
                 have = 0;
-                File::create(&partial)?
+                File::create(partial)?
             }
             _ => bail!("download of {} failed: HTTP {status}", model.filename),
         };
@@ -227,18 +262,7 @@ pub fn fetch(
             model.bytes
         );
     }
-    let digest = hex(&hasher.finalize());
-    if digest != model.sha256 {
-        let _ = fs::remove_file(&partial);
-        bail!(
-            "checksum mismatch for {} (got {digest}, expected {})",
-            model.filename,
-            model.sha256
-        );
-    }
-    fs::rename(&partial, &path)
-        .with_context(|| format!("failed to move download to {}", path.display()))?;
-    Ok(path)
+    Ok(hex(&hasher.finalize()))
 }
 
 fn hash_existing(

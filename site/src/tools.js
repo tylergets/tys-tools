@@ -250,7 +250,7 @@ opencode.submit = false;`,
     features: [
       "Toggle or push-to-talk from a hotkey",
       "Pick a model from the tray: Parakeet, Whisper, Qwen3-ASR, SenseVoice",
-      "Resumable, checksum-verified model downloads",
+      "Resumable, checksum-verified model downloads; checksum mismatches automatically retry once from scratch",
       "Types into the focused window, copies to the clipboard, or both",
       "D-Bus API for scripts and bars",
       "Live status output for polybar, eww and other bars",

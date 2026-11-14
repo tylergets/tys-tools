@@ -16,8 +16,9 @@ Hugging Face revisions and checksums. Like Hex, it runs them with
 - **Model picker in the tray.** Choosing a model downloads it, with progress in the menu, then
   loads it. The previous model keeps working until the new one is ready. The choice is
   remembered (`${XDG_STATE_HOME:-~/.local/state}/tyspeak/state.json`).
-- Resumable, SHA-256-verified downloads. If one fails, **Retry Download** in the tray (or
-  `tyspeak retry`) picks up where it stopped.
+- Resumable, SHA-256-verified downloads. A checksum mismatch automatically discards the
+  corrupt download and retries once from scratch. If a download still fails, **Retry Download**
+  in the tray (or `tyspeak retry`) tries again, resuming interrupted downloads.
 - Text is typed into the focused window (xdotool on X11, wtype on Wayland), put on the clipboard, or both.
 - A small D-Bus API on the session bus for i3 bindings, scripts and bars.
 - `status --follow` for polybar, eww and other bars.
