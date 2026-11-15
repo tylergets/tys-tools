@@ -9,6 +9,7 @@ Website: <https://tys.tools> (with every tool's [dependencies](https://tys.tools
 
 | Tool | What it does |
 | --- | --- |
+| [tybat](crates/tybat) | Laptop and Bluetooth/device batteries in the tray, with focus-grabbing critical countdowns. |
 | [tyquote](crates/tyquote) | Syncthing-friendly personal quotes: random, latest, or today's quote; integrates with tylock. |
 | [tynotif](crates/tynotif) | Desktop notification daemon with actions, history and do-not-disturb. Opt-in alternative to Dunst. |
 | [tyboard](crates/tyboard) | Clipboard history in your tray, with a rofi picker. |
@@ -41,6 +42,7 @@ most of it; GNOME does not offer these protocols.
 
 | Tool | On Wayland |
 | --- | --- |
+| tybat | Critical popup uses layer-shell with exclusive keyboard focus; tray lists laptop and peripheral batteries. |
 | tyboard | Watches the clipboard with `wl-paste`; active-window info from sway or Hyprland. |
 | tykey | Reads keyboards from `/dev/input` (you need to be in the `input` group) and types with `wtype`. |
 | tycapture | Records with `wf-recorder`, one monitor at a time. Window recording uses sway like i3; zoom needs Hyprland. |

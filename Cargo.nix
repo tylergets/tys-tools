@@ -53,6 +53,16 @@ rec {
       # File a bug if you depend on any for non-debug work!
       debug = internal.debugCrate { inherit packageId; };
     };
+    "tybat" = rec {
+      packageId = "tybat";
+      build = internal.buildRustCrateWithFeatures {
+        packageId = "tybat";
+      };
+
+      # Debug support which might change between releases.
+      # File a bug if you depend on any for non-debug work!
+      debug = internal.debugCrate { inherit packageId; };
+    };
     "tyboard" = rec {
       packageId = "tyboard";
       build = internal.buildRustCrateWithFeatures {
@@ -610,9 +620,9 @@ rec {
       };
       "bumpalo" = rec {
         crateName = "bumpalo";
-        version = "3.20.3";
+        version = "3.20.4";
         edition = "2021";
-        sha256 = "0jc6va3nwcqikm7chnpdv1s87my3gs2j7g1sc7g3k91brg3arxbj";
+        sha256 = "1nrq69ym33pmydashsxw1447a0r3v1q87drch9xzpchyzmkcz847";
         authors = [
           "Nick Fitzgerald <fitzgen@gmail.com>"
         ];
@@ -735,9 +745,9 @@ rec {
       };
       "cc" = rec {
         crateName = "cc";
-        version = "1.11.1";
+        version = "1.11.2";
         edition = "2021";
-        sha256 = "0mgicvynjmz4xan2nbdi1dr62pjqb9kikml0j21qq3zzdw9aiwjg";
+        sha256 = "0i8xv6psbly5zn2vpmv283cnl402jwlw3x6gjmx5r92lh4z9xvrk";
         dependencies = [
           {
             name = "find-msvc-tools";
@@ -779,11 +789,11 @@ rec {
         };
         resolvedDefaultFeatures = [ "default" "target-lexicon" "targets" ];
       };
-      "cfg-expr 0.20.10" = rec {
+      "cfg-expr 0.20.11" = rec {
         crateName = "cfg-expr";
-        version = "0.20.10";
+        version = "0.20.11";
         edition = "2024";
-        sha256 = "17vc10w7wlw3qhr77g80zn59m3p142vrgy5ihmv04iy42vnfkacv";
+        sha256 = "1zv3arr0gny5zwy2cpqxzq7dl8p5sy6sz78dn47j3fazfn14vm7d";
         libName = "cfg_expr";
         authors = [
           "Embark <opensource@embark-studios.com>"
@@ -5508,7 +5518,7 @@ rec {
         dependencies = [
           {
             name = "cfg-expr";
-            packageId = "cfg-expr 0.20.10";
+            packageId = "cfg-expr 0.20.11";
             features = [ "targets" ];
           }
           {
@@ -6113,7 +6123,7 @@ rec {
       };
       "ty-common" = rec {
         crateName = "ty-common";
-        version = "0.11.0";
+        version = "0.12.0";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./crates/ty-common; };
         libName = "ty_common";
@@ -6201,9 +6211,51 @@ rec {
         ];
 
       };
+      "tybat" = rec {
+        crateName = "tybat";
+        version = "0.12.0";
+        edition = "2021";
+        crateBin = [
+          {
+            name = "tybat";
+            path = "src/main.rs";
+            requiredFeatures = [ ];
+          }
+        ];
+        src = lib.cleanSourceWith { filter = sourceFilter;  src = ./crates/tybat; };
+        dependencies = [
+          {
+            name = "anyhow";
+            packageId = "anyhow";
+          }
+          {
+            name = "clap";
+            packageId = "clap";
+            features = [ "derive" ];
+          }
+          {
+            name = "dbus";
+            packageId = "dbus";
+          }
+          {
+            name = "gtk";
+            packageId = "gtk";
+          }
+          {
+            name = "serde";
+            packageId = "serde";
+            features = [ "derive" ];
+          }
+          {
+            name = "ty-common";
+            packageId = "ty-common";
+          }
+        ];
+
+      };
       "tyboard" = rec {
         crateName = "tyboard";
-        version = "0.11.0";
+        version = "0.12.0";
         edition = "2021";
         crateBin = [
           {
@@ -6258,7 +6310,7 @@ rec {
       };
       "tycapture" = rec {
         crateName = "tycapture";
-        version = "0.11.0";
+        version = "0.12.0";
         edition = "2021";
         crateBin = [
           {
@@ -6308,7 +6360,7 @@ rec {
       };
       "tyci" = rec {
         crateName = "tyci";
-        version = "0.11.0";
+        version = "0.12.0";
         edition = "2021";
         crateBin = [
           {
@@ -6355,7 +6407,7 @@ rec {
       };
       "tygesture" = rec {
         crateName = "tygesture";
-        version = "0.11.0";
+        version = "0.12.0";
         edition = "2021";
         crateBin = [
           {
@@ -6401,7 +6453,7 @@ rec {
       };
       "tykey" = rec {
         crateName = "tykey";
-        version = "0.11.0";
+        version = "0.12.0";
         edition = "2021";
         crateBin = [
           {
@@ -6447,7 +6499,7 @@ rec {
       };
       "tylight" = rec {
         crateName = "tylight";
-        version = "0.11.0";
+        version = "0.12.0";
         edition = "2021";
         crateBin = [
           {
@@ -6519,7 +6571,7 @@ rec {
       };
       "tylock" = rec {
         crateName = "tylock";
-        version = "0.11.0";
+        version = "0.12.0";
         edition = "2021";
         crateBin = [
           {
@@ -6577,7 +6629,7 @@ rec {
       };
       "tynotif" = rec {
         crateName = "tynotif";
-        version = "0.11.0";
+        version = "0.12.0";
         edition = "2021";
         crateBin = [
           {
@@ -6629,7 +6681,7 @@ rec {
       };
       "typk" = rec {
         crateName = "typk";
-        version = "0.11.0";
+        version = "0.12.0";
         edition = "2021";
         crateBin = [
           {
@@ -6679,7 +6731,7 @@ rec {
       };
       "typort" = rec {
         crateName = "typort";
-        version = "0.11.0";
+        version = "0.12.0";
         edition = "2021";
         crateBin = [
           {
@@ -6725,7 +6777,7 @@ rec {
       };
       "tyquote" = rec {
         crateName = "tyquote";
-        version = "0.11.0";
+        version = "0.12.0";
         edition = "2021";
         crateBin = [
           {
@@ -6776,7 +6828,7 @@ rec {
       };
       "tyshot" = rec {
         crateName = "tyshot";
-        version = "0.11.0";
+        version = "0.12.0";
         edition = "2021";
         crateBin = [
           {
@@ -6832,7 +6884,7 @@ rec {
       };
       "tyspeak" = rec {
         crateName = "tyspeak";
-        version = "0.11.0";
+        version = "0.12.0";
         edition = "2021";
         crateBin = [
           {

@@ -6,6 +6,45 @@ export const license = `${repo}/blob/main/LICENSE`;
 
 export const tools = [
   {
+    name: "tybat",
+    tagline: "A battery warning you will actually see.",
+    summary:
+      "Laptop and connected device batteries in your tray, including Bluetooth devices. " +
+      "A critical laptop battery takes focus with a countdown to suspend or hibernate.",
+    features: [
+      "Battery-level tray icon and laptop percentage",
+      "Menu with laptop, Bluetooth and other reported device batteries",
+      "UPower discovery with BlueZ Battery1 fallback",
+      "Focus-grabbing critical popup with a live countdown",
+      "Plugging in cancels; Escape or a button snoozes",
+      "Configurable thresholds, countdown, snooze and power action",
+      "Safe preview command; peripherals never trigger suspend",
+    ],
+    wayland: "Exclusive layer-shell keyboard focus on supported compositors; X11 uses an input grab.",
+    requirements: [
+      "Linux with GTK 3 and UPower on the system D-Bus",
+      "A StatusNotifierItem tray for the battery menu",
+      "BlueZ and a device reporting battery levels for Bluetooth batteries",
+      "Working logind power actions; hibernate requires system configuration",
+      "Replace batsignal and keep UPower's emergency threshold below tybat's",
+    ],
+    usage: `tybat run
+tybat status
+tybat preview`,
+    config: `warning_percent: 20
+critical_percent: 5
+countdown_seconds: 60
+snooze_seconds: 60
+poll_seconds: 5
+action: suspend`,
+    nixSettings: `warning_percent = 20;
+critical_percent = 5;
+countdown_seconds = 60;
+snooze_seconds = 60;
+poll_seconds = 5;
+action = "suspend";`,
+  },
+  {
     name: "tynotif",
     tagline: "Notifications, history, and a little quiet.",
     summary:

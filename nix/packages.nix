@@ -222,6 +222,11 @@
     };
 in {
   inherit workspace cargoArtifacts commonArgs craneLib src;
+  tybat = mkTool {
+    name = "tybat";
+    description = "Laptop and device batteries with critical countdown popups";
+    runtimeDeps = [pkgs.systemd];
+  };
   tyquote = (buildTool "tyquote").overrideAttrs (old: {
     meta =
       (old.meta or {})

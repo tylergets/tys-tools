@@ -143,6 +143,25 @@ impl<A: Clone + Send + PartialEq + 'static> Applet<A> {
     pub fn update(&mut self, spec: TraySpec<A>) {
         self.inner.update(spec);
     }
+
+    /// Show a live theme icon and short label (for example a battery percentage).
+    /// Call after `update`, which restores the spec's bundled icon.
+    pub fn set_icon_and_label(&mut self, icon: &str, label: &str) {
+        if let (Ok(icon), Ok(label)) = (CString::new(icon), CString::new(label)) {
+            unsafe {
+                libappindicator::app_indicator_set_icon_full(
+                    self.inner.indicator,
+                    icon.as_ptr(),
+                    label.as_ptr(),
+                );
+                libappindicator::app_indicator_set_label(
+                    self.inner.indicator,
+                    label.as_ptr(),
+                    label.as_ptr(),
+                );
+            }
+        }
+    }
 }
 
 struct Inner<A: Clone + Send + 'static> {

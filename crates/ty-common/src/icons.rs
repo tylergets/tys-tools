@@ -13,6 +13,7 @@ pub const BUSY_COLOR: &str = "#f5c542";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tool {
+    Bat,
     Board,
     Key,
     Capture,
@@ -27,7 +28,8 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub const ALL: [Tool; 11] = [
+    pub const ALL: [Tool; 12] = [
+        Tool::Bat,
         Tool::Board,
         Tool::Key,
         Tool::Capture,
@@ -43,6 +45,7 @@ impl Tool {
 
     pub fn name(self) -> &'static str {
         match self {
+            Tool::Bat => "tybat",
             Tool::Board => "tyboard",
             Tool::Key => "tykey",
             Tool::Capture => "tycapture",
@@ -60,6 +63,7 @@ impl Tool {
     /// The `currentColor` SVG source.
     pub fn svg(self) -> &'static str {
         match self {
+            Tool::Bat => include_str!("../icons/tybat.svg"),
             Tool::Board => include_str!("../icons/tyboard.svg"),
             Tool::Key => include_str!("../icons/tykey.svg"),
             Tool::Capture => include_str!("../icons/tycapture.svg"),
@@ -77,6 +81,7 @@ impl Tool {
     /// Freedesktop icon used if the bundled ones can't be installed.
     fn fallback(self) -> &'static str {
         match self {
+            Tool::Bat => "battery-symbolic",
             Tool::Board => "edit-paste",
             Tool::Key => "input-keyboard",
             Tool::Capture => "media-record",

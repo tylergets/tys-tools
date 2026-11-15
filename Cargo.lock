@@ -164,9 +164,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.20.3"
+version = "3.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
+checksum = "87a0cf66fd1eb2fb7b822cb78370d82303750809bc6ba855f3f58e517d3238db"
 
 [[package]]
 name = "bytes"
@@ -201,9 +201,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.11.1"
+version = "1.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ff2a8126fff0f8c839080d619675a585e61720bb12d2baceae45769fd66f155"
+checksum = "33ef9e3e8154a45c7a95cff4c1299702106ad94062d7bb85fdc5d3a5afd91d45"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -221,9 +221,9 @@ dependencies = [
 
 [[package]]
 name = "cfg-expr"
-version = "0.20.10"
+version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ba9e9ec16c447027685b1f897b720e18e9a8afd00bd7332c483537e38086c9f"
+checksum = "edd44d82755fb9210fb10d9daf8dd7e522da0efe1d5f263cffc5db07725663ff"
 dependencies = [
  "smallvec",
  "target-lexicon 0.13.5",
@@ -1792,7 +1792,7 @@ version = "7.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "396a35feb67335377e0251fcbc1092fc85c484bd4e3a7a54319399da127796e7"
 dependencies = [
- "cfg-expr 0.20.10",
+ "cfg-expr 0.20.11",
  "heck 0.5.0",
  "pkg-config",
  "toml 1.2.1+spec-1.1.0",
@@ -2004,7 +2004,7 @@ dependencies = [
 
 [[package]]
 name = "ty-common"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -2025,8 +2025,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tybat"
+version = "0.12.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dbus",
+ "gtk",
+ "serde",
+ "ty-common",
+]
+
+[[package]]
 name = "tyboard"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2040,7 +2052,7 @@ dependencies = [
 
 [[package]]
 name = "tycapture"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2054,7 +2066,7 @@ dependencies = [
 
 [[package]]
 name = "tyci"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2067,7 +2079,7 @@ dependencies = [
 
 [[package]]
 name = "tygesture"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2080,7 +2092,7 @@ dependencies = [
 
 [[package]]
 name = "tykey"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2093,7 +2105,7 @@ dependencies = [
 
 [[package]]
 name = "tylight"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2112,7 +2124,7 @@ dependencies = [
 
 [[package]]
 name = "tylock"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2128,7 +2140,7 @@ dependencies = [
 
 [[package]]
 name = "tynotif"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2146,7 +2158,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "typk"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2160,7 +2172,7 @@ dependencies = [
 
 [[package]]
 name = "typort"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2173,7 +2185,7 @@ dependencies = [
 
 [[package]]
 name = "tyquote"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2187,7 +2199,7 @@ dependencies = [
 
 [[package]]
 name = "tyshot"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2202,7 +2214,7 @@ dependencies = [
 
 [[package]]
 name = "tyspeak"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "clap",
