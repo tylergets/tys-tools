@@ -23,6 +23,11 @@ pub enum Annotation {
         from: (f64, f64),
         to: (f64, f64),
     },
+    /// A dimension line labeled with its length in screenshot (device) pixels.
+    Measure {
+        from: (f64, f64),
+        to: (f64, f64),
+    },
     /// A freehand stroke through these points.
     Pen(Vec<(f64, f64)>),
     /// A wide translucent freehand stroke, multiplied into the image like a marker.
@@ -47,6 +52,7 @@ impl Annotation {
         match self {
             Self::Box(rect) | Self::Blur(rect) => rect.width() < MIN || rect.height() < MIN,
             Self::Arrow { from, to } => (to.0 - from.0).hypot(to.1 - from.1) < MIN * 2.0,
+            Self::Measure { from, to } => from == to,
             // A click with the pen leaves a dot, which is fine; only an empty stroke isn't.
             Self::Pen(points) | Self::Highlight(points) => points.is_empty(),
             Self::Text { text, .. } => text.trim().is_empty(),
@@ -291,6 +297,45 @@ pub fn paint_annotation(
                 cr.line_to(base.0 + uy * half, base.1 - ux * half);
                 cr.close_path();
                 let _ = cr.fill();
+            }
+        }
+        Annotation::Measure { from, to } => {
+            let (dx, dy) = (to.0 - from.0, to.1 - from.1);
+            let length = dx.hypot(dy);
+            if length > 0.0 {
+                let (nx, ny) = (-dy / length, dx / length);
+                let tick = (width * 2.0).max(5.0);
+                cr.set_source_rgb(r, g, b);
+                cr.set_line_width(width);
+                cr.set_line_cap(cairo::LineCap::Butt);
+                cr.move_to(from.0, from.1);
+                cr.line_to(to.0, to.1);
+                for (x, y) in [from, to] {
+                    cr.move_to(x - nx * tick, y - ny * tick);
+                    cr.line_to(x + nx * tick, y + ny * tick);
+                }
+                let _ = cr.stroke();
+
+                let label = format!("{:.0} px", length * canvas.scale);
+                set_text_font(cr, style.font_size);
+                if let Ok(extents) = cr.text_extents(&label) {
+                    let (x, y) = ((from.0 + to.0) / 2.0, (from.1 + to.1) / 2.0);
+                    let pad = 4.0;
+                    cr.rectangle(
+                        x - extents.width() / 2.0 - pad,
+                        y - extents.height() / 2.0 - pad,
+                        extents.width() + pad * 2.0,
+                        extents.height() + pad * 2.0,
+                    );
+                    cr.set_source_rgba(0.08, 0.08, 0.1, 0.92);
+                    let _ = cr.fill();
+                    cr.set_source_rgb(1.0, 1.0, 1.0);
+                    cr.move_to(
+                        x - extents.x_bearing() - extents.width() / 2.0,
+                        y - extents.y_bearing() - extents.height() / 2.0,
+                    );
+                    let _ = cr.show_text(&label);
+                }
             }
         }
         Annotation::Pen(ref points) => {

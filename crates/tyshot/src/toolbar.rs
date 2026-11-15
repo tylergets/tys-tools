@@ -12,6 +12,7 @@ pub enum Button {
     Select,
     Box,
     Arrow,
+    Measure,
     Pen,
     Highlight,
     Text,
@@ -33,6 +34,7 @@ impl Button {
             Self::Select => "Select / move (V)",
             Self::Box => "Box (R)",
             Self::Arrow => "Arrow (A)",
+            Self::Measure => "Measure pixels (M)",
             Self::Pen => "Pen (P)",
             Self::Highlight => "Highlighter (H)",
             Self::Text => "Text (T)",
@@ -56,6 +58,7 @@ const GROUPS: [&[Button]; 3] = [
         Button::Select,
         Button::Box,
         Button::Arrow,
+        Button::Measure,
         Button::Pen,
         Button::Highlight,
         Button::Text,
@@ -221,6 +224,16 @@ fn draw_icon(cr: &cairo::Context, button: Button) {
             cr.line_to(5.0, 0.5);
             cr.close_path();
             let _ = cr.fill();
+        }
+        Button::Measure => {
+            // A ruler with alternating long and short ticks.
+            cr.rectangle(-9.0, -5.0, 18.0, 10.0);
+            for index in 0..5 {
+                let x = -6.0 + index as f64 * 3.0;
+                cr.move_to(x, -5.0);
+                cr.line_to(x, if index % 2 == 0 { 0.0 } else { -2.0 });
+            }
+            let _ = cr.stroke();
         }
         Button::Pen => {
             // A pencil, tip at the bottom left.
@@ -423,7 +436,7 @@ mod tests {
     #[test]
     fn hits_buttons_in_order() {
         let bar = layout(&sel(400.0, 100.0, 800.0, 300.0), 1920.0, 1080.0, 44.0);
-        assert_eq!(bar.buttons.len(), 16);
+        assert_eq!(bar.buttons.len(), 17);
         let center = |rect: &Rect| ((rect.x0 + rect.x1) / 2.0, (rect.y0 + rect.y1) / 2.0);
         for (button, rect) in &bar.buttons {
             assert_eq!(bar.hit(center(rect)), Some(*button));

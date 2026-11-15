@@ -67,6 +67,7 @@ enum Tool {
     Select,
     Box,
     Arrow,
+    Measure,
     Pen,
     Highlight,
     /// Click to place a text cursor, then type.
@@ -82,6 +83,7 @@ impl Tool {
             Self::Select => Button::Select,
             Self::Box => Button::Box,
             Self::Arrow => Button::Arrow,
+            Self::Measure => Button::Measure,
             Self::Pen => Button::Pen,
             Self::Highlight => Button::Highlight,
             Self::Text => Button::Text,
@@ -97,6 +99,7 @@ impl Tool {
             Self::Select | Self::Text => None,
             Self::Box => Some(Annotation::Box(Rect::from_corners(at, at))),
             Self::Arrow => Some(Annotation::Arrow { from: at, to: at }),
+            Self::Measure => Some(Annotation::Measure { from: at, to: at }),
             Self::Pen => Some(Annotation::Pen(vec![at])),
             Self::Highlight => Some(Annotation::Highlight(vec![at])),
             Self::Step => Some(Annotation::Step { at, number: step }),
@@ -109,7 +112,7 @@ impl Tool {
 fn extend(annotation: &mut Annotation, start: (f64, f64), to: (f64, f64)) {
     match annotation {
         Annotation::Box(rect) | Annotation::Blur(rect) => *rect = Rect::from_corners(start, to),
-        Annotation::Arrow { to: end, .. } => *end = to,
+        Annotation::Arrow { to: end, .. } | Annotation::Measure { to: end, .. } => *end = to,
         Annotation::Pen(points) | Annotation::Highlight(points) => {
             let far_enough = points
                 .last()
@@ -475,6 +478,7 @@ fn press_button(window: &Overlay, state: &Rc<RefCell<State>>, button: Button) {
         Button::Select => s.set_tool(Tool::Select),
         Button::Box => s.set_tool(Tool::Box),
         Button::Arrow => s.set_tool(Tool::Arrow),
+        Button::Measure => s.set_tool(Tool::Measure),
         Button::Pen => s.set_tool(Tool::Pen),
         Button::Highlight => s.set_tool(Tool::Highlight),
         Button::Text => s.set_tool(Tool::Text),
@@ -710,6 +714,7 @@ fn on_key(window: &Overlay, state: &Rc<RefCell<State>>, event: &gdk::EventKey) {
         key::v => Some(Tool::Select),
         key::r => Some(Tool::Box),
         key::a => Some(Tool::Arrow),
+        key::m => Some(Tool::Measure),
         key::p => Some(Tool::Pen),
         key::h => Some(Tool::Highlight),
         key::t => Some(Tool::Text),

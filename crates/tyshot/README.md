@@ -12,8 +12,11 @@ and works well bound to a hotkey in i3 or sway.
   window-manager decorations)
 - Move the selection by dragging inside it; resize it from any edge or corner handle
 - **Toolbar** beside the selection (button size configurable): select, **box**, **arrow**,
-  **pen**, **highlighter**, **text**, **numbered steps**, **blur**, **frame**, undo, redo,
+  **measure**, **pen**, **highlighter**, **text**, **numbered steps**, **blur**, **frame**, undo, redo,
   **send to opencode**, **pin**, **copy**, **save**, close
+- **Measure**: drag a line to label its length in screenshot pixels (rounded to the nearest
+  pixel, including display scaling). The label updates while dragging and is included in
+  copied, saved and pinned screenshots
 - **Frames**: put the screenshot in a browser window, phone or app window frame. The frame is
   shown on screen and added *around* the selection, so the copied/saved image grows to
   include it and nothing is cropped (rounded corners are transparent)
@@ -41,6 +44,7 @@ and works well bound to a hotkey in i3 or sway.
 | Drag inside / on an edge or handle | Move / resize the selection |
 | V / R / A / B | Tool: select / box / arrow / blur (then drag on the selection to draw) |
 | P / H | Tool: pen / highlighter (freehand) |
+| M | Tool: measure. Drag a line to label its length in pixels |
 | T | Tool: text. Click to place, type; Shift+Enter new line, Enter or a click finishes, Esc discards |
 | N | Tool: numbered steps. Click to place ①, ②, ③, … (drag to position) |
 | F | Cycle the frame: none → browser → mobile → window |
