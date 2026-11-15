@@ -6,8 +6,9 @@ const crate = (name) => `https://crates.io/crates/${name}`;
 // Most crates are dual-licensed ("MIT OR Apache-2.0"); show MIT and keep the full text on hover.
 const shortLicense = (license) => (license?.includes("MIT") ? "MIT" : license ?? "—");
 
-// Crates every tool uses come first, then the rest; each group alphabetical.
-const usedByAll = (d) => d.usedBy.length === deps.crates.length;
+// Shared ty-common dependencies count as used by all tools; each group is alphabetical.
+const tools = deps.crates.filter((c) => c.name !== "ty-common");
+const usedByAll = (d) => d.usedBy.includes("ty-common") || tools.every((c) => d.usedBy.includes(c.name));
 const rows = [...deps.external.filter(usedByAll), ...deps.external.filter((d) => !usedByAll(d))];
 </script>
 
@@ -41,7 +42,6 @@ const rows = [...deps.external.filter(usedByAll), ...deps.external.filter((d) =>
               v-for="c in d.usedBy"
               :key="c"
               class="user"
-              :class="{ muted: c === 'ty-common' }"
             >{{ c }}</span>
           </td>
         </tr>
