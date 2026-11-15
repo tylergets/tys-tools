@@ -12,7 +12,8 @@ export const tools = [
       "Laptop and connected device batteries in your tray, including Bluetooth devices. " +
       "A critical laptop battery takes focus with a countdown to suspend or hibernate.",
     features: [
-      "Battery-level tray icon and laptop percentage",
+      "Tray icon in the shared ty-tools palette and laptop percentage",
+      "Optional Framework charge cap with persistent tray overrides and resume reapply",
       "Menu with laptop, Bluetooth and other reported device batteries",
       "UPower discovery with BlueZ Battery1 fallback",
       "Focus-grabbing critical popup with a live countdown",
@@ -36,13 +37,22 @@ critical_percent: 5
 countdown_seconds: 60
 snooze_seconds: 60
 poll_seconds: 5
-action: suspend`,
+action: suspend
+# Optional; use a privileged, restricted helper:
+# charge_limit:
+#   percent: 80
+#   command: [/run/wrappers/bin/sudo, -n, /path/to/charge-limit-helper]`,
     nixSettings: `warning_percent = 20;
 critical_percent = 5;
 countdown_seconds = 60;
 snooze_seconds = 60;
 poll_seconds = 5;
-action = "suspend";`,
+action = "suspend";
+# Optional; use a privileged, restricted helper:
+# charge_limit = {
+#   percent = 80;
+#   command = [ "/run/wrappers/bin/sudo" "-n" "/path/to/charge-limit-helper" ];
+# };`,
   },
   {
     name: "tynotif",

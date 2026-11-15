@@ -2004,7 +2004,7 @@ dependencies = [
 
 [[package]]
 name = "ty-common"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -2026,11 +2026,12 @@ dependencies = [
 
 [[package]]
 name = "tybat"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "clap",
  "dbus",
+ "dirs",
  "gtk",
  "serde",
  "ty-common",
@@ -2038,7 +2039,7 @@ dependencies = [
 
 [[package]]
 name = "tyboard"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -2052,7 +2053,7 @@ dependencies = [
 
 [[package]]
 name = "tycapture"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -2066,7 +2067,7 @@ dependencies = [
 
 [[package]]
 name = "tyci"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2079,7 +2080,7 @@ dependencies = [
 
 [[package]]
 name = "tygesture"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -2092,7 +2093,7 @@ dependencies = [
 
 [[package]]
 name = "tykey"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2105,7 +2106,7 @@ dependencies = [
 
 [[package]]
 name = "tylight"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2124,7 +2125,7 @@ dependencies = [
 
 [[package]]
 name = "tylock"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2140,7 +2141,7 @@ dependencies = [
 
 [[package]]
 name = "tynotif"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -2158,7 +2159,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "typk"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -2172,7 +2173,7 @@ dependencies = [
 
 [[package]]
 name = "typort"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -2185,7 +2186,7 @@ dependencies = [
 
 [[package]]
 name = "tyquote"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2199,7 +2200,7 @@ dependencies = [
 
 [[package]]
 name = "tyshot"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2214,7 +2215,7 @@ dependencies = [
 
 [[package]]
 name = "tyspeak"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "anyhow",
  "clap",

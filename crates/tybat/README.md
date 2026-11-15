@@ -4,7 +4,8 @@ Battery monitor and tray applet for Linux, replacing batsignal. Critical laptop 
 warnings take keyboard focus over a dimmed desktop and count down to a power action.
 Plugging in cancels the countdown; Escape or the Snooze button postpones it.
 
-The tray shows a battery-level icon and laptop percentage (if the tray host displays labels).
+The tray uses the shared ty-tools icon palette (neutral, yellow when low, red when critical)
+and laptop percentage (if the tray host displays labels).
 Its menu lists laptop batteries and connected peripherals with percentages and charging
 states. UPower supplies device discovery, with BlueZ Battery1 as a fallback for Bluetooth
 devices. Devices must report a battery level to Linux; not all headphones do. Discovery
@@ -41,6 +42,37 @@ Enable `services.upower.enable = true` in NixOS. Bluetooth batteries require Blu
 and a connected device exposing its battery. Remove `services.batsignal.enable` from
 Home Manager. Keep UPower's emergency action threshold below tybat's critical threshold
 so it does not preempt the popup. Hibernate requires working system hibernation.
+
+### Framework maximum charge
+
+Set `programs.tybat.chargeLimit` to enable charge control:
+
+```nix
+programs.tybat.chargeLimit = {
+  percent = 80;
+  command = [ "/run/wrappers/bin/sudo" "-n" "/path/to/restricted-charge-limit-helper" ];
+};
+```
+
+The helper receives one appended percentage argument and must allow values 25–100.
+It should invoke `framework_tool --charge-limit` with appropriate privileges. Grant
+passwordless access only to the restricted helper, rather than all framework_tool commands.
+Disable any old service setting a fixed limit so it does not overwrite tray selections.
+
+The tray's **Maximum charge** submenu offers 25–100% in 5% steps and **Reset to declared
+default**. The declared percentage can be any integer in that range. Successful selections
+are saved under `$XDG_STATE_HOME/tybat/charge-limit` (normally `~/.local/state/tybat/charge-limit`).
+Tybat applies the selected value at startup and after logind reports resume; changing the
+declared default discards the previous override. Charge control only runs while the daemon
+is running. Failed helper commands are shown in the menu and sent as notifications.
+
+Equivalent YAML (omitting `charge_limit` disables the feature):
+
+```yaml
+charge_limit:
+  percent: 80
+  command: [/run/wrappers/bin/sudo, -n, /path/to/restricted-charge-limit-helper]
+```
 
 ## YAML
 

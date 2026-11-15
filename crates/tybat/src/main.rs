@@ -1,3 +1,4 @@
+mod charge;
 mod devices;
 
 use std::cell::{Cell, RefCell};
@@ -52,6 +53,7 @@ impl Action {
 #[derive(Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct Config {
+    charge_limit: Option<charge::Config>,
     warning_percent: u8,
     critical_percent: u8,
     countdown_seconds: u32,
@@ -63,6 +65,7 @@ struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            charge_limit: None,
             warning_percent: 20,
             critical_percent: 5,
             countdown_seconds: 60,
@@ -75,6 +78,9 @@ impl Default for Config {
 
 impl Config {
     fn validate(&self) -> Result<()> {
+        if let Some(config) = &self.charge_limit {
+            config.validate()?;
+        }
         ensure!(
             self.critical_percent > 0
                 && self.critical_percent < self.warning_percent
@@ -350,7 +356,7 @@ fn main() -> Result<()> {
     }
     let _lock = InstanceLock::acquire("tybat")?;
     ty_common::lock::serve(_lock.listener(), |_| "running".into())?;
-    devices::start()?;
+    devices::start(cfg.charge_limit.clone())?;
     let monitor = RefCell::new(Monitor::default());
     if let Err(error) = monitor.borrow_mut().tick(&cfg) {
         eprintln!("tybat: {error:#}");

@@ -129,13 +129,13 @@ pub fn scan() -> Result<Vec<Device>> {
     Ok(devices)
 }
 
-pub fn spec(result: &Result<Vec<Device>>) -> (TraySpec<()>, &'static str, String) {
+pub fn spec(result: &Result<Vec<Device>>) -> (TraySpec<crate::charge::Action>, String) {
     let mut menu = vec![
         MenuEntry::Label("tybat · Batteries".into()),
         MenuEntry::Separator,
     ];
     let mut label = String::new();
-    let mut icon = "battery-missing-symbolic";
+    let mut icon = IconState::Normal;
     match result {
         Err(error) => menu.push(MenuEntry::Label(format!(
             "Battery discovery failed: {error}"
@@ -165,49 +165,71 @@ pub fn spec(result: &Result<Vec<Device>>) -> (TraySpec<()>, &'static str, String
                 let percent = device.percent.unwrap_or_default();
                 label = format!("{percent:.0}%");
                 icon = if device.state == "charging" {
-                    "battery-good-charging-symbolic"
+                    IconState::Normal
                 } else if percent <= 5.0 {
-                    "battery-caution-symbolic"
+                    IconState::Attention
                 } else if percent <= 20.0 {
-                    "battery-low-symbolic"
-                } else if percent <= 60.0 {
-                    "battery-good-symbolic"
+                    IconState::Busy
                 } else {
-                    "battery-full-symbolic"
+                    IconState::Normal
                 };
             }
         }
     }
     (
         TraySpec {
-            icon: IconState::Normal,
+            icon,
             title: format!("tybat {label}"),
             menu,
             click_action: None,
         },
-        icon,
         label,
     )
 }
 
-pub fn start() -> Result<()> {
+pub fn start(charge_config: Option<crate::charge::Config>) -> Result<()> {
     use ty_common::tray::{self, Applet};
-    let (send, _receive) = tray::channel::<()>();
+    let (send, receive) = tray::channel::<crate::charge::Action>();
     let icons = ty_common::icons::Tool::Bat.tray_icons();
-    let (spec, _, _) = spec(&Ok(Vec::new()));
+    let (spec, _) = spec(&Ok(Vec::new()));
     let mut applet = Applet::new("tybat", &icons, spec, send)?;
     let (tx, rx) = std::sync::mpsc::sync_channel(1);
-    std::thread::spawn(move || loop {
-        if tx.send(scan()).is_err() {
-            break;
+    let (action_tx, action_rx) = std::sync::mpsc::channel();
+    if charge_config.is_some() {
+        crate::charge::watch_resume(action_tx.clone());
+    }
+    std::thread::spawn(move || {
+        let mut charge = charge_config.map(crate::charge::Controller::new);
+        loop {
+            if tx
+                .send((scan(), charge.as_ref().map(|c| c.menu())))
+                .is_err()
+            {
+                break;
+            }
+            match action_rx.recv_timeout(Duration::from_secs(10)) {
+                Ok(action) => {
+                    if let Some(charge) = &mut charge {
+                        charge.handle(action);
+                    }
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            }
         }
-        std::thread::sleep(Duration::from_secs(10));
     });
-    gtk::glib::timeout_add_local(Duration::from_secs(1), move || {
-        if let Ok(result) = rx.try_recv() {
-            let (spec, icon, label) = self::spec(&result);
+    gtk::glib::timeout_add_local(Duration::from_millis(100), move || {
+        while let Ok(action) = receive.try_recv() {
+            let _ = action_tx.send(action);
+        }
+        if let Ok((result, charge_menu)) = rx.try_recv() {
+            let (mut spec, label) = self::spec(&result);
+            if let Some(menu) = charge_menu {
+                spec.menu.push(MenuEntry::Separator);
+                spec.menu.push(menu);
+            }
             applet.update(spec);
-            applet.set_icon_and_label(icon, &label);
+            applet.set_label(&label);
         }
         gtk::glib::ControlFlow::Continue
     });

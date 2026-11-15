@@ -6123,7 +6123,7 @@ rec {
       };
       "ty-common" = rec {
         crateName = "ty-common";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./crates/ty-common; };
         libName = "ty_common";
@@ -6213,7 +6213,7 @@ rec {
       };
       "tybat" = rec {
         crateName = "tybat";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         crateBin = [
           {
@@ -6238,6 +6238,10 @@ rec {
             packageId = "dbus";
           }
           {
+            name = "dirs";
+            packageId = "dirs";
+          }
+          {
             name = "gtk";
             packageId = "gtk";
           }
@@ -6255,7 +6259,7 @@ rec {
       };
       "tyboard" = rec {
         crateName = "tyboard";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         crateBin = [
           {
@@ -6310,7 +6314,7 @@ rec {
       };
       "tycapture" = rec {
         crateName = "tycapture";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         crateBin = [
           {
@@ -6360,7 +6364,7 @@ rec {
       };
       "tyci" = rec {
         crateName = "tyci";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         crateBin = [
           {
@@ -6407,7 +6411,7 @@ rec {
       };
       "tygesture" = rec {
         crateName = "tygesture";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         crateBin = [
           {
@@ -6453,7 +6457,7 @@ rec {
       };
       "tykey" = rec {
         crateName = "tykey";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         crateBin = [
           {
@@ -6499,7 +6503,7 @@ rec {
       };
       "tylight" = rec {
         crateName = "tylight";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         crateBin = [
           {
@@ -6571,7 +6575,7 @@ rec {
       };
       "tylock" = rec {
         crateName = "tylock";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         crateBin = [
           {
@@ -6629,7 +6633,7 @@ rec {
       };
       "tynotif" = rec {
         crateName = "tynotif";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         crateBin = [
           {
@@ -6681,7 +6685,7 @@ rec {
       };
       "typk" = rec {
         crateName = "typk";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         crateBin = [
           {
@@ -6731,7 +6735,7 @@ rec {
       };
       "typort" = rec {
         crateName = "typort";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         crateBin = [
           {
@@ -6777,7 +6781,7 @@ rec {
       };
       "tyquote" = rec {
         crateName = "tyquote";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         crateBin = [
           {
@@ -6828,7 +6832,7 @@ rec {
       };
       "tyshot" = rec {
         crateName = "tyshot";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         crateBin = [
           {
@@ -6884,7 +6888,7 @@ rec {
       };
       "tyspeak" = rec {
         crateName = "tyspeak";
-        version = "0.12.0";
+        version = "0.12.1";
         edition = "2021";
         crateBin = [
           {

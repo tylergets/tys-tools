@@ -9,6 +9,7 @@ license.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 dbus.workspace = true
+dirs.workspace = true
 gtk.workspace = true
 serde.workspace = true
 ty-common.workspace = true

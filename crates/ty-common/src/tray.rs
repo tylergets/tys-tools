@@ -144,16 +144,10 @@ impl<A: Clone + Send + PartialEq + 'static> Applet<A> {
         self.inner.update(spec);
     }
 
-    /// Show a live theme icon and short label (for example a battery percentage).
-    /// Call after `update`, which restores the spec's bundled icon.
-    pub fn set_icon_and_label(&mut self, icon: &str, label: &str) {
-        if let (Ok(icon), Ok(label)) = (CString::new(icon), CString::new(label)) {
+    /// Show a short live label alongside the bundled icon, where supported by the host.
+    pub fn set_label(&mut self, label: &str) {
+        if let Ok(label) = CString::new(label) {
             unsafe {
-                libappindicator::app_indicator_set_icon_full(
-                    self.inner.indicator,
-                    icon.as_ptr(),
-                    label.as_ptr(),
-                );
                 libappindicator::app_indicator_set_label(
                     self.inner.indicator,
                     label.as_ptr(),
