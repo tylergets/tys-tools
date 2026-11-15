@@ -1,26 +1,20 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed } from "vue";
 import captures from "../public/screenshots/manifest.json";
 
 const { name } = defineProps({
   name: { type: String, required: true },
 });
 const views = computed(() => Object.values(captures).filter(capture => capture.tool === name));
-const selected = ref(0);
-watch(() => name, () => { selected.value = 0; });
-const capture = computed(() => views.value[selected.value]);
-const source = computed(() => `${import.meta.env.BASE_URL}screenshots/${capture.value.scene}.png?v=${capture.value.sha256.slice(0, 12)}`);
+const source = capture => `${import.meta.env.BASE_URL}screenshots/${capture.scene}.png?v=${capture.sha256.slice(0, 12)}`;
 </script>
 
 <template>
-  <figure class="tool-screenshot">
-    <div v-if="views.length > 1" class="views" aria-label="Screenshot views">
-      <button v-for="(view, index) in views" :key="view.scene" type="button"
-        :aria-pressed="selected === index" @click="selected = index">{{ view.caption }}</button>
-    </div>
-    <a :href="source" :aria-label="`Open full-size ${name} screenshot`">
+  <div class="screenshots" :class="{ single: views.length === 1 }">
+  <figure v-for="capture in views" :key="capture.scene" class="tool-screenshot">
+    <a class="image" :href="source(capture)" :aria-label="`Open full-size ${name}: ${capture.caption}`">
       <img
-        :src="source"
+        :src="source(capture)"
         :alt="`${name}: ${capture.caption}`"
         :width="capture.width"
         :height="capture.height"
@@ -33,35 +27,41 @@ const source = computed(() => `${import.meta.env.BASE_URL}screenshots/${capture.
       <a href="https://github.com/tylergets/tys-tools/tree/main/site/screenshots">Repeatable Xvfb capture</a>
     </figcaption>
   </figure>
+  </div>
 </template>
 
 <style scoped>
-.tool-screenshot {
+.screenshots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  align-items: start;
+  gap: 24px;
   margin: 24px 0 32px;
+}
+.tool-screenshot {
+  min-width: 0;
+  margin: 0;
+}
+.image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 280px;
+}
+.single .image {
+  height: auto;
+  justify-content: flex-start;
 }
 .tool-screenshot img {
   display: block;
   max-width: 100%;
   height: auto;
+  width: auto;
+  max-height: 100%;
+  object-fit: contain;
 }
-.views {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.views button {
-  font: inherit;
-  color: inherit;
-  background: transparent;
-  border: 1px solid currentColor;
-  padding: 6px 10px;
-  cursor: pointer;
-}
-.views button[aria-pressed="true"] {
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 4px;
+.single img {
+  max-height: 480px;
 }
 .tool-screenshot figcaption {
   margin-top: 8px;

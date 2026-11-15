@@ -65,7 +65,7 @@ entry in `site/src/tools.js` should have a corresponding image. Do not silently 
 a failed scene with a blank desktop or a fabricated app window.
 
 `scenes.json` maps each image name to its app and caption. App detail pages show a
-view selector when an app has multiple captures. `--only tyshot` captures all of
+side-by-side gallery when an app has multiple captures, stacking on narrow screens. `--only tyshot` captures all of
 tyshot's views; `--only tyshot-annotate` captures only its annotation scene.
 
 Additional views cover tybat's device/charge menu, tynotif's history, tycapture's
