@@ -21,13 +21,14 @@ cargo run -p tyboard -- run`;
 <template>
   <h1>ty's tools</h1>
   <p class="lede">
-    Small desktop tools for Linux. Each one does one job, most sit in the system tray, and
-    all of them can be scripted from the command line. Built for X11 and used daily on i3;
-    they run on Wayland too. Written in Rust, packaged with Nix, <a :href="license">MIT licensed</a>.
+    Small desktop tools for Linux, written in Rust. Most sit in the system tray, and each
+    has a command-line interface for scripts and keybindings. I use them daily on i3.
+    They were built for X11 and also run on supported Wayland compositors.
+    They're packaged with Nix and <a :href="license">MIT licensed</a>.
   </p>
   <p class="muted">v{{ deps.version }} · <RouterLink to="/deps">dependencies</RouterLink></p>
 
-  <nav class="tray-bar" aria-label="Desktop bar preview — explore the tools">
+  <nav class="tray-bar" aria-label="Desktop bar preview: explore the tools">
     <span class="tray-workspace" aria-hidden="true">1</span>
     <span class="tray-title" aria-hidden="true">ty's tools</span>
     <div class="tray-icons">
@@ -44,15 +45,13 @@ cargo run -p tyboard -- run`;
     <span class="tray-clock" aria-hidden="true">Nov 11&nbsp; 11:28 PM</span>
   </nav>
 
-  <h2>Why use them</h2>
+  <h2>How they fit your desktop</h2>
   <ul class="plain">
-    <li><strong>Private.</strong> No telemetry, no accounts, no cloud. Works offline.</li>
-    <li><strong>Lightweight.</strong> Native Rust, no Electron. Idle tools sleep, not poll.</li>
-    <li><strong>Scriptable.</strong> A CLI for everything, made for bars and keybindings.</li>
-    <li><strong>Plain config.</strong> One YAML file per tool, ready for your dotfiles.</li>
-    <li><strong>Reproducible.</strong> One Nix flake, Home Manager modules included.</li>
-    <li><strong>Minimal, auditable dependencies.</strong> <RouterLink to="/deps">See the list</RouterLink>.</li>
-    <li><strong>Open source.</strong> <a :href="license">MIT licensed</a>.</li>
+    <li>There's no telemetry or separate account to create. Tools that use online services, like tyci, need those services' accounts and a connection.</li>
+    <li>The apps are written in native Rust and don't use Electron.</li>
+    <li>Each tool has a YAML config file you can keep in your dotfiles.</li>
+    <li>One Nix flake provides reproducible packages and Home Manager modules.</li>
+    <li>You can review the <RouterLink to="/deps">dependencies and their licenses</RouterLink>.</li>
   </ul>
 
   <h2>Tools</h2>
@@ -69,16 +68,17 @@ cargo run -p tyboard -- run`;
 
   <h2>Wayland</h2>
   <p>
-    Every tool runs on Wayland compositors with the wlroots protocols (layer-shell, screencopy,
-    data-control, virtual-keyboard): sway, Hyprland, river and similar. KDE covers most of it;
-    GNOME doesn't offer these protocols. Each tool's page says what changes on Wayland, and
-    the Nix packages bring the helpers it needs (wl-clipboard, wtype, grim, wf-recorder).
+    Wayland support depends on the protocols your compositor implements, including layer-shell,
+    screencopy, data-control and virtual-keyboard. The tools support sway, Hyprland, river and
+    similar compositors. KDE supports most of these protocols; GNOME doesn't offer them.
+    Check each tool's page for its requirements and Wayland limitations. The Nix packages
+    include the helpers each tool needs, such as wl-clipboard, wtype, grim and wf-recorder.
   </p>
 
   <h2>Install</h2>
-  <p>Everything lives in one Nix flake.</p>
+  <p>Try a tool or install the whole collection:</p>
   <CodeBlock :code="tryOne" lang="shell" />
-  <p>Home Manager, all tools at once:</p>
+  <p>With Home Manager, import the modules and enable the tools you want:</p>
   <CodeBlock :code="homeManager" lang="nix" />
   <p>From source:</p>
   <CodeBlock :code="fromSource" lang="shell" />

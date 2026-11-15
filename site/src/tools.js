@@ -7,10 +7,10 @@ export const license = `${repo}/blob/main/LICENSE`;
 export const tools = [
   {
     name: "tybat",
-    tagline: "A battery warning you will actually see.",
+    tagline: "Battery levels and low-charge warnings.",
     summary:
       "Laptop and connected device batteries in your tray, including Bluetooth devices. " +
-      "A critical laptop battery takes focus with a countdown to suspend or hibernate.",
+      "When the laptop battery is critically low, a focused popup counts down to suspend or hibernate.",
     features: [
       "Tray icon in the shared ty-tools palette and laptop percentage",
       "Optional Framework charge cap with persistent tray overrides and resume reapply",
@@ -56,7 +56,7 @@ action = "suspend";
   },
   {
     name: "tynotif",
-    tagline: "Notifications, history, and a little quiet.",
+    tagline: "Desktop notifications with history and snooze.",
     summary:
       "An opt-in notification daemon with popup actions, progress, in-memory history " +
       "and tray controls for history and timed snoozing. Works with notify-send and desktop apps.",
@@ -190,7 +190,7 @@ snippets = [
     tagline: "Screen recording from your tray.",
     summary:
       "Record the screen, a region, or one window at an exact size, with mic and system " +
-      "audio. Encodes on the GPU when it can and can zoom in where you click.",
+      "audio. It uses GPU encoding when available and can zoom in where you click.",
     features: [
       "Screen: record everything",
       "Window: click a window, pick a size (1080p, 4K, square, vertical, custom). It moves to its own i3 or sway workspace at that size, then goes back when you stop.",
@@ -403,7 +403,7 @@ monitor_brightness = {
   },
   {
     name: "tygesture",
-    tagline: "Touchpad gestures, your commands.",
+    tagline: "Run commands with touchpad gestures.",
     summary:
       "Maps touchpad swipes, pinches, twists and holds to shell commands, like fusuma or " +
       "libinput-gestures. It reads libinput directly, so gestures can also work like sliders.",
@@ -454,7 +454,7 @@ pinch."2" = {
   },
   {
     name: "typort",
-    tagline: "Your dev servers, one click away.",
+    tagline: "Dev servers in your tray.",
     summary:
       "Lists the ports your user is listening on (Vite, Next.js, http.server, …) in the tray. " +
       "Open one in the browser, copy its URL, or stop it.",
@@ -484,9 +484,9 @@ browser = [ "firefox" "--new-tab" ];`,
   },
   {
     name: "tyci",
-    tagline: "Your CI and PRs, in the tray.",
+    tagline: "GitHub Actions and pull requests in your tray.",
     summary:
-      "Shows the GitHub Actions runs going right now, the ones that just finished, and " +
+      "Shows running and recently finished GitHub Actions runs, plus " +
       "recently opened pull requests. Click one to open it. Uses the gh CLI you're already logged in to.",
     features: [
       "Running and recently finished CI runs across your repos",
@@ -562,10 +562,10 @@ dim_screen = false;`,
   },
   {
     name: "tylock",
-    tagline: "A lock screen with your wallpaper, a clock and your finger.",
+    tagline: "A screen locker with password and fingerprint support.",
     summary:
       "A screen locker for X11 and Wayland: your wallpaper with a large clock, unlocked " +
-      "with your password or a finger through PAM, sharp on 1080p and 4K alike.",
+      "with your password or fingerprint through PAM. It renders at each monitor's resolution, including 1080p and 4K.",
     features: [
       "Fingerprint and password side by side: touch the reader or start typing",
       "Unlocks through PAM, with the reader's and PAM's own messages",
