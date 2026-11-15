@@ -21,7 +21,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("DbusmenuGtk3", "0.4")
 from gi.repository import Gtk, Gdk, GLib, DbusmenuGtk3
-import cairo
+from PIL import Image, ImageChops
 import dbus
 import dbus.service
 from dbus.mainloop.glib import DBusGMainLoop
@@ -29,7 +29,8 @@ from fixtures import prepare
 
 DBusGMainLoop(set_as_default=True)
 bus = dbus.SessionBus()
-tool = sys.argv[1]
+scene = sys.argv[1]
+tool = json.loads(Path('/capture/scenes.json').read_text())[scene]['tool']
 prepare(tool)
 subprocess.Popen(["openbox", "--sm-disable"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -104,28 +105,19 @@ window.add(canvas)
 def draw(_, cr):
     cr.set_source_rgb(.075, .085, .105)
     cr.paint()
-    cr.set_source_rgb(.12, .14, .17)
-    cr.rectangle(0, 0, 1200, 64)
-    cr.fill()
-    cr.select_font_face("DejaVu Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
-    cr.set_font_size(18)
-    cr.set_source_rgb(.83, .83, .82)
-    cr.move_to(32, 40)
-    cr.show_text("ty's tools")
-    cr.set_font_size(14)
-    cr.move_to(1050, 40)
-    cr.show_text("09:41")
-    cr.set_font_size(13)
-    cr.set_source_rgb(.48, .53, .61)
-    cr.move_to(32, 764)
-    cr.show_text(f"{tool}  /  sample session")
     return False
 
 
 canvas.connect("draw", draw)
 window.show_all()
 pump(.5)
-baseline = bytes(Gdk.pixbuf_get_from_window(Gdk.get_default_root_window(), 0, 64, 1200, 672).get_pixels())
+def snapshot():
+    pixbuf = Gdk.pixbuf_get_from_window(Gdk.get_default_root_window(), 0, 0, 1200, 800)
+    mode = "RGBA" if pixbuf.get_has_alpha() else "RGB"
+    return Image.frombytes(mode, (1200, 800), bytes(pixbuf.get_pixels()), "raw", mode, pixbuf.get_rowstride()).convert("RGB")
+
+
+baseline = snapshot()
 
 
 def tray_menu():
@@ -166,7 +158,41 @@ def open_submenu(menu, prefix):
     raise RuntimeError(f"Missing submenu: {prefix}")
 
 
-if tool in {"tyboard", "tykey", "tyspeak", "tylight", "tyci", "typort"}:
+if scene == "tybat-tray":
+    class Device(dbus.service.Object):
+        def __init__(self, index, model, percent, laptop):
+            self.path = f"/org/freedesktop/UPower/devices/sample{index}"
+            super().__init__(bus, self.path)
+            self.props = {"Type": dbus.UInt32(2 if laptop else 5), "IsPresent": dbus.Boolean(True),
+                          "PowerSupply": dbus.Boolean(laptop), "Model": model,
+                          "Percentage": dbus.Double(percent), "State": dbus.UInt32(2), "NativePath": self.path}
+
+        @dbus.service.method("org.freedesktop.DBus.Properties", in_signature="s", out_signature="a{sv}")
+        def GetAll(self, interface):
+            return self.props
+
+    class UPower(dbus.service.Object):
+        def __init__(self):
+            self.name = dbus.service.BusName("org.freedesktop.UPower", bus)
+            super().__init__(bus, "/org/freedesktop/UPower")
+            self.devices = [Device(0, "Framework", 76, True), Device(1, "Wireless mouse", 62, False), Device(2, "Headphones", 85, False)]
+
+        @dbus.service.method("org.freedesktop.UPower", out_signature="ao")
+        def EnumerateDevices(self):
+            return [dbus.ObjectPath(device.path) for device in self.devices]
+
+    power = UPower()
+    config = Path.home() / '.config/tybat/config.yaml'
+    config.write_text(config.read_text() + "charge_limit: { percent: 80, command: ['true'] }\n")
+    app = launch(tool, "run")
+    menu = tray_menu()
+    open_submenu(menu, "Maximum charge:")
+elif scene == "tylight-graph":
+    app = launch(tool, "run")
+    wait_for(lambda: watcher.items, "applet")
+    run("tylight", "graph")
+    pump(2)
+elif tool in {"tyboard", "tykey", "tyspeak", "tylight", "tyci", "typort"}:
     if tool == "typort":
         Path("index.html").write_text("<title>Project documentation</title><h1>Documentation</h1>")
         subprocess.Popen(["python", "-m", "http.server", "5173", "--bind", "127.0.0.1"], executable=sys.executable)
@@ -195,8 +221,13 @@ elif tool == "tybat":
 elif tool == "tycapture":
     app = launch("tycapture", "run")
     wait_for(lambda: Path("/run/user/tycapture-demo.sock").exists(), "capture daemon")
-    launch("tycapture", "start", "screen")
-    pump(2)
+    if scene == "tycapture-recording":
+        run("tycapture", "start", "screen", "--now")
+        wait_for(lambda: run("tycapture", "status").startswith("recording"), "recording")
+        menu = tray_menu()
+    else:
+        launch("tycapture", "start", "screen")
+        pump(2)
 elif tool == "tyshot":
     # Use a real GTK window as the subject, then select it with the actual overlay.
     note = Gtk.Window(title="A small improvement")
@@ -214,6 +245,13 @@ elif tool == "tyshot":
     pump(1)
     run("xdotool", "mousemove", "250", "160", "mousedown", "1", "mousemove", "950", "620", "mouseup", "1")
     pump(.5)
+    if scene == "tyshot-annotate":
+        for key, start, end in [("r", (420, 325), (785, 465)), ("a", (810, 505), (715, 425))]:
+            run("xdotool", "key", key)
+            run("xdotool", "mousemove", *map(str, start), "mousedown", "1", "mousemove", *map(str, end), "mouseup", "1")
+            pump(.2)
+        run("xdotool", "key", "n", "mousemove", "395", "340", "click", "1")
+        pump(.3)
 elif tool == "tygesture":
     app = launch("tygesture", "run")
     wait_for(lambda: Path("/run/user/tygesture-demo.sock").exists(), "gesture daemon")
@@ -231,6 +269,10 @@ elif tool == "tynotif":
     notify.Notify("Build & test", 0, "", "All checks passed", "Your changes are ready to ship.", ["default", "Open build"], {"urgency": dbus.Byte(1)}, 0)
     notify.Notify("Downloads", 0, "", "Download in progress", "Release archive", [], {"value": dbus.Int32(68)}, 0)
     pump(1)
+    if scene == "tynotif-history":
+        run("tynotif", "close-all")
+        menu = tray_menu()
+        open_submenu(menu, "History (")
 elif tool == "tylock":
     app = launch("tylock")
     pump(1)
@@ -273,14 +315,30 @@ if app.poll() is not None:
     raise RuntimeError(f"{tool} exited before capture ({app.returncode})")
 run("xdotool", "mousemove", "1180", "780")
 pump(.2)
-root = Gdk.get_default_root_window()
-if bytes(Gdk.pixbuf_get_from_window(root, 0, 64, 1200, 672).get_pixels()) == baseline:
+image = snapshot()
+bounds = ImageChops.difference(image, baseline).getbbox()
+if bounds is None:
     raise RuntimeError(f"{tool} left only the empty sample desktop visible")
-image = Gdk.pixbuf_get_from_window(root, 0, 0, 1200, 800)
-if len(set(image.get_pixels())) < 8:
+if max(high - low for low, high in image.getextrema()) < 8:
     raise RuntimeError(f"{tool} rendered a blank screen")
-image.savev(f"/output/{tool}.png", "png", [], [])
+# Menus and dialogs need a close-up, not a made-up desktop frame. Keep native
+# window decorations where the app actually has them. Screen-wide UIs stay wide.
+framing = "full-screen"
+if tool not in {"tylock", "tyshot"}:
+    if scene == "tybat":
+        bounds = (320, 245, 880, 555)  # critical popup; exclude the dimming surface
+    else:
+        # Sample the final backdrop: initial WM/theme settling can repaint the
+        # entire desktop after the baseline, which would defeat a temporal diff.
+        backdrop = Image.new("RGB", image.size, image.getpixel((0, 799)))
+        bounds = ImageChops.difference(image, backdrop).getbbox()
+        if bounds is None:
+            raise RuntimeError(f"{tool} has no visible content to crop")
+    left, top, right, bottom = bounds
+    image = image.crop((max(0, left - 12), max(0, top - 12), min(1200, right + 12), min(800, bottom + 12)))
+    framing = "content"
+image.save(f"/output/{scene}.png")
 version = run(tool, "--version").strip()
-Path(f"/output/{tool}.json").write_text(json.dumps({"version": version, "width": 1200, "height": 800, "scene": tool, "theme": "Adwaita:dark", "font": "DejaVu Sans 11"}, indent=2) + "\n")
+Path(f"/output/{scene}.json").write_text(json.dumps({"version": version, "width": image.width, "height": image.height, "framing": framing, "scene": scene, "theme": "Adwaita:dark", "font": "DejaVu Sans 11"}, indent=2) + "\n")
 print(f"Captured {tool}: {version}", flush=True)
 os._exit(0)

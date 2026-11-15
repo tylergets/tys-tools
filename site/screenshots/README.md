@@ -34,8 +34,11 @@ There is no access to the real desktop, clipboard, credentials, hardware, system
 network, or other running processes. The store is read-only. Linux must permit
 unprivileged user namespaces; the script fails rather than capturing the host desktop.
 
-All scenes use Adwaita dark, pinned DejaVu fonts, the same sample desktop and a fixed
-desktop clock. The applications themselves are real processes. The minimal tray host
+All scenes use Adwaita dark, pinned DejaVu fonts and a plain background. Menus and
+dialogs are cropped to their real content with 12px of breathing room; tylock and
+tyshot retain their full-screen view. There is no synthetic desktop frame or website
+border. Native window decorations are kept only where the app has them. The lock
+screen clock is fixed. The applications themselves are real processes. The minimal tray host
 renders their real exported menus using libdbusmenu-gtk3. GUI interactions use normal
 CLI commands, D-Bus calls and xdotool. tyquote is captured in a real xterm.
 
@@ -56,7 +59,16 @@ have to build every native app.
 
 ## Adding an app
 
-Add its name to `capture.py`, add a scene in `scene.py` and any sample inputs in
+Add its views to `scenes.json`, add scenes in `scene.py` and any sample inputs in
 `fixtures.py`. Capture it, inspect the PNG, and commit it with `manifest.json`. Every
 entry in `site/src/tools.js` should have a corresponding image. Do not silently replace
 a failed scene with a blank desktop or a fabricated app window.
+
+`scenes.json` maps each image name to its app and caption. App detail pages show a
+view selector when an app has multiple captures. `--only tyshot` captures all of
+tyshot's views; `--only tyshot-annotate` captures only its annotation scene.
+
+Additional views cover tybat's device/charge menu, tynotif's history, tycapture's
+active recording controls, tyshot's annotations, and tylight's schedule graph.
+The battery menu uses a private UPower fixture and an inert charge-limit command;
+the recording scene starts a real recording inside the sandbox.

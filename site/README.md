@@ -38,7 +38,7 @@ without their own config file, use `configTool` to name the integration target a
 `storage` to explain where their data lives.
 Use `integration` for a separate Nix example connecting a tool to tylock.
 
-Every app also has a real screenshot on its card and detail page. See
+Every app also has a real screenshot on its detail page. See
 [`screenshots/README.md`](screenshots/README.md) for the isolated Xvfb capture scripts
 and commands to regenerate `public/screenshots/` consistently.
 

@@ -1,128 +1,230 @@
 {
   "tybat": {
     "version": "tybat 0.12.1",
-    "width": 1200,
-    "height": 800,
+    "width": 584,
+    "height": 334,
+    "framing": "content",
     "scene": "tybat",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "65e675ff8caefbea3ce840adedfdb837f549a5e7f85fe5d4c740c5bb5cbb39e9"
+    "sha256": "cef854f26d905300d59099eee3baad6f25ea6aa0cf601ef6a1909a3be51fa0c5",
+    "tool": "tybat",
+    "caption": "Critical battery countdown"
   },
   "tynotif": {
     "version": "tynotif 0.12.1",
-    "width": 1200,
-    "height": 800,
+    "width": 504,
+    "height": 278,
+    "framing": "content",
     "scene": "tynotif",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "dddc434862d76cd6f6ee992daab268cb0c6dbdac8a9c1a42d383e241bbf4b2d6"
+    "sha256": "779cfb25ec737daed70f6e0c26549a016334cd27ebc6b5d45834537c3063c0af",
+    "tool": "tynotif",
+    "caption": "Notifications and progress"
   },
   "tyboard": {
     "version": "tyboard 0.12.1",
-    "width": 1200,
-    "height": 800,
+    "width": 523,
+    "height": 164,
+    "framing": "content",
     "scene": "tyboard",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "b72dd8f62da79e7dde3e2414ff1680755791cff1c4b5bf9ebfed9f696f660dae"
+    "sha256": "2a9a0e20aff25458daaaa1788f9f02407ffabb710ea95772cf3846e74494ebd3",
+    "tool": "tyboard",
+    "caption": "Clipboard history"
   },
   "tykey": {
     "version": "tykey 0.12.1",
-    "width": 1200,
-    "height": 800,
+    "width": 187,
+    "height": 164,
+    "framing": "content",
     "scene": "tykey",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "619fef9b4935e142198e0f6597092c31d4ffd50f207e83e64832e9b527b71ad5"
+    "sha256": "912f00aa643d705dcaf139145f164b94dce4b5e5b6022e4488c2364c9c0e1f80",
+    "tool": "tykey",
+    "caption": "Snippet menu"
   },
   "tycapture": {
     "version": "tycapture 0.12.1",
-    "width": 1200,
-    "height": 800,
+    "width": 491,
+    "height": 776,
+    "framing": "content",
     "scene": "tycapture",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "66e3d4f9a3c4c76e0bdd1b93bf35cb0b16472c5b4a4896abf776dc2062d4d1d9"
+    "sha256": "19acd312d2ff56288591f1750873ab6db1a367bb055606d4bfcdf03d0815a394",
+    "tool": "tycapture",
+    "caption": "Recording setup"
   },
   "tyshot": {
     "version": "tyshot 0.12.1",
     "width": 1200,
     "height": 800,
+    "framing": "full-screen",
     "scene": "tyshot",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "8fbbf6eab26f8263ff2af5ef2676770f505a85f7d840cc39f03c9c113dfe71ea"
+    "sha256": "316d83a05be010cf646da8d2254c7736eadbe12737b61346636819032c88ae78",
+    "tool": "tyshot",
+    "caption": "Region selection"
   },
   "tyspeak": {
     "version": "tyspeak 0.12.1",
-    "width": 1200,
-    "height": 800,
+    "width": 797,
+    "height": 268,
+    "framing": "content",
     "scene": "tyspeak",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "18a5b0e4c19839bbcecb7fc8b8794a618dd51315fcdb9535c0268584a8a09632"
+    "sha256": "02146e4b3833b7b362a8ce642f80804e63985851e902359c0db211a0859909c9",
+    "tool": "tyspeak",
+    "caption": "Model selection"
   },
   "tylight": {
     "version": "tylight 0.12.1",
-    "width": 1200,
-    "height": 800,
+    "width": 474,
+    "height": 241,
+    "framing": "content",
     "scene": "tylight",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "08cc42088bea15e7edd6e647b79e2ebbb8a7e1518633a1c86a45fd6c36a6d035"
+    "sha256": "b505d1451bc8a413bdc93a715e1427f692abf8b4bb22882861a5efd22f2cd0a9",
+    "tool": "tylight",
+    "caption": "Color temperature presets"
   },
   "tygesture": {
     "version": "tygesture 0.12.1",
-    "width": 1200,
-    "height": 800,
+    "width": 808,
+    "height": 451,
+    "framing": "content",
     "scene": "tygesture",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "56ac7bbc44f1fb0302548caea2b0ab370a4c2a34924a132970057dca79d13a02"
+    "sha256": "d0c480ec98ac4bb7450fa5ef4c09e2dee8b4c2167e92fe8ed8dd7a44c7a57a1f",
+    "tool": "tygesture",
+    "caption": "Gesture bindings"
   },
   "typort": {
     "version": "typort 0.12.1",
-    "width": 1200,
-    "height": 800,
+    "width": 675,
+    "height": 243,
+    "framing": "content",
     "scene": "typort",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "ee7e2996014452335e0d743e63f11fa8543c59604eacffa17738b111fa3d9fc0"
+    "sha256": "eb31c9d06cd1a9c7f63c1f9e1a3258055e05ee5fb02e32bac9758cf02e8e7528",
+    "tool": "typort",
+    "caption": "Local server controls"
   },
   "tyci": {
     "version": "tyci 0.12.1",
-    "width": 1200,
-    "height": 800,
+    "width": 455,
+    "height": 269,
+    "framing": "content",
     "scene": "tyci",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "1f30d8a9a92631e8b26f9ecfeb506193b3ef7d72dfdd28d52dc89cf6e32ed1df"
+    "sha256": "502ded0b858fc43743cbba62f85cc0afdd1f1c834c19bc41887954c59e3ce0ea",
+    "tool": "tyci",
+    "caption": "Builds and pull requests"
   },
   "typk": {
     "version": "typk 0.12.1",
-    "width": 1200,
-    "height": 800,
+    "width": 484,
+    "height": 317,
+    "framing": "content",
     "scene": "typk",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "a76d75ed854da7a1cf93ad4f778faadcd0a2ba1235df6c511ceffa72fcc5b6ab"
+    "sha256": "fdedffce201dde2e3b19e8fac755307d2ba29f5d70ec3c148507a4588dd96d59",
+    "tool": "typk",
+    "caption": "Authentication prompt"
   },
   "tylock": {
     "version": "tylock 0.12.1",
     "width": 1200,
     "height": 800,
+    "framing": "full-screen",
     "scene": "tylock",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "85c067f5efcd6d72642be66e077ea7bc3126ec0ff1182609339b5e911c74de1c"
+    "sha256": "da3ae00d2468829828fee96a6bdb57a5764dca9381c32b3668a6727bf6b5c60a",
+    "tool": "tylock",
+    "caption": "Lock screen"
   },
   "tyquote": {
     "version": "tyquote 0.12.1",
-    "width": 1200,
-    "height": 800,
+    "width": 872,
+    "height": 495,
+    "framing": "content",
     "scene": "tyquote",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "68baefc85f076fb7f49c1ba27edfc048ff5d93b16a527b334f1db02b93f40ad2"
+    "sha256": "50e1b8239f70d942ea7e676bc49e786f64845fae83995f19aa247d21e60ff114",
+    "tool": "tyquote",
+    "caption": "Quotes in the terminal"
+  },
+  "tybat-tray": {
+    "version": "tybat 0.12.1",
+    "width": 610,
+    "height": 488,
+    "framing": "content",
+    "scene": "tybat-tray",
+    "theme": "Adwaita:dark",
+    "font": "DejaVu Sans 11",
+    "sha256": "eea550b76d942ee49df9d021f8a1a1dfa97227522d24d1726d3cac7e17b17bd6",
+    "tool": "tybat",
+    "caption": "Device batteries and charge limit"
+  },
+  "tynotif-history": {
+    "version": "tynotif 0.12.1",
+    "width": 563,
+    "height": 216,
+    "framing": "content",
+    "scene": "tynotif-history",
+    "theme": "Adwaita:dark",
+    "font": "DejaVu Sans 11",
+    "sha256": "241cdca4df59e9a0d64b9fdef19263694fc410925c88f68505c596b0ac4eadcd",
+    "tool": "tynotif",
+    "caption": "Notification history"
+  },
+  "tycapture-recording": {
+    "version": "tycapture 0.12.1",
+    "width": 301,
+    "height": 217,
+    "framing": "content",
+    "scene": "tycapture-recording",
+    "theme": "Adwaita:dark",
+    "font": "DejaVu Sans 11",
+    "sha256": "21c5e1a8fba773dc71ef71cccb8db1f050362a6e33112278a33987cb3dbc996d",
+    "tool": "tycapture",
+    "caption": "Recording controls"
+  },
+  "tyshot-annotate": {
+    "version": "tyshot 0.12.1",
+    "width": 1200,
+    "height": 800,
+    "framing": "full-screen",
+    "scene": "tyshot-annotate",
+    "theme": "Adwaita:dark",
+    "font": "DejaVu Sans 11",
+    "sha256": "5e48661eba07d22935f1afc0dc8de7775ec82adee603e98ac9fc47fc950dc369",
+    "tool": "tyshot",
+    "caption": "Arrows and annotations"
+  },
+  "tylight-graph": {
+    "version": "tylight 0.12.1",
+    "width": 776,
+    "height": 379,
+    "framing": "content",
+    "scene": "tylight-graph",
+    "theme": "Adwaita:dark",
+    "font": "DejaVu Sans 11",
+    "sha256": "5bd358f87500caf3ada5423bd9d64804fd42ad15d8ea7f21b2da673c9f7487bd",
+    "tool": "tylight",
+    "caption": "Temperature schedule"
   }
 }

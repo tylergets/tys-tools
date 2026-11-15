@@ -1,0 +1,21 @@
+{
+  "tybat": { "tool": "tybat", "caption": "Critical battery countdown" },
+  "tybat-tray": { "tool": "tybat", "caption": "Device batteries and charge limit" },
+  "tynotif": { "tool": "tynotif", "caption": "Notifications and progress" },
+  "tynotif-history": { "tool": "tynotif", "caption": "Notification history" },
+  "tyboard": { "tool": "tyboard", "caption": "Clipboard history" },
+  "tykey": { "tool": "tykey", "caption": "Snippet menu" },
+  "tycapture": { "tool": "tycapture", "caption": "Recording setup" },
+  "tycapture-recording": { "tool": "tycapture", "caption": "Recording controls" },
+  "tyshot": { "tool": "tyshot", "caption": "Region selection" },
+  "tyshot-annotate": { "tool": "tyshot", "caption": "Arrows and annotations" },
+  "tyspeak": { "tool": "tyspeak", "caption": "Model selection" },
+  "tylight": { "tool": "tylight", "caption": "Color temperature presets" },
+  "tylight-graph": { "tool": "tylight", "caption": "Temperature schedule" },
+  "tygesture": { "tool": "tygesture", "caption": "Gesture bindings" },
+  "typort": { "tool": "typort", "caption": "Local server controls" },
+  "tyci": { "tool": "tyci", "caption": "Builds and pull requests" },
+  "typk": { "tool": "typk", "caption": "Authentication prompt" },
+  "tylock": { "tool": "tylock", "caption": "Lock screen" },
+  "tyquote": { "tool": "tyquote", "caption": "Quotes in the terminal" }
+}

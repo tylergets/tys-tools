@@ -1,6 +1,6 @@
 # A capture environment, separate from the app packages so existing builds can be reused.
 {pkgs}: let
-  python = pkgs.python3.withPackages (p: [p.pygobject3 p.pycairo p.dbus-python]);
+  python = pkgs.python3.withPackages (p: [p.pygobject3 p.pycairo p.dbus-python p.pillow]);
 in
   pkgs.stdenvNoCC.mkDerivation {
     pname = "tys-tools-screenshots";

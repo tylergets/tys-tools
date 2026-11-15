@@ -10,15 +10,15 @@ import sys
 import tempfile
 
 HERE = Path(__file__).resolve().parent
-TOOLS = ["tybat", "tynotif", "tyboard", "tykey", "tycapture", "tyshot", "tyspeak",
-         "tylight", "tygesture", "typort", "tyci", "typk", "tylock", "tyquote"]
+SCENES = json.loads((HERE / "scenes.json").read_text())
+TOOLS = sorted({scene["tool"] for scene in SCENES.values()})
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apps", type=Path, required=True, help="built package containing bin/ (nix build .#default)")
     parser.add_argument("--output", type=Path, default=Path("site/public/screenshots"))
-    parser.add_argument("--only", choices=TOOLS, action="append", help="capture only these apps")
+    parser.add_argument("--only", choices=sorted(set(TOOLS) | set(SCENES)), action="append", help="capture an app's views, or one named scene")
     parser.add_argument("--logs", type=Path, default=Path(tempfile.gettempdir()) / "tys-tools-screenshot-logs")
     args = parser.parse_args()
     apps = args.apps.resolve()
@@ -26,14 +26,14 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     logs = args.logs.resolve()
     logs.mkdir(parents=True, exist_ok=True)
-    selected = args.only or TOOLS
+    selected = [name for name, scene in SCENES.items() if not args.only or name in args.only or scene["tool"] in args.only]
     failures = []
-    for tool in selected:
+    for tool in {SCENES[name]["tool"] for name in selected}:
         if not (apps / "bin" / tool).is_file():
             parser.error(f"missing {apps / 'bin' / tool}")
-    for tool in selected:
-        print(f"Capturing {tool}…", flush=True)
-        with tempfile.TemporaryDirectory(prefix=f"ty-screenshot-{tool}-") as temp:
+    for scene in selected:
+        print(f"Capturing {scene}…", flush=True)
+        with tempfile.TemporaryDirectory(prefix=f"ty-screenshot-{scene}-") as temp:
             root = Path(temp)
             home = root / "home"
             home.mkdir()
@@ -72,20 +72,22 @@ def main():
                     env[key] = os.environ[key]
             for key, value in env.items():
                 cmd += ["--setenv", key, value]
-            cmd += ["--chdir", "/home/demo", "dbus-run-session", "--config-file=/capture/session.conf", "--", sys.executable, "/capture/scene.py", tool]
+            cmd += ["--chdir", "/home/demo", "dbus-run-session", "--config-file=/capture/session.conf", "--", sys.executable, "/capture/scene.py", scene]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
-            (logs / f"{tool}.log").write_text(result.stdout + result.stderr)
+            (logs / f"{scene}.log").write_text(result.stdout + result.stderr)
             if result.returncode:
-                failures.append(tool)
-                print(f"{tool} failed; see {logs / (tool + '.log')}\n{result.stderr[-2000:]}", file=sys.stderr)
+                failures.append(scene)
+                print(f"{scene} failed; see {logs / (scene + '.log')}\n{result.stderr[-2000:]}", file=sys.stderr)
     manifest_path = output / "manifest.json"
     manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
-    for tool in TOOLS:
-        image = output / f"{tool}.png"
-        metadata = output / f"{tool}.json"
+    for scene in SCENES:
+        image = output / f"{scene}.png"
+        metadata = output / f"{scene}.json"
         if image.exists() and metadata.exists():
-            manifest[tool] = {**json.loads(metadata.read_text()), "sha256": hashlib.sha256(image.read_bytes()).hexdigest()}
+            manifest[scene] = {**json.loads(metadata.read_text()), "sha256": hashlib.sha256(image.read_bytes()).hexdigest()}
             metadata.unlink()
+        if scene in manifest:
+            manifest[scene].update(SCENES[scene])
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
     if failures:
         raise SystemExit("Failed scenes: " + ", ".join(failures))
