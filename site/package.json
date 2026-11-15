@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "screenshots": "cd .. && nix build .#default --out-link site/.screenshot-apps && nix run .#screenshots -- --apps site/.screenshot-apps",
+    "prebuild": "node screenshots/check.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },

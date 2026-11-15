@@ -37,6 +37,7 @@
       lib.genAttrs tools (name: built.${name})
       // {
         workspace = built.workspace;
+        screenshots = import ./nix/screenshots.nix {inherit pkgs;};
         default = pkgs.symlinkJoin {
           name = "tys-tools-${built.workspace.version}";
           paths = map (name: built.${name}) tools;

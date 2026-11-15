@@ -2,6 +2,7 @@
 import { tools, license } from "../tools.js";
 import deps from "virtual:cargo-deps";
 import ToolIcon from "../ToolIcon.vue";
+import ToolScreenshot from "../ToolScreenshot.vue";
 import CodeBlock from "../CodeBlock.vue";
 
 const tryOne = `# try one
@@ -64,6 +65,7 @@ cargo run -p tyboard -- run`;
       </h3>
       <p class="tagline">{{ t.tagline }}</p>
       <p>{{ t.summary }}</p>
+      <ToolScreenshot :name="t.name" compact />
     </li>
   </ul>
 

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { findTool, nixConfig, repo } from "../tools.js";
 import ToolIcon from "../ToolIcon.vue";
+import ToolScreenshot from "../ToolScreenshot.vue";
 import CodeBlock from "../CodeBlock.vue";
 
 const props = defineProps({ name: { type: String, required: true } });
@@ -15,6 +16,7 @@ watch(() => props.name, () => { configFormat.value = "nix"; });
     <h1><ToolIcon :name="tool.name" />{{ tool.name }}</h1>
     <p class="lede">{{ tool.tagline }}</p>
     <p>{{ tool.summary }}</p>
+    <ToolScreenshot :name="tool.name" />
 
     <h2>Features</h2>
     <ul class="plain">

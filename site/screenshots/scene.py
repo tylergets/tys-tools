@@ -1,0 +1,286 @@
+"""One fresh X server and bus per scene; never runs on the user's desktop."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import signal
+import sys
+import time
+
+os.environ["DBUS_SYSTEM_BUS_ADDRESS"] = os.environ["DBUS_SESSION_BUS_ADDRESS"]
+Path("/run/user").mkdir(mode=0o700)
+xserver = subprocess.Popen(["Xvfb", ":99", "-screen", "0", "1200x800x24", "-dpi", "96", "-nolisten", "tcp", "-ac"])
+for _ in range(100):
+    if Path("/tmp/.X11-unix/X99").exists():
+        break
+    time.sleep(.05)
+else:
+    raise SystemExit("Xvfb did not start")
+
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("DbusmenuGtk3", "0.4")
+from gi.repository import Gtk, Gdk, GLib, DbusmenuGtk3
+import cairo
+import dbus
+import dbus.service
+from dbus.mainloop.glib import DBusGMainLoop
+from fixtures import prepare
+
+DBusGMainLoop(set_as_default=True)
+bus = dbus.SessionBus()
+tool = sys.argv[1]
+prepare(tool)
+subprocess.Popen(["openbox", "--sm-disable"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def pump(seconds=.1):
+    until = time.monotonic() + seconds
+    while time.monotonic() < until:
+        while Gtk.events_pending():
+            Gtk.main_iteration_do(False)
+        time.sleep(.01)
+
+
+def run(*args):
+    result = subprocess.run(args, capture_output=True, text=True, timeout=15)
+    if result.returncode:
+        raise RuntimeError(f"{args}: {result.stderr}")
+    return result.stdout
+
+
+def launch(*args):
+    return subprocess.Popen(args, stdout=sys.stdout, stderr=sys.stderr)
+
+
+def wait_for(predicate, description, seconds=15):
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        if predicate():
+            return
+        pump()
+    raise RuntimeError(f"Timed out waiting for {description}")
+
+
+class Watcher(dbus.service.Object):
+    def __init__(self):
+        self.name = dbus.service.BusName("org.kde.StatusNotifierWatcher", bus)
+        super().__init__(bus, "/StatusNotifierWatcher")
+        self.items = []
+
+    @dbus.service.method("org.kde.StatusNotifierWatcher", in_signature="s", sender_keyword="sender")
+    def RegisterStatusNotifierItem(self, service, sender=None):
+        name, path = (sender, service) if service.startswith("/") else (service, "/StatusNotifierItem")
+        self.items.append((str(name), str(path)))
+        self.StatusNotifierItemRegistered(name + path)
+
+    @dbus.service.method("org.kde.StatusNotifierWatcher", in_signature="s")
+    def RegisterStatusNotifierHost(self, name):
+        pass
+
+    @dbus.service.signal("org.kde.StatusNotifierWatcher", signature="s")
+    def StatusNotifierItemRegistered(self, name):
+        pass
+
+    @dbus.service.method("org.freedesktop.DBus.Properties", in_signature="ss", out_signature="v")
+    def Get(self, interface, prop):
+        return self.GetAll(interface)[prop]
+
+    @dbus.service.method("org.freedesktop.DBus.Properties", in_signature="s", out_signature="a{sv}")
+    def GetAll(self, interface):
+        return {"IsStatusNotifierHostRegistered": dbus.Boolean(True), "ProtocolVersion": dbus.Int32(0),
+                "RegisteredStatusNotifierItems": dbus.Array([name + path for name, path in self.items], signature="s")}
+
+
+watcher = Watcher()
+window = Gtk.Window(title="ty's tools · sample desktop")
+window.set_decorated(False)
+window.set_default_size(1200, 800)
+window.move(0, 0)
+canvas = Gtk.DrawingArea()
+window.add(canvas)
+
+
+def draw(_, cr):
+    cr.set_source_rgb(.075, .085, .105)
+    cr.paint()
+    cr.set_source_rgb(.12, .14, .17)
+    cr.rectangle(0, 0, 1200, 64)
+    cr.fill()
+    cr.select_font_face("DejaVu Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+    cr.set_font_size(18)
+    cr.set_source_rgb(.83, .83, .82)
+    cr.move_to(32, 40)
+    cr.show_text("ty's tools")
+    cr.set_font_size(14)
+    cr.move_to(1050, 40)
+    cr.show_text("09:41")
+    cr.set_font_size(13)
+    cr.set_source_rgb(.48, .53, .61)
+    cr.move_to(32, 764)
+    cr.show_text(f"{tool}  /  sample session")
+    return False
+
+
+canvas.connect("draw", draw)
+window.show_all()
+pump(.5)
+baseline = bytes(Gdk.pixbuf_get_from_window(Gdk.get_default_root_window(), 0, 64, 1200, 672).get_pixels())
+
+
+def tray_menu():
+    wait_for(lambda: watcher.items, "tray registration")
+    pump(2)
+    name, path = watcher.items[-1]
+    obj = bus.get_object(name, path)
+    menu_path = obj.Get("org.kde.StatusNotifierItem", "Menu", dbus_interface="org.freedesktop.DBus.Properties")
+    menu = DbusmenuGtk3.Menu.new(name, str(menu_path))
+    menu.show_all()
+    pump(1)
+    rect = Gdk.Rectangle()
+    size = menu.get_preferred_size()[1]
+    # Leave room for the real submenu, keeping the combined scene in-frame.
+    left = {"tyboard": 350, "tyspeak": 200, "typort": 320, "tylight": 350}.get(tool, (1200 - size.width) // 2)
+    rect.x, rect.y, rect.width, rect.height = left, max(80, (800 - size.height) // 2), 1, 1
+    menu.popup_at_rect(window.get_window(), rect, Gdk.Gravity.NORTH_WEST, Gdk.Gravity.NORTH_WEST, None)
+    pump(1)
+    return menu
+
+
+def clipboard(text):
+    cb = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+    cb.set_text(text, -1)
+    pump(.6)
+
+
+def open_submenu(menu, prefix):
+    for child in menu.get_children():
+        if (child.get_label() or "").startswith(prefix):
+            _, x, y = menu.get_window().get_origin()
+            bounds = child.get_allocation()
+            run("xdotool", "mousemove", str(x + bounds.x + 30), str(y + bounds.y + bounds.height // 2))
+            pump(1)
+            if not child.get_submenu().get_mapped():
+                raise RuntimeError(f"Submenu did not open: {prefix}")
+            return
+    raise RuntimeError(f"Missing submenu: {prefix}")
+
+
+if tool in {"tyboard", "tykey", "tyspeak", "tylight", "tyci", "typort"}:
+    if tool == "typort":
+        Path("index.html").write_text("<title>Project documentation</title><h1>Documentation</h1>")
+        subprocess.Popen(["python", "-m", "http.server", "5173", "--bind", "127.0.0.1"], executable=sys.executable)
+    app = launch(tool, "run")
+    wait_for(lambda: watcher.items, "applet")
+    if tool == "tyboard":
+        for text in ("https://example.com/project", "Make room for the work that matters.", "git switch -c a-small-improvement"):
+            clipboard(text)
+    if tool == "tylight":
+        pump(1)
+        run("tylight", "set", "4500")
+    pump(3)
+    menu = tray_menu()
+    if tool == "tyboard":
+        open_submenu(menu, "History")
+    elif tool == "tyspeak":
+        open_submenu(menu, "Model:")
+    elif tool == "typort":
+        open_submenu(menu, ":5173")
+    elif tool == "tylight":
+        open_submenu(menu, "Presets")
+elif tool == "tybat":
+    app = launch("tybat", "preview")
+    pump(.5)
+    os.kill(app.pid, signal.SIGSTOP)
+elif tool == "tycapture":
+    app = launch("tycapture", "run")
+    wait_for(lambda: Path("/run/user/tycapture-demo.sock").exists(), "capture daemon")
+    launch("tycapture", "start", "screen")
+    pump(2)
+elif tool == "tyshot":
+    # Use a real GTK window as the subject, then select it with the actual overlay.
+    note = Gtk.Window(title="A small improvement")
+    note.set_default_size(640, 380)
+    note.move(280, 190)
+    text = Gtk.Label(label="A small improvement\n\nKeep the useful parts.\nMake the next step obvious.\nLeave things a little better.")
+    text.set_margin_top(48)
+    text.set_margin_bottom(48)
+    text.set_margin_start(48)
+    text.set_margin_end(48)
+    note.add(text)
+    note.show_all()
+    pump(.5)
+    app = launch("tyshot", "gui")
+    pump(1)
+    run("xdotool", "mousemove", "250", "160", "mousedown", "1", "mousemove", "950", "620", "mouseup", "1")
+    pump(.5)
+elif tool == "tygesture":
+    app = launch("tygesture", "run")
+    wait_for(lambda: Path("/run/user/tygesture-demo.sock").exists(), "gesture daemon")
+    run("tygesture", "show")
+    pump(1)
+    wid = run("xdotool", "search", "--onlyvisible", "--name", "^tygesture$").strip().splitlines()[-1]
+    run("xdotool", "windowmove", wid, "210", "185")
+elif tool == "tynotif":
+    app = launch("tynotif", "run")
+    wait_for(lambda: bus.name_has_owner("org.freedesktop.Notifications"), "notifications")
+    pump(.5)
+    run("tynotif", "close-all")
+    proxy = bus.get_object("org.freedesktop.Notifications", "/org/freedesktop/Notifications")
+    notify = dbus.Interface(proxy, "org.freedesktop.Notifications")
+    notify.Notify("Build & test", 0, "", "All checks passed", "Your changes are ready to ship.", ["default", "Open build"], {"urgency": dbus.Byte(1)}, 0)
+    notify.Notify("Downloads", 0, "", "Download in progress", "Release archive", [], {"value": dbus.Int32(68)}, 0)
+    pump(1)
+elif tool == "tylock":
+    app = launch("tylock")
+    pump(1)
+elif tool == "tyquote":
+    run("tyquote", "add", "Make room for the work that matters.", "--author", "A reminder")
+    script = Path("quote-session.sh")
+    script.write_text("set -e\nprintf '\\033[1;36m$ tyquote latest\\033[0m\\n\\n'\n/apps/bin/tyquote latest\nprintf '\\n\\033[1;36m$ tyquote today\\033[0m\\n\\n'\n/apps/bin/tyquote today\ntouch /home/demo/quote-ready\nread -r _\n")
+    app = launch("xterm", "-geometry", "84x20+180+170", "-fa", "DejaVu Sans Mono", "-fs", "13", "-bg", "#171b22", "-fg", "#d3d2d1", "-title", "tyquote", "-e", "/bin/sh", str(script))
+    wait_for(lambda: Path("quote-ready").exists(), "quote terminal output")
+    pump(1)
+elif tool == "typk":
+    # A private fake authority sends a normal request to the real agent. The helper
+    # only prompts and always fails; no host polkit/PAM services are reachable.
+    class Authority(dbus.service.Object):
+        def __init__(self):
+            self.name = dbus.service.BusName("org.freedesktop.PolicyKit1", bus)
+            super().__init__(bus, "/org/freedesktop/PolicyKit1/Authority")
+            self.agent = None
+
+        @dbus.service.method("org.freedesktop.PolicyKit1.Authority", in_signature="(sa{sv})so", sender_keyword="sender")
+        def RegisterAuthenticationAgent(self, subject, locale, path, sender=None):
+            self.agent = (sender, path)
+
+        @dbus.service.method("org.freedesktop.PolicyKit1.Authority", in_signature="(sa{sv})o")
+        def UnregisterAuthenticationAgent(self, subject, path):
+            pass
+
+    authority = Authority()
+    app = launch("typk", "run")
+    wait_for(lambda: authority.agent, "polkit agent registration")
+    name, path = authority.agent
+    proxy = bus.get_object(name, path)
+    identities = dbus.Array([dbus.Struct(("unix-user", dbus.Dictionary({"uid": dbus.UInt32(os.getuid())}, signature="sv")), signature="sa{sv}")], signature="(sa{sv})")
+    proxy.BeginAuthentication("tools.tys.typk.verify", "Authentication is required to install updates.", "system-software-update", dbus.Dictionary({}, signature="ss"), "sample-cookie", identities, dbus_interface="org.freedesktop.PolicyKit1.AuthenticationAgent", reply_handler=lambda: None, error_handler=lambda error: None)
+    pump(1)
+else:
+    raise RuntimeError(f"No scene for {tool}")
+
+if app.poll() is not None:
+    raise RuntimeError(f"{tool} exited before capture ({app.returncode})")
+run("xdotool", "mousemove", "1180", "780")
+pump(.2)
+root = Gdk.get_default_root_window()
+if bytes(Gdk.pixbuf_get_from_window(root, 0, 64, 1200, 672).get_pixels()) == baseline:
+    raise RuntimeError(f"{tool} left only the empty sample desktop visible")
+image = Gdk.pixbuf_get_from_window(root, 0, 0, 1200, 800)
+if len(set(image.get_pixels())) < 8:
+    raise RuntimeError(f"{tool} rendered a blank screen")
+image.savev(f"/output/{tool}.png", "png", [], [])
+version = run(tool, "--version").strip()
+Path(f"/output/{tool}.json").write_text(json.dumps({"version": version, "width": 1200, "height": 800, "scene": tool, "theme": "Adwaita:dark", "font": "DejaVu Sans 11"}, indent=2) + "\n")
+print(f"Captured {tool}: {version}", flush=True)
+os._exit(0)
