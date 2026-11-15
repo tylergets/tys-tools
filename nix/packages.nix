@@ -287,6 +287,12 @@ in {
     runtimeDeps = waylandDeps ++ (with pkgs; [pulseaudio xdotool wtype]);
   };
 
+  tytts = mkTool {
+    name = "tytts";
+    description = "Local text-to-speech with an automatically downloaded voice";
+    runtimeDeps = with pkgs; [piper-tts pulseaudio];
+  };
+
   tylight = mkTool {
     name = "tylight";
     description = "Screen color temperature and monitor brightness daemon (X11 and wlroots)";

@@ -193,6 +193,16 @@ rec {
       # File a bug if you depend on any for non-debug work!
       debug = internal.debugCrate { inherit packageId; };
     };
+    "tytts" = rec {
+      packageId = "tytts";
+      build = internal.buildRustCrateWithFeatures {
+        packageId = "tytts";
+      };
+
+      # Debug support which might change between releases.
+      # File a bug if you depend on any for non-debug work!
+      debug = internal.debugCrate { inherit packageId; };
+    };
   };
 
 
@@ -6123,7 +6133,7 @@ rec {
       };
       "ty-common" = rec {
         crateName = "ty-common";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./crates/ty-common; };
         libName = "ty_common";
@@ -6213,7 +6223,7 @@ rec {
       };
       "tybat" = rec {
         crateName = "tybat";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         crateBin = [
           {
@@ -6259,7 +6269,7 @@ rec {
       };
       "tyboard" = rec {
         crateName = "tyboard";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         crateBin = [
           {
@@ -6314,7 +6324,7 @@ rec {
       };
       "tycapture" = rec {
         crateName = "tycapture";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         crateBin = [
           {
@@ -6364,7 +6374,7 @@ rec {
       };
       "tyci" = rec {
         crateName = "tyci";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         crateBin = [
           {
@@ -6411,7 +6421,7 @@ rec {
       };
       "tygesture" = rec {
         crateName = "tygesture";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         crateBin = [
           {
@@ -6457,7 +6467,7 @@ rec {
       };
       "tykey" = rec {
         crateName = "tykey";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         crateBin = [
           {
@@ -6503,7 +6513,7 @@ rec {
       };
       "tylight" = rec {
         crateName = "tylight";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         crateBin = [
           {
@@ -6575,7 +6585,7 @@ rec {
       };
       "tylock" = rec {
         crateName = "tylock";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         crateBin = [
           {
@@ -6633,7 +6643,7 @@ rec {
       };
       "tynotif" = rec {
         crateName = "tynotif";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         crateBin = [
           {
@@ -6685,7 +6695,7 @@ rec {
       };
       "typk" = rec {
         crateName = "typk";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         crateBin = [
           {
@@ -6735,7 +6745,7 @@ rec {
       };
       "typort" = rec {
         crateName = "typort";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         crateBin = [
           {
@@ -6781,7 +6791,7 @@ rec {
       };
       "tyquote" = rec {
         crateName = "tyquote";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         crateBin = [
           {
@@ -6832,7 +6842,7 @@ rec {
       };
       "tyshot" = rec {
         crateName = "tyshot";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         crateBin = [
           {
@@ -6888,7 +6898,7 @@ rec {
       };
       "tyspeak" = rec {
         crateName = "tyspeak";
-        version = "0.12.1";
+        version = "0.13.0";
         edition = "2021";
         crateBin = [
           {
@@ -6949,6 +6959,54 @@ rec {
           "vulkan" = [ "transcribe-cpp/vulkan" ];
         };
         resolvedDefaultFeatures = [ "vulkan" ];
+      };
+      "tytts" = rec {
+        crateName = "tytts";
+        version = "0.13.0";
+        edition = "2021";
+        crateBin = [
+          {
+            name = "tytts";
+            path = "src/main.rs";
+            requiredFeatures = [ ];
+          }
+        ];
+        src = lib.cleanSourceWith { filter = sourceFilter;  src = ./crates/tytts; };
+        dependencies = [
+          {
+            name = "anyhow";
+            packageId = "anyhow";
+          }
+          {
+            name = "clap";
+            packageId = "clap";
+            features = [ "derive" ];
+          }
+          {
+            name = "dirs";
+            packageId = "dirs";
+          }
+          {
+            name = "serde";
+            packageId = "serde";
+            features = [ "derive" ];
+          }
+          {
+            name = "sha2";
+            packageId = "sha2";
+          }
+          {
+            name = "ty-common";
+            packageId = "ty-common";
+          }
+          {
+            name = "ureq";
+            packageId = "ureq";
+            usesDefaultFeatures = false;
+            features = [ "rustls" "gzip" ];
+          }
+        ];
+
       };
       "udev" = rec {
         crateName = "udev";

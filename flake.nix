@@ -15,7 +15,7 @@
     systems = ["x86_64-linux" "aarch64-linux"];
     forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
 
-    tools = ["tybat" "tyboard" "tykey" "tycapture" "tyshot" "tyspeak" "tylight" "tygesture" "typort" "tyci" "typk" "tylock" "tynotif" "tyquote"];
+    tools = ["tybat" "tyboard" "tykey" "tycapture" "tyshot" "tyspeak" "tytts" "tylight" "tygesture" "typort" "tyci" "typk" "tylock" "tynotif" "tyquote"];
 
     # Called directly on legacyPackages (no nixpkgs re-instantiation) for fast evaluation.
     mkPackages = pkgs:
@@ -79,6 +79,7 @@
           crate2nix
           ffmpeg-full
           pulseaudio
+          piper-tts
           xdotool
           libnotify
           grim

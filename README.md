@@ -17,6 +17,7 @@ Website: <https://tys.tools> (with every tool's [dependencies](https://tys.tools
 | [tycapture](crates/tycapture) | Screen recording of the screen, a region or one window, with zoom on clicks. |
 | [tyshot](crates/tyshot) | Screenshots you can mark up with arrows, text and blur. |
 | [tyspeak](crates/tyspeak) | Dictation that stays on your machine. |
+| [tytts](crates/tytts) | Speak text locally, with an automatically downloaded voice. |
 | [tylight](crates/tylight) | Warmer screen colors at night, plus monitor brightness. X11 and wlroots. |
 | [tygesture](crates/tygesture) | Touchpad gestures (swipe, pinch, rotate, hold) mapped to commands, read straight from libinput. X11 and Wayland. |
 | [typort](crates/typort) | Your running dev servers in the tray: open them in the browser or stop them. |
@@ -48,6 +49,7 @@ most of it; GNOME does not offer these protocols.
 | tycapture | Records with `wf-recorder`, one monitor at a time. Window recording uses sway like i3; zoom needs Hyprland. |
 | tyshot | Screenshots with `grim`; the overlay covers every monitor. Window snapping on sway and Hyprland. |
 | tyspeak | Types with `wtype`, copies with `wl-copy`. |
+| tytts | Unchanged: local speech synthesis and PulseAudio/PipeWire playback; no display required. |
 | tylight | Sets gamma with `wlr-gamma-control` (sway, Hyprland, river, niri, labwc). Brightness over DDC works anywhere. Not on GNOME or KDE. |
 | tygesture | Unchanged: it reads libinput directly. Bind gestures to `wtype` and `swaymsg`/`hyprctl` instead of `xdotool` and `i3-msg`. |
 | typort, tyci | Unchanged: tray icon and `xdg-open` only. |

@@ -6,6 +6,44 @@ export const license = `${repo}/blob/main/LICENSE`;
 
 export const tools = [
   {
+    name: "tytts",
+    tagline: "Speak text with a local voice.",
+    summary:
+      "Read text aloud from arguments or stdin with Piper. The English Lessac voice " +
+      "downloads automatically on first use, then runs offline. No daemon or cloud service.",
+    features: [
+      "Text arguments and piped or redirected stdin",
+      "Automatic, checksum-verified default voice download (~63 MB)",
+      "Offline CPU inference after the first download",
+      "Adjustable speech speed and custom local Piper voices",
+      "Play speech immediately or save a WAV file",
+    ],
+    wayland: "Works on any desktop, or without a display server.",
+    requirements: [
+      "piper-tts and pulseaudio (included in the Nix package)",
+      "PulseAudio or PipeWire's PulseAudio server for playback; not needed for WAV output",
+      "Internet access for the first default voice download",
+    ],
+    usage: `tytts "Hello, Tyler."
+printf 'Your build finished.' | tytts
+tytts - < article.txt
+tytts --speed 1.25 "A little faster."
+tytts --output greeting.wav "Save this."
+tytts --model ~/voices/voice.onnx "Another voice."`,
+    config: `auto_download: true
+speed: 1.0
+# model: ~/voices/voice.onnx
+# model_dir: ~/.local/share/tytts/models`,
+    nixSettings: `auto_download = true;
+speed = 1.0;
+# model = "~/voices/voice.onnx";
+# model_dir = "~/.local/share/tytts/models";`,
+    storage:
+      "Default voice files live in $XDG_DATA_HOME/tytts/models (normally ~/.local/share/tytts/models). " +
+      "Persist that directory on ephemeral systems. Custom models need an adjacent .onnx.json file " +
+      "and are not downloaded automatically. Voice weights have their own dataset license terms; see the tool README.",
+  },
+  {
     name: "tybat",
     tagline: "Battery levels and low-charge warnings.",
     summary:
