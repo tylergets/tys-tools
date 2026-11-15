@@ -79,7 +79,6 @@
           crate2nix
           ffmpeg-full
           pulseaudio
-          piper-tts
           xdotool
           libnotify
           grim

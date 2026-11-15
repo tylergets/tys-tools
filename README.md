@@ -17,7 +17,7 @@ Website: <https://tys.tools> (with every tool's [dependencies](https://tys.tools
 | [tycapture](crates/tycapture) | Screen recording of the screen, a region or one window, with zoom on clicks. |
 | [tyshot](crates/tyshot) | Screenshots you can mark up with arrows, text and blur. |
 | [tyspeak](crates/tyspeak) | Dictation that stays on your machine. |
-| [tytts](crates/tytts) | Speak text locally, with an automatically downloaded voice. |
+| [tytts](crates/tytts) | Local speech with Pocket TTS, Zonos3-Mini, Kokoro, Piper, or Qwen3-TTS; clone recordings, choose voices, and download models automatically. |
 | [tylight](crates/tylight) | Warmer screen colors at night, plus monitor brightness. X11 and wlroots. |
 | [tygesture](crates/tygesture) | Touchpad gestures (swipe, pinch, rotate, hold) mapped to commands, read straight from libinput. X11 and Wayland. |
 | [typort](crates/typort) | Your running dev servers in the tray: open them in the browser or stop them. |

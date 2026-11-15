@@ -9,39 +9,97 @@ export const tools = [
     name: "tytts",
     tagline: "Speak text with a local voice.",
     summary:
-      "Read text aloud from arguments or stdin with Piper. The English Lessac voice " +
-      "downloads automatically on first use, then runs offline. No daemon or cloud service.",
+      "Read text aloud with Pocket TTS, Zonos3-Mini, Kokoro, Piper, or Qwen3-TTS. Clone recordings with Zonos or Qwen, or choose preset voices. " +
+      "Pocket streams audio; the other engines finish generation before playback. Models download on first use, then run offline.",
     features: [
       "Text arguments and piped or redirected stdin",
-      "Automatic, checksum-verified default voice download (~63 MB)",
+      "Automatic, checksum-verified model downloads (Pocket ~236 MB; full-precision Kokoro ~350 MB; Piper ~67 MB per voice)",
+      "Every download resumes from .part files; shared downloader with tyspeak verifies SHA-256 and serializes concurrent writers",
       "Offline CPU inference after the first download",
-      "Adjustable speech speed and custom local Piper voices",
-      "Play speech immediately or save a WAV file",
+      "Embedded Pocket streaming; native helper runtimes for Zonos, Kokoro, and Piper",
+      "Pitch-preserving speech speed (0.25–4×) and compatible voice embeddings",
+      "Download progress bars and loading/synthesis/playback status; --quiet to hide",
+      "Stream to playback or save a WAV; stdin is read to EOF before synthesis",
+      "Zonos finishes generation before playback to prevent stuttering on slower CPUs",
+      "Zonos text-alignment guard reduces extra words and handles short prompts",
+      "Zonos3-Mini multilingual voice cloning: --clone recording.wav --name NAME",
+      "Aligned voice table with language and gender parsed from Kokoro prefixes; --voices uses the OS locale",
+      "Region-aware filtering: US English hides British presets; --language en includes both; --all-languages shows all",
+      "Inspect voices with --voice-info; delete saved clones with --remove-voice",
+      "Saved voices select their engine automatically; Zonos supports --language and automatically uses a GPU with CPU fallback",
+      "Full-precision Kokoro avoids int8 ringing; 48 presets across seven languages",
+      "Piper Lessac and Amy voices; local sherpa-onnx Piper bundles support other languages",
+      "Kokoro/Piper CPU inference and up to 100,000 UTF-8 bytes per request",
+      "Qwen3-TTS 1.7B: nine presets, voice cloning, and --instruct delivery controls for presets",
+      "Qwen BF16 talker and full-precision codec (~4.5 GB); native Vulkan GPU acceleration",
     ],
     wayland: "Works on any desktop, or without a display server.",
     requirements: [
-      "piper-tts and pulseaudio (included in the Nix package)",
+      "PulseAudio client libraries (included in the Nix package)",
       "PulseAudio or PipeWire's PulseAudio server for playback; not needed for WAV output",
-      "Internet access for the first default voice download",
+      "Internet access for the first model download; no login required",
+      "Zonos native server, speaker encoder, and FFmpeg (included in Nix); ~1.12 GB synthesis weights plus ~45 MB cloning encoder",
+      "Kokoro/Piper: sherpa-onnx, GNU tar, and bzip2 (included in Nix)",
+      "Qwen: qwen-tts, qwen-codec, FFmpeg (included in Nix); Vulkan driver for GPU execution",
     ],
     usage: `tytts "Hello, Tyler."
 printf 'Your build finished.' | tytts
 tytts - < article.txt
 tytts --speed 1.25 "A little faster."
 tytts --output greeting.wav "Save this."
-tytts --model ~/voices/voice.onnx "Another voice."`,
-    config: `auto_download: true
+tytts --voice ~/voices/voice.safetensors "Another compatible voice."
+tytts --voices
+tytts --clone recording.wav --name tyler
+tytts --voice tyler "My cloned voice."
+tytts --voice-info tyler
+tytts --remove-voice tyler
+tytts --engine kokoro "Hello from Kokoro."
+tytts --voice bf_emma "A British voice."
+tytts --voice ff_siwis "Bonjour."
+tytts --engine piper "Hello from Piper."
+tytts --voice en_US-amy-low "Another Piper voice."
+tytts --voices --engine kokoro
+tytts --voices --engine piper
+tytts --voices --language fr
+tytts --voices --all-languages
+tytts --engine qwen "Hello from Qwen."
+tytts --voice qwen-aiden --instruct "Speak warmly." "Welcome home."
+tytts --engine qwen --clone recording.wav --name my-qwen --transcript "The exact recorded words."
+tytts --voice my-qwen "My Qwen voice."
+tytts --quiet "Hide progress."`,
+    config: `engine: pocket # or zonos, kokoro, piper, qwen
+auto_download: true
 speed: 1.0
-# model: ~/voices/voice.onnx
-# model_dir: ~/.local/share/tytts/models`,
-    nixSettings: `auto_download = true;
+# voice: ~/voices/voice.safetensors
+# voice: af_heart # or en_US-lessac-medium; presets select their engine
+# model_dir: ~/.local/share/tytts/models
+# language: en_us
+# gpu: false # force CPU for Zonos/Qwen; GPU is automatic by default
+# instruct: "Speak warmly." # Qwen presets only`,
+    nixSettings: `engine = "pocket"; # or "zonos", "kokoro", "piper", "qwen"
+auto_download = true;
 speed = 1.0;
-# model = "~/voices/voice.onnx";
-# model_dir = "~/.local/share/tytts/models";`,
+# voice = "~/voices/voice.safetensors";
+# voice = "af_heart"; # or "en_US-lessac-medium"; presets select their engine
+# model_dir = "~/.local/share/tytts/models";
+# language = "en_us";
+# gpu = false; # force CPU for Zonos/Qwen; GPU is automatic by default
+# instruct = "Speak warmly."; # Qwen presets only`,
     storage:
-      "Default voice files live in $XDG_DATA_HOME/tytts/models (normally ~/.local/share/tytts/models). " +
-      "Persist that directory on ephemeral systems. Custom models need an adjacent .onnx.json file " +
-      "and are not downloaded automatically. Voice weights have their own dataset license terms; see the tool README.",
+      "Assets live in $XDG_DATA_HOME/tytts/models/pocket-tts-2026-01/ (normally under ~/.local/share). " +
+      "Interrupted downloads retain .part files; rerun to resume. Persistent .download.lock files carry OS locks released on exit. " +
+      "Zonos models use a separate revision-pinned subdirectory. Saved voices and reference recordings live in " +
+      "$XDG_DATA_HOME/tytts/voices/; persist both directories. Pocket custom model directories contain model.safetensors, " +
+      "tokenizer.model, a ptts config.json, and voice.safetensors (or use --voice). " +
+      "Zonos uses GGUF models and .npy speaker embeddings; its private native server runs only during speech. " +
+      "Kokoro/Piper archives and extracted bundles also live under models/. Their --model directory needs a " +
+      "sherpa-onnx ONNX model, tokens.txt, and espeak-ng-data; Kokoro also needs voices.bin and lexicons. " +
+      "Voice filtering uses --language, configured language, then LC_ALL/LC_MESSAGES/LANG (C/POSIX defaults to US English); " +
+      "regional variants are filtered separately. Saved clones remain visible with undetermined language and gender. " +
+      "Qwen models use models/qwen3-tts-1.7b-b7ee2e8c/: BF16 CustomVoice/Base talkers and an F32 codec. " +
+      "Qwen cloning downloads a separate ~3.9 GB Base talker; --transcript enables in-context cloning. " +
+      "Zonos and Qwen support recording-based cloning. Kyutai assets are CC-BY-4.0; Zonos, Kokoro, and Qwen weights " +
+      "are Apache-2.0; Piper voice licenses vary. See the tool README.",
   },
   {
     name: "tybat",
@@ -338,7 +396,8 @@ opencode.submit = false;`,
     features: [
       "Toggle or push-to-talk from a hotkey",
       "Pick a model from the tray: Parakeet, Whisper, Qwen3-ASR, SenseVoice",
-      "Resumable, checksum-verified model downloads; checksum mismatches automatically retry once from scratch",
+      "Shared downloader with tytts: resumable .part files, validated HTTP ranges, and cross-process file locking",
+      "SHA-256-verified downloads; checksum mismatches automatically retry once from scratch",
       "Types into the focused window, copies to the clipboard, or both",
       "D-Bus API for scripts and bars",
       "Live status output for polybar, eww and other bars",

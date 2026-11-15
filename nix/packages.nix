@@ -29,7 +29,7 @@
     pname = "tys-tools";
     version = (lib.importTOML ../Cargo.toml).workspace.package.version;
     strictDeps = true;
-    nativeBuildInputs = with pkgs; [cmake pkg-config];
+    nativeBuildInputs = with pkgs; [cmake pkg-config rustPlatform.bindgenHook];
     buildInputs =
       guiLibs
       ++ (with pkgs; [
@@ -41,6 +41,7 @@
         libinput
         libxtst
         linux-pam
+        libpulseaudio
         udev
         xdotool
       ]);
@@ -103,6 +104,17 @@
       pkgs.defaultCrateOverrides
       // lib.genAttrs (builtins.attrNames (builtins.readDir ../crates)) localCrateOverride
       // {
+        libpulse-sys = _: {
+          nativeBuildInputs = [pkgs.pkg-config];
+          buildInputs = [pkgs.libpulseaudio];
+        };
+        libpulse-simple-sys = _: {
+          nativeBuildInputs = [pkgs.pkg-config];
+          buildInputs = [pkgs.libpulseaudio];
+        };
+        sonic-sys = _: {
+          nativeBuildInputs = [pkgs.rustPlatform.bindgenHook];
+        };
         gtk-layer-shell-sys = _: {
           nativeBuildInputs = [pkgs.pkg-config];
           buildInputs = [pkgs.gtk-layer-shell];
@@ -175,6 +187,7 @@
     description,
     bins ? [name],
     runtimeDeps ? [],
+    runtimeDepsFirst ? false,
     desktopEntries ? [],
     # Extra install commands (files under $out).
     extraInstall ? "",
@@ -209,7 +222,11 @@
           makeWrapper ${unwrapped}/bin/${bin} $out/bin/${bin} \
             "''${gappsWrapperArgs[@]}" \
             --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath guiLibs} \
-            --suffix PATH : ${lib.makeBinPath ([pkgs.libnotify pkgs.xdg-utils] ++ runtimeDeps)}
+            --${
+            if runtimeDepsFirst
+            then "prefix"
+            else "suffix"
+          } PATH : ${lib.makeBinPath ([pkgs.libnotify pkgs.xdg-utils] ++ runtimeDeps)}
         '')
         bins;
       passthru = {inherit unwrapped;};
@@ -289,8 +306,10 @@ in {
 
   tytts = mkTool {
     name = "tytts";
-    description = "Local text-to-speech with an automatically downloaded voice";
-    runtimeDeps = with pkgs; [piper-tts pulseaudio];
+    description = "Local speech with Pocket TTS, Zonos3, Kokoro, Piper, and Qwen3-TTS";
+    runtimeDeps = [(import ./zonos.nix {inherit lib pkgs;}) (import ./qwen-tts.nix {inherit lib pkgs;}) pkgs.sherpa-onnx pkgs.gnutar pkgs.bzip2 pkgs.ffmpeg];
+    # The native protocol and model assets are pinned together.
+    runtimeDepsFirst = true;
   };
 
   tylight = mkTool {

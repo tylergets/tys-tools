@@ -19,6 +19,11 @@ Hugging Face revisions and checksums. Like Hex, it runs them with
 - Resumable, SHA-256-verified downloads. A checksum mismatch automatically discards the
   corrupt download and retries once from scratch. If a download still fails, **Retry Download**
   in the tray (or `tyspeak retry`) tries again, resuming interrupted downloads.
+  The downloader is shared with tytts in `ty-common`; existing `<filename>.part`
+  files remain compatible. Byte-range responses are validated, and servers without
+  range support restart safely. OS file locks prevent concurrent processes from
+  writing the same partial file. `<filename>.download.lock` files remain on disk,
+  but their locks are released automatically on exit or crash.
 - Text is typed into the focused window (xdotool on X11, wtype on Wayland), put on the clipboard, or both.
 - A small D-Bus API on the session bus for i3 bindings, scripts and bars.
 - `status --follow` for polybar, eww and other bars.

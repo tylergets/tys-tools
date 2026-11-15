@@ -7,6 +7,7 @@ its own. If two tools need the same thing, it belongs here.
 | Module   | What it does |
 |----------|--------------|
 | `config` | Finds and loads a tool's YAML config, including the shared `env:` and `appearance:` sections |
+| `download` | Resumable, SHA-256-verified downloads with progress, cancellation, and cross-process locking (feature `download`) |
 | `appearance` | The shared `appearance:` settings: the font for cairo text (`select_font`) and GTK widgets |
 | `lock`   | Single-instance lock, a Unix socket that can double as the control socket |
 | `notify` | Desktop notifications through `notify-send`, with optional action buttons |
@@ -68,6 +69,20 @@ Both sections are removed before the tool's own config is parsed, so tools with
 `deny_unknown_fields` accept them. `config::parse` validates them without applying them.
 
 Also: `expand_user` / `expand_home` for leading `~` in paths.
+
+## download
+
+Enable `ty-common`'s `download` feature. `download::fetch` takes an `Asset`
+(URL, destination path, expected size and SHA-256), a `Progress`, an `AtomicBool`
+cancellation flag, and a callback receiving absolute completed-byte counts.
+It is blocking: tray tools run it on a worker thread; CLI tools can update a
+progress bar directly. `download::is_cancelled` identifies cancellation errors.
+
+Transfers retain `<destination>.part` for retries, validate HTTP byte ranges, and
+publish only after full checksum verification. Corrupt transfers retry once from
+scratch. OS locks on persistent `<destination>.download.lock` files serialize
+threads and processes and release automatically on crash. Published files are
+size-checked on reuse; the checksum is checked when first publishing.
 
 ## appearance
 

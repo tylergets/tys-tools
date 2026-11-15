@@ -21,15 +21,22 @@ emojis = "=0.7.2"
 evdev = "=0.13.2"
 gtk = "=0.18.2"
 gtk-layer-shell = { version = "=0.8.2", features = ["v0_6"] }
+hound = "=3.5.1"
+indicatif = "=0.18.6"
 input = "=0.10.0"
 libappindicator = "=0.9.0"
+libpulse-binding = "=2.30.1"
+libpulse-simple-binding = "=2.29.0"
 libc = "=0.2.191"
 pangocairo = "=0.18.0"
+ptts = { version = "=0.7.1", default-features = false }
 regex = "=1.13.1"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
 serde_yaml_ng = "=0.10.0"
+sentencepiece-rs = "=0.2.2"
 sha2 = "=0.10.9"
+sonic-sys = "=1.0.0"
 transcribe-cpp = { version = "=0.4.1", default-features = false }
 ureq = { version = "=3.5.1", default-features = false }
 wayland-client = "=0.31.15"
@@ -37,6 +44,7 @@ wayland-protocols = { version = "=0.32.13", features = ["client", "staging"] }
 wayland-protocols-wlr = { version = "=0.3.12", features = ["client"] }
 x11rb = "=0.13.2"
 xkbcommon = { version = "=0.7.0", default-features = false }
+xn = "=0.2.14"
 
 [profile.release]
 lto = "thin"

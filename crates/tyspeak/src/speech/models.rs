@@ -101,9 +101,7 @@ impl ModelInfo {
 
     /// Present with the expected size. The checksum is verified once, when downloading.
     pub fn is_downloaded(&self, dir: &Path) -> bool {
-        std::fs::metadata(self.path_in(dir))
-            .map(|meta| meta.is_file() && meta.len() == self.bytes)
-            .unwrap_or(false)
+        ty_common::download::is_complete(&self.path_in(dir), self.bytes)
     }
 
     pub fn size_label(&self) -> String {
