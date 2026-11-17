@@ -485,12 +485,8 @@ impl Prompt {
             }
         }
         for pid in pids {
-            // SAFETY: kill has no memory preconditions; a wrong pid fails harmlessly.
-            if unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) } != 0 {
-                eprintln!(
-                    "warning: failed to kill {pid}: {}",
-                    std::io::Error::last_os_error()
-                );
+            if let Err(err) = ty_common::process::signal(pid, libc::SIGTERM) {
+                eprintln!("warning: failed to kill {pid}: {err}");
             }
         }
         self.finish(Done::Cancelled);

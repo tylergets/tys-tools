@@ -5,6 +5,7 @@
 //! single-instance.
 
 use std::rc::Rc;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -107,7 +108,7 @@ impl Service {
             .context("introspection data lacks the interface")?;
         // GDBus invokes the handler on this (the GTK) thread; the guard lets the closure hold
         // the app's non-Send state.
-        let handle = MainThreadOnly(ThreadGuard::new(
+        let handle = Mutex::new(ThreadGuard::new(
             Rc::new(handle) as Rc<dyn Fn(Request) -> Result<Reply>>
         ));
         let registration = connection
@@ -122,7 +123,10 @@ impl Service {
                         );
                         return;
                     };
-                    match (handle.get())(request) {
+                    // Clone on the owning thread, then release the lock before calling
+                    // app code: a nested main-loop dispatch may reenter this handler.
+                    let handle = handle.lock().unwrap().get_ref().clone();
+                    match handle(request) {
                         Ok(Reply::Empty) => invocation.return_value(None),
                         Ok(Reply::Text(text)) => {
                             invocation.return_value(Some(&(text,).to_variant()))
@@ -159,19 +163,6 @@ impl Service {
         ) {
             eprintln!("warning: failed to emit {signal}: {err}");
         }
-    }
-}
-
-/// A value only ever touched on the thread that created it. `ThreadGuard` checks that on
-/// every access (panicking elsewhere), which makes sharing references across threads sound.
-struct MainThreadOnly<T>(ThreadGuard<T>);
-
-// SAFETY: every access goes through `ThreadGuard::get_ref`, which panics off the owning thread.
-unsafe impl<T> Sync for MainThreadOnly<T> {}
-
-impl<T> MainThreadOnly<T> {
-    fn get(&self) -> &T {
-        self.0.get_ref()
     }
 }
 

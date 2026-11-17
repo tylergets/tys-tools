@@ -62,10 +62,8 @@ fn run(argv: &[String]) -> anyhow::Result<String> {
         }
     })();
     if result.is_err() {
-        // SAFETY: the child's process group was created above; kill its helpers too.
-        unsafe {
-            libc::kill(-(child.id() as i32), libc::SIGKILL);
-        }
+        // The child's process group was created above; kill its helpers too.
+        let _ = ty_common::process::signal_group(child.id(), libc::SIGKILL);
     }
     let _ = child.wait();
     result

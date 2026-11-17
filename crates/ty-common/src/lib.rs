@@ -21,6 +21,8 @@ pub mod notify;
 #[cfg(target_os = "linux")]
 pub mod overlay;
 #[cfg(target_os = "linux")]
+pub mod process;
+#[cfg(target_os = "linux")]
 pub mod screen;
 #[cfg(target_os = "linux")]
 pub mod screenlock;

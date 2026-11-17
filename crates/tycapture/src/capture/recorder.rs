@@ -208,10 +208,7 @@ impl Recording {
     pub fn stop(mut self) -> Result<PathBuf> {
         if self.grabber.is_some() {
             // Reading frames from a pipe, ffmpeg ignores `q`; SIGINT finalizes the file too.
-            // SAFETY: plain kill(2) on our own child.
-            unsafe {
-                libc::kill(self.child.id() as libc::pid_t, libc::SIGINT);
-            }
+            let _ = ty_common::process::signal(self.child.id(), libc::SIGINT);
         } else if let Some(mut stdin) = self.child.stdin.take() {
             // `q` on stdin makes ffmpeg flush and finalize the container.
             let _ = stdin.write_all(b"q");
@@ -231,10 +228,7 @@ impl Recording {
         };
         if let Some(mut grabber) = self.grabber.take() {
             // Without a reader it would block on the pipe; SIGINT lets it exit cleanly.
-            // SAFETY: plain kill(2) on our own child.
-            unsafe {
-                libc::kill(grabber.id() as libc::pid_t, libc::SIGINT);
-            }
+            let _ = ty_common::process::signal(grabber.id(), libc::SIGINT);
             let deadline = Instant::now() + STOP_TIMEOUT;
             while grabber.try_wait()?.is_none() {
                 if Instant::now() >= deadline {

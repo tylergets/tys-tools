@@ -37,10 +37,7 @@ pub fn kill(port: &Port, force: bool) -> Result<()> {
     }
     let signal = if force { libc::SIGKILL } else { libc::SIGTERM };
     for pid in port.pids() {
-        let pid = libc::pid_t::try_from(pid).context("pid out of range")?;
-        // SAFETY: kill(2) has no memory-safety requirements.
-        if unsafe { libc::kill(pid, signal) } != 0 {
-            let err = std::io::Error::last_os_error();
+        if let Err(err) = ty_common::process::signal(pid, signal) {
             // Already gone (e.g. a worker that exited with its parent) is fine.
             if err.raw_os_error() != Some(libc::ESRCH) {
                 return Err(err).with_context(|| format!("failed to signal pid {pid}"));
