@@ -254,6 +254,12 @@ impl App {
             // Downloaded but failed to load: try again.
             self.load(selected);
         }
+        if self.active.get().is_none() {
+            bail!(
+                "{} is loading; try dictation again when it is ready",
+                self.selected.get().name
+            );
+        }
         let recorder = Recorder::start(&self.config.audio.source)?;
         if self.config.audio.start_sound {
             audio::play_chime(Chime::Start);
@@ -448,14 +454,45 @@ impl App {
 
     fn load(&self, model: &'static ModelInfo) {
         let generation = self.engine.next_generation();
+        self.active.set(None);
         self.loading.set(Some(model));
         self.failed.borrow_mut().take();
         let engine = self.engine.clone();
         let path = model.path_in(&self.model_dir);
+        let model_dir = self.model_dir.clone();
+        let auto_repair = self.config.auto_download;
         let threads = self.config.threads;
         let weak = self.this.clone();
         spawn_blocking(
-            move || engine.load(generation, model.id, &path, threads),
+            move || {
+                let result = engine.load(generation, model.id, &path, threads);
+                if let Err(err) = &result {
+                    match err.downcast_ref::<transcribe_cpp::Error>() {
+                        Some(
+                            transcribe_cpp::Error::ModelLoad(_)
+                            | transcribe_cpp::Error::ModelFileNotFound(_),
+                        ) if auto_repair && engine.is_current(generation) => {
+                            eprintln!(
+                                "checking and repairing {} after load failure: {err:#}",
+                                model.name
+                            );
+                            download::repair(model, &model_dir)?;
+                            // One retry only: a valid but unsupported model must not loop.
+                            return engine.load(generation, model.id, &path, threads);
+                        }
+                        Some(
+                            transcribe_cpp::Error::VersionMismatch(_)
+                            | transcribe_cpp::Error::BadStructSize(_),
+                        ) => {
+                            return Err(anyhow::anyhow!(
+                                "tyspeak's speech library and bindings are incompatible; update/rebuild tyspeak and restart it (model downloads cannot fix this): {err:#}"
+                            ));
+                        }
+                        _ => {}
+                    }
+                }
+                result
+            },
             move |result| {
                 let Some(app) = weak.upgrade() else {
                     return;

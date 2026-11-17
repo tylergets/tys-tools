@@ -88,13 +88,33 @@ pub fn fetch(
     cancel: &AtomicBool,
     report: impl Fn(u64),
 ) -> Result<PathBuf> {
+    fetch_inner(asset, progress, cancel, report, false)
+}
+
+/// Recheck a published file's checksum, replacing corrupt files under the download lock.
+pub fn fetch_verified(
+    asset: &Asset<'_>,
+    progress: &Progress,
+    cancel: &AtomicBool,
+    report: impl Fn(u64),
+) -> Result<PathBuf> {
+    fetch_inner(asset, progress, cancel, report, true)
+}
+
+fn fetch_inner(
+    asset: &Asset<'_>,
+    progress: &Progress,
+    cancel: &AtomicBool,
+    report: impl Fn(u64),
+    verify_existing: bool,
+) -> Result<PathBuf> {
     progress.total.store(asset.bytes, Ordering::Relaxed);
     let update = |done| {
         progress.done.store(done, Ordering::Relaxed);
         report(done);
     };
     check_cancel(cancel)?;
-    if is_complete(asset.path, asset.bytes) {
+    if !verify_existing && is_complete(asset.path, asset.bytes) {
         update(asset.bytes);
         return Ok(asset.path.to_owned());
     }
@@ -115,6 +135,22 @@ pub fn fetch(
         }
     }
     // Another downloader may have finished while we waited.
+    if verify_existing && asset.path.is_file() {
+        let mut file = File::open(asset.path)?;
+        let mut hasher = Sha256::new();
+        let mut buffer = [0u8; 65536];
+        loop {
+            check_cancel(cancel)?;
+            let count = file.read(&mut buffer)?;
+            if count == 0 {
+                break;
+            }
+            hasher.update(&buffer[..count]);
+        }
+        if format!("{:x}", hasher.finalize()) != asset.sha256 {
+            fs::remove_file(asset.path)?;
+        }
+    }
     if is_complete(asset.path, asset.bytes) {
         update(asset.bytes);
         return Ok(asset.path.to_owned());

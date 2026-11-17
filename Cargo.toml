@@ -37,7 +37,9 @@ serde_yaml_ng = "=0.10.0"
 sentencepiece-rs = "=0.2.2"
 sha2 = "=0.10.9"
 sonic-sys = "=1.0.0"
-transcribe-cpp = { version = "=0.4.1", default-features = false }
+transcribe-cpp = { version = "=0.4.2", default-features = false }
+# Keep the native library on the bindings' exact pre-1.0 version.
+transcribe-cpp-sys = { version = "=0.4.2", default-features = false }
 ureq = { version = "=3.5.1", default-features = false }
 wayland-client = "=0.31.15"
 wayland-protocols = { version = "=0.32.13", features = ["client", "staging"] }

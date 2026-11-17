@@ -80,3 +80,18 @@ pub fn fetch(
         |_| {},
     )
 }
+
+/// Check a model rejected by the loader and repair it if its contents are corrupt.
+pub fn repair(model: &ModelInfo, dir: &Path) -> Result<PathBuf> {
+    ty_common::download::fetch_verified(
+        &ty_common::download::Asset {
+            url: &model.url(),
+            path: &model.path_in(dir),
+            bytes: model.bytes,
+            sha256: model.sha256,
+        },
+        &Progress::new(model.bytes),
+        &AtomicBool::new(false),
+        |_| {},
+    )
+}

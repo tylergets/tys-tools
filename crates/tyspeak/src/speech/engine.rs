@@ -48,7 +48,7 @@ impl Engine {
         // Free the old model first so two never sit in memory together.
         *loaded = None;
         let model = Model::load(path)
-            .map_err(|err| anyhow::anyhow!("{err}"))
+            .map_err(anyhow::Error::new)
             .with_context(|| format!("failed to load {}", path.display()))?;
         let capabilities = model
             .capabilities()

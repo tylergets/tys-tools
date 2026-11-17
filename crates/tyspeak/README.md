@@ -14,7 +14,8 @@ Hugging Face revisions and checksums. Like Hex, it runs them with
   recording, yellow while transcribing, downloading or loading a model. **Middle-click
   toggles dictation** (if your tray host forwards secondary activation).
 - **Model picker in the tray.** Choosing a model downloads it, with progress in the menu, then
-  loads it. The previous model keeps working until the new one is ready. The choice is
+  loads it. The previous model keeps working during the download; dictation pauses
+  while the new model loads. The choice is
   remembered (`${XDG_STATE_HOME:-~/.local/state}/tyspeak/state.json`).
 - Resumable, SHA-256-verified downloads. A checksum mismatch automatically discards the
   corrupt download and retries once from scratch. If a download still fails, **Retry Download**
@@ -24,6 +25,10 @@ Hugging Face revisions and checksums. Like Hex, it runs them with
   range support restart safely. OS file locks prevent concurrent processes from
   writing the same partial file. `<filename>.download.lock` files remain on disk,
   but their locks are released automatically on exit or crash.
+- If the daemon cannot load a model, it checks its checksum, automatically replaces
+  corrupt files, and retries loading once (`auto_download` must be enabled).
+  Dictation waits until a model is ready. Library/bindings incompatibilities are
+  reported as installation errors; the Nix package pins both to the same version.
 - Text is typed into the focused window (xdotool on X11, wtype on Wayland), put on the clipboard, or both.
 - A small D-Bus API on the session bus for i3 bindings, scripts and bars.
 - `status --follow` for polybar, eww and other bars.

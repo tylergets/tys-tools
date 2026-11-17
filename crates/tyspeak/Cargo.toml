@@ -13,6 +13,7 @@ gtk.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 transcribe-cpp.workspace = true
+transcribe-cpp-sys.workspace = true
 
 [features]
 # GPU inference through ggml's Vulkan backend (needs Vulkan headers, loader and glslc).

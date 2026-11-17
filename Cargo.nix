@@ -8126,10 +8126,10 @@ rec {
       };
       "transcribe-cpp" = rec {
         crateName = "transcribe-cpp";
-        version = "0.4.1";
+        version = "0.4.2";
         edition = "2021";
         links = "transcribe_cpp";
-        sha256 = "0507ih0qiv54fc0bqnv0n0a3k7rq4dl26f3gmfh3wk2s1z9nbawb";
+        sha256 = "0jnd8capvkgv7hpf0f1gyac8km462pxjlqqm8pm0m2bk9ixnixkc";
         libName = "transcribe_cpp";
         dependencies = [
           {
@@ -9006,6 +9006,11 @@ rec {
           {
             name = "transcribe-cpp";
             packageId = "transcribe-cpp";
+            usesDefaultFeatures = false;
+          }
+          {
+            name = "transcribe-cpp-sys";
+            packageId = "transcribe-cpp-sys";
             usesDefaultFeatures = false;
           }
           {
