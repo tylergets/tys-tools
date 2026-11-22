@@ -110,6 +110,7 @@ speed = 1.0;
     features: [
       "Tray icon in the shared ty-tools palette and laptop percentage",
       "Optional Framework charge cap with persistent tray overrides and resume reapply",
+      "Power profile submenu: Power saver, Balanced and Performance, where supported",
       "Menu with laptop, Bluetooth and other reported device batteries",
       "Measured percentage drain and time remaining in the menu and tybat status; watts when available",
       "Remaining-time tray label, estimated from up to 30 minutes of percentage readings",
@@ -124,6 +125,7 @@ speed = 1.0;
     requirements: [
       "Linux with GTK 3 and UPower on the system D-Bus",
       "A StatusNotifierItem tray for the battery menu",
+      "Power profile switching requires power-profiles-daemon or a compatible provider and session PolicyKit permissions; on NixOS enable services.power-profiles-daemon.enable",
       "BlueZ and a device reporting battery levels for Bluetooth batteries",
       "Working logind power actions; hibernate requires system configuration",
       "Replace batsignal and keep UPower's emergency threshold below tybat's",

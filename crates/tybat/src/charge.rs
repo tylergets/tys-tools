@@ -129,7 +129,7 @@ impl Controller {
         }
     }
 
-    pub fn menu(&self) -> MenuEntry<Action> {
+    pub fn menu(&self) -> MenuEntry<crate::devices::Action> {
         let mut entries = vec![MenuEntry::Label(format!(
             "Declared default: {}%",
             self.config.percent
@@ -149,13 +149,13 @@ impl Controller {
                     percent
                 ),
                 enabled: true,
-                action: Action::Set(percent),
+                action: crate::devices::Action::Charge(Action::Set(percent)),
             });
         }
         entries.push(MenuEntry::Action {
             label: "Reset to declared default".into(),
             enabled: true,
-            action: Action::Reset,
+            action: crate::devices::Action::Charge(Action::Reset),
         });
         MenuEntry::Submenu {
             label: if self.applied {
@@ -169,7 +169,7 @@ impl Controller {
 }
 
 /// logind emits false after both suspend and hibernate, even for brief sleeps.
-pub fn watch_resume(sender: std::sync::mpsc::Sender<Action>) {
+pub fn watch_resume(sender: std::sync::mpsc::Sender<crate::devices::Action>) {
     std::thread::spawn(move || loop {
         let watch = || -> Result<()> {
             let conn = dbus::blocking::Connection::new_system()?;
@@ -181,7 +181,7 @@ pub fn watch_resume(sender: std::sync::mpsc::Sender<Action>) {
             let sender = sender.clone();
             conn.add_match(rule, move |(sleeping,): (bool,), _, _| {
                 if !sleeping {
-                    let _ = sender.send(Action::Reapply);
+                    let _ = sender.send(crate::devices::Action::Charge(Action::Reapply));
                 }
                 true
             })?;

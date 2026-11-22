@@ -10,6 +10,12 @@ use ty_common::tray::{IconState, MenuEntry, TraySpec};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 
+#[derive(Clone, PartialEq)]
+pub enum Action {
+    Charge(crate::charge::Action),
+    Profile(String),
+}
+
 #[derive(Clone)]
 pub struct Device {
     name: String,
@@ -227,7 +233,7 @@ pub fn scan() -> Result<Vec<Device>> {
     Ok(devices)
 }
 
-pub fn spec(result: &Result<Vec<Device>>) -> (TraySpec<crate::charge::Action>, String) {
+pub fn spec(result: &Result<Vec<Device>>) -> (TraySpec<Action>, String) {
     let mut menu = vec![
         MenuEntry::Label("tybat · Batteries".into()),
         MenuEntry::Separator,
@@ -371,7 +377,7 @@ pub fn start(
     status_cache: Arc<Mutex<Option<String>>>,
 ) -> Result<()> {
     use ty_common::tray::{self, Applet};
-    let (send, receive) = tray::channel::<crate::charge::Action>();
+    let (send, receive) = tray::channel::<Action>();
     let icons = ty_common::icons::Tool::Bat.tray_icons();
     let (spec, _) = spec(&Ok(Vec::new()));
     let mut applet = Applet::new("tybat", &icons, spec, send)?;
@@ -393,17 +399,22 @@ pub fn start(
             );
             *status_cache.lock().unwrap() = Some(status(&result));
             if tx
-                .send((result, charge.as_ref().map(|c| c.menu())))
+                .send((
+                    result,
+                    charge.as_ref().map(|c| c.menu()),
+                    crate::profiles::menu(),
+                ))
                 .is_err()
             {
                 break;
             }
             match action_rx.recv_timeout(Duration::from_secs(10)) {
-                Ok(action) => {
+                Ok(Action::Charge(action)) => {
                     if let Some(charge) = &mut charge {
                         charge.handle(action);
                     }
                 }
+                Ok(Action::Profile(profile)) => crate::profiles::set(&profile),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
             }
@@ -413,8 +424,10 @@ pub fn start(
         while let Ok(action) = receive.try_recv() {
             let _ = action_tx.send(action);
         }
-        if let Ok((result, charge_menu)) = rx.try_recv() {
+        if let Ok((result, charge_menu, profile_menu)) = rx.try_recv() {
             let (mut spec, label) = self::spec(&result);
+            spec.menu.push(MenuEntry::Separator);
+            spec.menu.push(profile_menu);
             if let Some(menu) = charge_menu {
                 spec.menu.push(MenuEntry::Separator);
                 spec.menu.push(menu);

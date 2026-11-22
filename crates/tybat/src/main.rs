@@ -1,5 +1,6 @@
 mod charge;
 mod devices;
+mod profiles;
 
 use std::cell::{Cell, RefCell};
 use std::fs;

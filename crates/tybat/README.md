@@ -34,6 +34,19 @@ tybat preview   # focus-grabbing countdown; never performs a power action
 tybat --config /path/to/config.yaml run
 ```
 
+## Power profiles
+
+Use the tray's **Power profile** submenu to select **Power saver**, **Balanced**, or
+**Performance**. Only profiles offered by your system are listed; the active profile
+is checked. Changes made by other applications appear on the next ten-second refresh.
+Failed changes produce a notification.
+
+Install and enable power-profiles-daemon (or a compatible provider such as tuned-ppd).
+On NixOS, set `services.power-profiles-daemon.enable = true` in your system configuration.
+No tybat YAML or Home Manager setting is needed. Switching uses the system D-Bus API
+with your session's PolicyKit permissions. Without a provider, the tray shows
+“Power profiles unavailable”.
+
 ## Home Manager
 
 ```nix
