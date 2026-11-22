@@ -8,7 +8,6 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::f64::consts::TAU;
 use std::ffi::CString;
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
@@ -23,7 +22,7 @@ use gtk::prelude::*;
 use gtk::{cairo, gdk, pango};
 use ty_common::icons::ATTENTION_COLOR;
 use ty_common::overlay;
-use ty_common::svgpath;
+use ty_common::fingerprint;
 use ty_common::tray;
 
 use crate::appinfo::App;
@@ -49,13 +48,7 @@ const ICON_PX: i32 = 48;
 const DIM_ALPHA: f64 = 0.6;
 /// The fingerprint glyph, logical px.
 const GLYPH_SIZE: i32 = 84;
-/// Lucide's fingerprint (ISC), drawn on a 24px grid with 2px strokes.
-const FINGERPRINT_SVG: &str = include_str!("../icons/fingerprint.svg");
-const ICON_GRID: f64 = 24.0;
-const ICON_STROKE: f64 = 1.75;
 /// The glyph breathes while PAM waits for a finger, and flashes red when one is refused.
-const FRAME: Duration = Duration::from_millis(33);
-const PULSE: Duration = Duration::from_millis(2400);
 const FLASH: Duration = Duration::from_millis(900);
 
 /// The open prompts, by cookie.
@@ -204,7 +197,6 @@ struct Prompt {
     /// The fingerprint glyph, shown while PAM waits for a finger.
     glyph: gtk::DrawingArea,
     /// Its strokes, as SVG path data.
-    glyph_paths: Vec<String>,
     shown_at: Instant,
     /// The prompt label and the entry.
     password_row: gtk::Box,
@@ -379,7 +371,6 @@ impl Prompt {
             window: window.clone(),
             chooser: chooser.clone(),
             glyph: glyph.clone(),
-            glyph_paths: svgpath::path_data(FINGERPRINT_SVG),
             shown_at: Instant::now(),
             password_row,
             prompt_label,
@@ -633,7 +624,7 @@ impl Prompt {
         self.set_status("", false);
         if animate {
             let weak = Rc::downgrade(self);
-            glib::timeout_add_local(FRAME, move || {
+            glib::timeout_add_local(fingerprint::FRAME, move || {
                 let Some(prompt) = weak.upgrade() else {
                     return ControlFlow::Break;
                 };
@@ -656,25 +647,26 @@ impl Prompt {
             .flash_until
             .is_some_and(|until| now < until);
         let color = area.style_context().color(gtk::StateFlags::NORMAL);
-        let (rgb, alpha, pulse) = if flashing {
-            (hex_rgb(ATTENTION_COLOR), 1.0, 1.0)
+        let (rgb, alpha) = if flashing {
+            (hex_rgb(ATTENTION_COLOR), 1.0)
         } else {
-            let phase = (now - self.shown_at).as_secs_f64() / PULSE.as_secs_f64() * TAU;
-            let pulse = 0.5 - 0.5 * phase.cos();
             (
                 (color.red(), color.green(), color.blue()),
-                color.alpha() * (0.45 + 0.55 * pulse),
-                pulse,
+                color.alpha(),
             )
         };
-        paint_fingerprint(
+        let width = f64::from(area.allocated_width());
+        let height = f64::from(area.allocated_height());
+        if let Err(err) = fingerprint::paint(
             cr,
-            &self.glyph_paths,
-            f64::from(area.allocated_width()),
-            f64::from(area.allocated_height()),
+            (width / 2.0, height / 2.0),
+            width.min(height),
             (rgb.0, rgb.1, rgb.2, alpha),
-            pulse,
-        );
+            now - self.shown_at,
+            !flashing,
+        ) {
+            eprintln!("warning: fingerprint drawing failed: {err:#}");
+        }
     }
 
     /// Reveal the password field (and keep it).
@@ -795,35 +787,6 @@ fn is_fingerprint_hint(text: &str) -> bool {
     text.to_lowercase().contains("finger")
 }
 
-/// Draw the fingerprint strokes centered in `width` x `height`, grown a little with
-/// `pulse` (0 to 1).
-fn paint_fingerprint(
-    cr: &cairo::Context,
-    paths: &[String],
-    width: f64,
-    height: f64,
-    rgba: (f64, f64, f64, f64),
-    pulse: f64,
-) {
-    let scale = width.min(height) / ICON_GRID * (0.94 + 0.06 * pulse);
-    cr.translate(width / 2.0, height / 2.0);
-    cr.scale(scale, scale);
-    cr.translate(-ICON_GRID / 2.0, -ICON_GRID / 2.0);
-    cr.set_source_rgba(rgba.0, rgba.1, rgba.2, rgba.3);
-    cr.set_line_width(ICON_STROKE);
-    cr.set_line_cap(cairo::LineCap::Round);
-    cr.set_line_join(cairo::LineJoin::Round);
-    for path in paths {
-        cr.new_path();
-        match svgpath::trace(cr, path) {
-            Ok(()) => {
-                let _ = cr.stroke();
-            }
-            Err(err) => eprintln!("warning: bad icon path: {err}"),
-        }
-    }
-}
-
 /// `#rrggbb` as cairo components.
 fn hex_rgb(hex: &str) -> (f64, f64, f64) {
     let channel = |index: usize| {
@@ -939,16 +902,15 @@ mod tests {
             let cr = cairo::Context::new(&surface).unwrap();
             cr.set_source_rgb(1.0, 1.0, 1.0);
             cr.paint().unwrap();
-            let paths = svgpath::path_data(FINGERPRINT_SVG);
-            assert_eq!(paths.len(), 9, "Lucide's fingerprint has nine strokes");
-            paint_fingerprint(
+            fingerprint::paint(
                 &cr,
-                &paths,
-                f64::from(size),
+                (f64::from(size) / 2.0, f64::from(size) / 2.0),
                 f64::from(size),
                 (0.1, 0.1, 0.1, 1.0),
-                1.0,
-            );
+                Duration::from_millis(1200),
+                true,
+            )
+            .unwrap();
         }
         surface.flush();
         let stride = surface.stride() as usize;

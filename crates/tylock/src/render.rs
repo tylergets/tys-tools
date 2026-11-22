@@ -5,6 +5,7 @@
 //! reference, so a 4K monitor gets the same layout as a 1080p one at twice the pixels.
 
 use std::f64::consts::TAU;
+use std::time::Instant;
 
 use anyhow::{Context as _, Result};
 use gtk::cairo::{self, Context, Format, ImageSurface};
@@ -12,11 +13,10 @@ use gtk::gdk::prelude::GdkContextExt;
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::pango::{self, FontDescription, Weight};
 use ty_common::screenlock::{Canvas, Damage, Output};
-use ty_common::svgpath;
+use ty_common::fingerprint;
 
 use crate::config::{AppConfig, Palette, Rgba};
 
-const FINGERPRINT_SVG: &str = include_str!("../icons/fingerprint.svg");
 /// Backgrounds kept, one per monitor size.
 const MAX_BACKGROUNDS: usize = 8;
 
@@ -61,7 +61,7 @@ pub struct Renderer {
     ui_font: String,
     clock_font: String,
     backgrounds: Vec<((i32, i32), ImageSurface)>,
-    fingerprint: Vec<String>,
+    shown_at: Instant,
     /// Per output: the size and clock last drawn, to tell when only the auth block
     /// changed.
     shown: Vec<(u32, (i32, i32), String, String)>,
@@ -86,7 +86,7 @@ impl Renderer {
             clock_font: config.clock_font.clone().unwrap_or_else(|| ui_font.clone()),
             ui_font,
             backgrounds: Vec::new(),
-            fingerprint: svgpath::path_data(FINGERPRINT_SVG),
+            shown_at: Instant::now(),
             shown: Vec::new(),
         })
     }
@@ -383,19 +383,14 @@ impl Renderer {
         cr.stroke()?;
 
         let size = 50.0 * u * swell;
-        cr.save()?;
-        cr.translate(cx - size / 2.0, cy - size / 2.0);
-        cr.scale(size / 24.0, size / 24.0);
-        cr.new_path();
-        for path in &self.fingerprint {
-            svgpath::trace(cr, path)?;
-        }
-        set_color(cr, color, 1.0);
-        cr.set_line_width(1.6);
-        cr.set_line_cap(cairo::LineCap::Round);
-        cr.set_line_join(cairo::LineJoin::Round);
-        cr.stroke()?;
-        cr.restore()?;
+        fingerprint::paint(
+            cr,
+            (cx, cy),
+            size,
+            (color.r, color.g, color.b, color.a),
+            self.shown_at.elapsed(),
+            matched.is_none() && error.is_none(),
+        )?;
 
         let (line, line_color) = match (matched, error) {
             (Some(_), _) => ("Unlocking…", p.success),

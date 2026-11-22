@@ -7,7 +7,7 @@ password or a finger to unlock. It works on X11 and on Wayland compositors with
 ## Features
 
 - **Fingerprint or password**, whichever comes first. With a reader and enrolled prints
-  the lock screen shows a fingerprint and what the reader says ("Place your finger on the
+  the lock screen shows the same breathing fingerprint as typk and what the reader says ("Place your finger on the
   fingerprint reader", "Failed to match fingerprint"); start typing and it switches to the
   password field. Esc goes back.
 - **Unlocks through PAM**: one PAM service for passwords, another for fingers (see

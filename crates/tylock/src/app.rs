@@ -294,6 +294,7 @@ impl State {
             || running(self.typed_at.last().copied(), DOT_POP)
             || self.checking()
             || self.unlocking()
+            || (self.mode == Mode::Fingerprint && self.finger_error.is_none())
     }
 
     fn key(&mut self, event: KeyEvent) {
