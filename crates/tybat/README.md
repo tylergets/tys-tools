@@ -12,11 +12,24 @@ devices. Devices must report a battery level to Linux; not all headphones do. Di
 refreshes every ten seconds in a worker thread. Only system batteries trigger warnings
 and power actions; a low mouse or headset never suspends the laptop.
 
+While a battery is discharging, its tray menu and `tybat status` show measured
+percentage loss per hour and approximate time remaining. Laptop time remaining also
+appears beside the tray percentage on hosts that display labels. Watts are shown
+when UPower provides them, but estimates need only percentage readings.
+
+The daemon measures up to the last 30 minutes of percentage readings, refreshing
+every ten seconds. Estimates appear after at least a minute and a one-percentage-point
+drop, and change with workload. Charging, a rising percentage, device removal,
+discovery failures or sampling gaps over a minute reset the measurement.
+`tybat status` reads the daemon's latest measurements; without the daemon it shows
+current battery levels and available watts. Each discharging battery has its own
+measurement; devices that do not report a discharging state show levels only.
+
 ## Usage
 
 ```sh
 tybat run       # daemon and tray; also the default command
-tybat status    # laptop and device battery levels
+tybat status    # battery levels, measured drain and estimated time remaining
 tybat preview   # focus-grabbing countdown; never performs a power action
 tybat --config /path/to/config.yaml run
 ```

@@ -28,7 +28,7 @@ enum Command {
     Run,
     /// Preview a critical popup without performing a power action.
     Preview,
-    /// Print laptop and connected device battery levels.
+    /// Print battery levels, laptop discharge rates and estimated time remaining.
     Status,
 }
 
@@ -324,12 +324,18 @@ fn main() -> Result<()> {
     cfg.validate()?;
     let command = cli.command.unwrap_or(Command::Run);
     if matches!(command, Command::Status) {
-        let devices = devices::scan()?;
-        for entry in devices::spec(&Ok(devices)).0.menu {
-            if let ty_common::tray::MenuEntry::Label(line) = entry {
-                println!("{line}");
+        if let Ok(status) = ty_common::lock::request("tybat", "batteries") {
+            if status != "running" && !status.is_empty() {
+                println!("{}", status.replace('\t', "\n"));
+                return Ok(());
             }
         }
+        println!(
+            "{}",
+            devices::status(&Ok(devices::scan()?))
+                .replace('\t', "\n")
+                .replace("Measuring drain…", "Run tybat to measure drain")
+        );
         return Ok(());
     }
     gtk::init()?;
@@ -355,8 +361,16 @@ fn main() -> Result<()> {
         return Ok(());
     }
     let _lock = InstanceLock::acquire("tybat")?;
-    ty_common::lock::serve(_lock.listener(), |_| "running".into())?;
-    devices::start(cfg.charge_limit.clone())?;
+    let status = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
+    let cached = status.clone();
+    ty_common::lock::serve(_lock.listener(), move |command| {
+        if command == "batteries" {
+            cached.lock().unwrap().clone().unwrap_or_default()
+        } else {
+            "running".into()
+        }
+    })?;
+    devices::start(cfg.charge_limit.clone(), status)?;
     let monitor = RefCell::new(Monitor::default());
     if let Err(error) = monitor.borrow_mut().tick(&cfg) {
         eprintln!("tybat: {error:#}");

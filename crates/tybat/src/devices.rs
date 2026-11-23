@@ -1,5 +1,6 @@
-use std::collections::HashMap;
-use std::time::Duration;
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
 
 use anyhow::Result;
 use dbus::arg::PropMap;
@@ -16,6 +17,9 @@ pub struct Device {
     percent: Option<f64>,
     state: String,
     laptop: bool,
+    drain_watts: Option<f64>,
+    seconds_left: Option<f64>,
+    percent_per_hour: Option<f64>,
 }
 
 fn text(props: &PropMap, key: &str) -> String {
@@ -28,6 +32,82 @@ fn text(props: &PropMap, key: &str) -> String {
 
 fn number(props: &PropMap, key: &str) -> u64 {
     props.get(key).and_then(|v| v.0.as_u64()).unwrap_or(0)
+}
+
+fn positive(props: &PropMap, key: &str) -> Option<f64> {
+    props
+        .get(key)
+        .and_then(|v| v.0.as_f64())
+        .filter(|value| value.is_finite() && *value > 0.0)
+}
+
+fn remaining_time(seconds: f64) -> String {
+    let minutes = (seconds / 60.0).ceil() as u64;
+    if minutes >= 60 {
+        format!("{}h {}m", minutes / 60, minutes % 60)
+    } else {
+        format!("{minutes}m")
+    }
+}
+
+#[derive(Default)]
+struct History {
+    samples: VecDeque<(Duration, f64)>,
+}
+
+impl History {
+    fn observe(&mut self, now: Duration, percent: f64) -> Option<f64> {
+        if self.samples.back().is_some_and(|&(time, previous)| {
+            now < time || now.saturating_sub(time) > Duration::from_secs(60) || percent > previous
+        }) {
+            self.samples.clear();
+        }
+        self.samples.push_back((now, percent));
+        while self
+            .samples
+            .front()
+            .is_some_and(|&(time, _)| now.saturating_sub(time) > Duration::from_secs(30 * 60))
+        {
+            self.samples.pop_front();
+        }
+        let &(start, initial) = self.samples.front()?;
+        let elapsed = now.saturating_sub(start).as_secs_f64();
+        let drop = initial - percent;
+        (elapsed >= 60.0 && drop >= 1.0).then(|| drop * 3600.0 / elapsed)
+    }
+}
+
+#[derive(Default)]
+struct Tracker(HashMap<String, History>);
+
+impl Tracker {
+    fn update(&mut self, result: &mut Result<Vec<Device>>, now: Duration) {
+        let Ok(devices) = result else {
+            self.0.clear();
+            return;
+        };
+        self.0.retain(|id, _| {
+            devices
+                .iter()
+                .any(|d| &d.native == id && d.state == "discharging" && d.percent.is_some())
+        });
+        for device in devices {
+            device.percent_per_hour = None;
+            device.seconds_left = None;
+            if device.state != "discharging" {
+                continue;
+            }
+            if let Some(percent) = device.percent {
+                let rate = self
+                    .0
+                    .entry(device.native.clone())
+                    .or_default()
+                    .observe(now, percent);
+                device.percent_per_hour = rate;
+                device.seconds_left = rate.map(|rate| percent / rate * 3600.0);
+            }
+        }
+    }
 }
 
 pub fn scan() -> Result<Vec<Device>> {
@@ -76,12 +156,27 @@ pub fn scan() -> Result<Vec<Device>> {
             _ => "connected",
         }
         .to_owned();
+        let drain_watts = if number(&props, "State") == 2 {
+            positive(&props, "EnergyRate")
+        } else {
+            None
+        };
         devices.push(Device {
             name,
-            native: text(&props, "NativePath"),
+            native: {
+                let native = text(&props, "NativePath");
+                if native.is_empty() {
+                    path.to_string()
+                } else {
+                    native
+                }
+            },
             percent,
             state,
             laptop,
+            drain_watts,
+            seconds_left: None,
+            percent_per_hour: None,
         });
     }
     // Some BlueZ Battery1 devices are not exported by UPower yet.
@@ -122,6 +217,9 @@ pub fn scan() -> Result<Vec<Device>> {
                     .map(|p| p as f64),
                 state: "Bluetooth".into(),
                 laptop: false,
+                drain_watts: None,
+                seconds_left: None,
+                percent_per_hour: None,
             });
         }
     }
@@ -152,6 +250,24 @@ pub fn spec(result: &Result<Vec<Device>>) -> (TraySpec<crate::charge::Action>, S
                     "{}: {level} · {}",
                     device.name, device.state
                 )));
+                if device.state == "discharging" {
+                    let mut details = Vec::new();
+                    if let Some(rate) = device.percent_per_hour {
+                        details.push(format!("{rate:.1}%/h drain"));
+                    }
+                    if let Some(watts) = device.drain_watts {
+                        details.push(format!("{watts:.1} W drain"));
+                    }
+                    if let Some(seconds) = device.seconds_left {
+                        let time = remaining_time(seconds);
+                        details.push(format!("~{time} remaining"));
+                    } else {
+                        details.push("Measuring drain…".into());
+                    }
+                    if !details.is_empty() {
+                        menu.push(MenuEntry::Label(details.join(" · ")));
+                    }
+                }
             }
             if let Some(device) = devices
                 .iter()
@@ -164,6 +280,9 @@ pub fn spec(result: &Result<Vec<Device>>) -> (TraySpec<crate::charge::Action>, S
             {
                 let percent = device.percent.unwrap_or_default();
                 label = format!("{percent:.0}%");
+                if let Some(seconds) = device.seconds_left {
+                    label.push_str(&format!(" · ~{}", remaining_time(seconds)));
+                }
                 icon = if device.state == "charging" {
                     IconState::Normal
                 } else if percent <= 5.0 {
@@ -187,7 +306,70 @@ pub fn spec(result: &Result<Vec<Device>>) -> (TraySpec<crate::charge::Action>, S
     )
 }
 
-pub fn start(charge_config: Option<crate::charge::Config>) -> Result<()> {
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn measures_percentage_loss_and_resets_after_gaps_or_increases() {
+        let mut history = History::default();
+        for seconds in (0..600).step_by(10) {
+            assert_eq!(history.observe(Duration::from_secs(seconds), 80.0), None);
+        }
+        assert_eq!(history.observe(Duration::from_secs(600), 78.0), Some(12.0));
+        assert_eq!(history.observe(Duration::from_secs(610), 79.0), None);
+        assert_eq!(history.observe(Duration::from_secs(1200), 70.0), None);
+        assert_eq!(history.observe(Duration::from_secs(1000), 69.0), None);
+    }
+
+    #[test]
+    fn tray_and_status_estimate_without_watts_and_clear_on_charging() {
+        let mut tracker = Tracker::default();
+        let mut result = Ok(vec![Device {
+            name: "Laptop battery".into(),
+            native: "BAT0".into(),
+            percent: Some(80.0),
+            state: "discharging".into(),
+            laptop: true,
+            drain_watts: None,
+            seconds_left: None,
+            percent_per_hour: None,
+        }]);
+        for seconds in (0..600).step_by(10) {
+            tracker.update(&mut result, Duration::from_secs(seconds));
+        }
+        result.as_mut().unwrap()[0].percent = Some(78.0);
+        tracker.update(&mut result, Duration::from_secs(600));
+        assert_eq!(spec(&result).1, "78% · ~6h 30m");
+        assert!(status(&result).contains("12.0%/h drain · ~6h 30m remaining"));
+        result.as_mut().unwrap()[0].state = "charging".into();
+        tracker.update(&mut result, Duration::from_secs(610));
+        assert_eq!(spec(&result).1, "78%");
+        result.as_mut().unwrap()[0].state = "discharging".into();
+        tracker.update(&mut result, Duration::from_secs(620));
+        assert!(status(&result).contains("Measuring drain"));
+    }
+}
+
+pub fn status(result: &Result<Vec<Device>>) -> String {
+    spec(result)
+        .0
+        .menu
+        .into_iter()
+        .filter_map(|entry| {
+            if let MenuEntry::Label(line) = entry {
+                Some(line.replace(['\n', '\r', '\t'], " "))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\t")
+}
+
+pub fn start(
+    charge_config: Option<crate::charge::Config>,
+    status_cache: Arc<Mutex<Option<String>>>,
+) -> Result<()> {
     use ty_common::tray::{self, Applet};
     let (send, receive) = tray::channel::<crate::charge::Action>();
     let icons = ty_common::icons::Tool::Bat.tray_icons();
@@ -200,9 +382,18 @@ pub fn start(charge_config: Option<crate::charge::Config>) -> Result<()> {
     }
     std::thread::spawn(move || {
         let mut charge = charge_config.map(crate::charge::Controller::new);
+        let mut tracker = Tracker::default();
         loop {
+            let mut result = scan();
+            tracker.update(
+                &mut result,
+                SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default(),
+            );
+            *status_cache.lock().unwrap() = Some(status(&result));
             if tx
-                .send((scan(), charge.as_ref().map(|c| c.menu())))
+                .send((result, charge.as_ref().map(|c| c.menu())))
                 .is_err()
             {
                 break;
