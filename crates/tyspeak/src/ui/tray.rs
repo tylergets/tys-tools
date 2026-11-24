@@ -690,6 +690,16 @@ impl App {
         };
 
         let action = |label: String, enabled: bool, action: TrayAction| MenuEntry::Action {
+            icon: match action {
+                TrayAction::Toggle => Some(if status.state == State::Recording {
+                    ty_common::tray::MenuIcon::Stop
+                } else {
+                    ty_common::tray::MenuIcon::Record
+                }),
+                TrayAction::OpenModelsFolder => Some(ty_common::tray::MenuIcon::Folder),
+                TrayAction::Quit => Some(ty_common::tray::MenuIcon::Quit),
+                _ => None,
+            },
             label,
             enabled,
             action,
@@ -722,6 +732,7 @@ impl App {
             MenuEntry::Separator,
             MenuEntry::Submenu {
                 label: format!("Model: {}", selected.name),
+                icon: None,
                 entries: self.model_entries(download),
             },
         ]);
@@ -789,6 +800,7 @@ impl App {
                 };
                 MenuEntry::Action {
                     label: format!("{mark} {} — {detail}", model.name),
+                    icon: None,
                     enabled: true,
                     action: TrayAction::SelectModel(model.id),
                 }

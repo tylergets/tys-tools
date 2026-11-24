@@ -139,6 +139,7 @@ impl Controller {
         }
         for percent in (25..=100).step_by(5) {
             entries.push(MenuEntry::Action {
+                icon: None,
                 label: format!(
                     "{}{}%",
                     if self.applied && percent == self.selected {
@@ -154,10 +155,12 @@ impl Controller {
         }
         entries.push(MenuEntry::Action {
             label: "Reset to declared default".into(),
+            icon: Some(ty_common::tray::MenuIcon::Reset),
             enabled: true,
             action: crate::devices::Action::Charge(Action::Reset),
         });
         MenuEntry::Submenu {
+            icon: None,
             label: if self.applied {
                 format!("Maximum charge: {}%", self.selected)
             } else {

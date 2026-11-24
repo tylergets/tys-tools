@@ -59,6 +59,7 @@ fn tray_spec(snippets: &[MenuSnippet]) -> TraySpec<TrayAction> {
                 .iter()
                 .enumerate()
                 .map(|(index, snippet)| MenuEntry::Action {
+                    icon: None,
                     label: snippet.title.clone(),
                     enabled: true,
                     action: TrayAction::Copy(index),
@@ -67,6 +68,7 @@ fn tray_spec(snippets: &[MenuSnippet]) -> TraySpec<TrayAction> {
         menu.push(MenuEntry::Separator);
     }
     menu.push(MenuEntry::Action {
+        icon: Some(ty_common::tray::MenuIcon::Quit),
         label: "Quit".to_string(),
         enabled: true,
         action: TrayAction::Quit,

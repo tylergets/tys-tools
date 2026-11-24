@@ -91,6 +91,15 @@ fn title(text: &str) -> String {
 
 fn spec(state: &State) -> TraySpec<Action> {
     let action = |label: &str, action| MenuEntry::Action {
+        icon: match action {
+            Action::TogglePause => Some(if state.paused {
+                ty_common::tray::MenuIcon::Resume
+            } else {
+                ty_common::tray::MenuIcon::Pause
+            }),
+            Action::Quit => Some(ty_common::tray::MenuIcon::Quit),
+            _ => None,
+        },
         label: label.into(),
         enabled: true,
         action,
@@ -107,6 +116,7 @@ fn spec(state: &State) -> TraySpec<Action> {
             .history
             .iter()
             .map(|n| MenuEntry::Action {
+                icon: None,
                 label: title(&format!(
                     "{} — {}",
                     n.app,
@@ -140,6 +150,7 @@ fn spec(state: &State) -> TraySpec<Action> {
             ),
             MenuEntry::Submenu {
                 label: "Sleep notifications".into(),
+                icon: None,
                 entries: [15, 30, 60, 120]
                     .into_iter()
                     .map(|minutes| {
@@ -150,15 +161,18 @@ fn spec(state: &State) -> TraySpec<Action> {
             MenuEntry::Separator,
             MenuEntry::Submenu {
                 label: format!("History ({})", state.history.len()),
+                icon: Some(ty_common::tray::MenuIcon::History),
                 entries: history,
             },
             MenuEntry::Action {
                 label: "Clear history".into(),
+                icon: None,
                 enabled: !state.history.is_empty(),
                 action: Action::ClearHistory,
             },
             MenuEntry::Action {
                 label: format!("Dismiss all ({})", state.active.len()),
+                icon: None,
                 enabled: !state.active.is_empty(),
                 action: Action::DismissAll,
             },

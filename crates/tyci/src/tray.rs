@@ -225,6 +225,7 @@ fn spec(snapshot: &Snapshot, fetching: bool, now: DateTime<Utc>) -> TraySpec<Tra
     if !snapshot.errors.is_empty() {
         menu.push(MenuEntry::Separator);
         menu.push(MenuEntry::Submenu {
+            icon: None,
             label: format!("⚠ {} gh errors", snapshot.errors.len()),
             entries: snapshot
                 .errors
@@ -237,11 +238,13 @@ fn spec(snapshot: &Snapshot, fetching: bool, now: DateTime<Utc>) -> TraySpec<Tra
     menu.push(MenuEntry::Separator);
     menu.push(MenuEntry::Action {
         label: if fetching { "Refreshing…" } else { "Refresh" }.into(),
+        icon: Some(ty_common::tray::MenuIcon::Refresh),
         enabled: !fetching,
         action: TrayAction::Refresh,
     });
     menu.push(MenuEntry::Action {
         label: "Quit".into(),
+        icon: Some(ty_common::tray::MenuIcon::Quit),
         enabled: true,
         action: TrayAction::Quit,
     });
@@ -281,6 +284,7 @@ fn run_entry(run: &Run, now: DateTime<Utc>) -> MenuEntry<TrayAction> {
         ),
         enabled: true,
         action: TrayAction::Open(run.url.clone()),
+        icon: None,
     }
 }
 
@@ -297,6 +301,7 @@ fn pr_entry(pr: &PullRequest, now: DateTime<Utc>) -> MenuEntry<TrayAction> {
         ),
         enabled: true,
         action: TrayAction::Open(pr.url.clone()),
+        icon: None,
     }
 }
 

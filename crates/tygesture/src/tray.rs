@@ -100,16 +100,23 @@ fn spec(status: &Status) -> TraySpec<Action> {
             MenuEntry::Separator,
             MenuEntry::Action {
                 label: "Show gestures…".to_string(),
+                icon: None,
                 enabled: true,
                 action: Action::Show,
             },
             MenuEntry::Action {
                 label: if status.paused { "Resume" } else { "Pause" }.to_string(),
+                icon: Some(if status.paused {
+                    ty_common::tray::MenuIcon::Resume
+                } else {
+                    ty_common::tray::MenuIcon::Pause
+                }),
                 enabled: true,
                 action: Action::TogglePause,
             },
             MenuEntry::Action {
                 label: "Quit".to_string(),
+                icon: Some(ty_common::tray::MenuIcon::Quit),
                 enabled: true,
                 action: Action::Quit,
             },

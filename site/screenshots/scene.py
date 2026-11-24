@@ -126,6 +126,16 @@ def tray_menu():
     name, path = watcher.items[-1]
     obj = bus.get_object(name, path)
     menu_path = obj.Get("org.kde.StatusNotifierItem", "Menu", dbus_interface="org.freedesktop.DBus.Properties")
+    exported = bus.get_object(name, menu_path)
+    _, layout = exported.GetLayout(0, -1, ["icon-name", "icon-data"],
+                                   dbus_interface="com.canonical.dbusmenu")
+
+    def has_icon(node):
+        _, props, children = node
+        return bool(props.get("icon-name") or props.get("icon-data")) or any(has_icon(child) for child in children)
+
+    if not has_icon(layout):
+        raise RuntimeError(f"{tool} exported no tray menu icons")
     menu = DbusmenuGtk3.Menu.new(name, str(menu_path))
     menu.show_all()
     pump(1)
@@ -221,13 +231,18 @@ elif tool == "tybat":
 elif tool == "tycapture":
     app = launch("tycapture", "run")
     wait_for(lambda: Path("/run/user/tycapture-demo.sock").exists(), "capture daemon")
-    if scene == "tycapture-recording":
+    if scene == "tycapture-tray":
+        menu = tray_menu()
+    elif scene == "tycapture-recording":
         run("tycapture", "start", "screen", "--now")
         wait_for(lambda: run("tycapture", "status").startswith("recording"), "recording")
         menu = tray_menu()
     else:
         launch("tycapture", "start", "screen")
         pump(2)
+elif scene == "tyshot-tray":
+    app = launch("tyshot", "tray")
+    menu = tray_menu()
 elif tool == "tyshot":
     # Use a real GTK window as the subject, then select it with the actual overlay.
     note = Gtk.Window(title="A small improvement")
@@ -252,6 +267,9 @@ elif tool == "tyshot":
             pump(.2)
         run("xdotool", "key", "n", "mousemove", "395", "340", "click", "1")
         pump(.3)
+elif scene == "tygesture-tray":
+    app = launch("tygesture", "run")
+    menu = tray_menu()
 elif tool == "tygesture":
     app = launch("tygesture", "run")
     wait_for(lambda: Path("/run/user/tygesture-demo.sock").exists(), "gesture daemon")
@@ -324,7 +342,7 @@ if max(high - low for low, high in image.getextrema()) < 8:
 # Menus and dialogs need a close-up, not a made-up desktop frame. Keep native
 # window decorations where the app actually has them. Screen-wide UIs stay wide.
 framing = "full-screen"
-if tool not in {"tylock", "tyshot"}:
+if tool not in {"tylock", "tyshot"} or scene == "tyshot-tray":
     if scene == "tybat":
         bounds = (320, 245, 880, 555)  # critical popup; exclude the dimming surface
     else:

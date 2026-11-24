@@ -10,7 +10,7 @@ use std::process::Command;
 use anyhow::{Context, Result};
 use gtk::glib::ControlFlow;
 use ty_common::icons::Tool;
-use ty_common::tray::{self, drain_actions, Applet, IconState, MenuEntry, TraySpec};
+use ty_common::tray::{self, drain_actions, Applet, IconState, MenuEntry, MenuIcon, TraySpec};
 
 use crate::config::AppConfig;
 
@@ -34,6 +34,12 @@ enum TrayAction {
 /// The (static) tray: middle-click (if the tray host forwards it) captures a region.
 fn spec() -> TraySpec<TrayAction> {
     let action = |label: &str, action| MenuEntry::Action {
+        icon: match action {
+            TrayAction::CaptureRegion | TrayAction::CaptureScreen => Some(MenuIcon::Capture),
+            TrayAction::OpenFolder => Some(MenuIcon::Folder),
+            TrayAction::Quit => Some(MenuIcon::Quit),
+            _ => None,
+        },
         label: label.to_string(),
         enabled: true,
         action,
@@ -44,6 +50,7 @@ fn spec() -> TraySpec<TrayAction> {
         menu: vec![
             action("Capture Region", TrayAction::CaptureRegion),
             MenuEntry::Submenu {
+                icon: None,
                 label: "Capture Region After".to_string(),
                 entries: REGION_DELAYS
                     .iter()

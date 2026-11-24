@@ -30,6 +30,7 @@ fn read_menu() -> Result<MenuEntry<Action>> {
         .iter()
         .filter_map(|props| props.get("Profile")?.0.as_str())
         .map(|profile| MenuEntry::Action {
+            icon: None,
             label: format!(
                 "{}{}",
                 if profile == active { "✓ " } else { "" },
@@ -40,6 +41,7 @@ fn read_menu() -> Result<MenuEntry<Action>> {
         })
         .collect();
     Ok(MenuEntry::Submenu {
+        icon: None,
         label: format!("Power profile: {}", label(&active)),
         entries,
     })

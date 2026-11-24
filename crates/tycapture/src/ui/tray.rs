@@ -927,6 +927,12 @@ fn tray_spec(status: &Status) -> TraySpec<TrayAction> {
     let idle = status.state == State::Idle;
     let active = matches!(status.state, State::Recording | State::Countdown);
     let action = |label: &str, enabled: bool, action: TrayAction| MenuEntry::Action {
+        icon: Some(match action {
+            TrayAction::Start(_) => ty_common::tray::MenuIcon::Record,
+            TrayAction::Stop => ty_common::tray::MenuIcon::Stop,
+            TrayAction::OpenFolder => ty_common::tray::MenuIcon::Folder,
+            TrayAction::Quit => ty_common::tray::MenuIcon::Quit,
+        }),
         label: label.to_string(),
         enabled,
         action,

@@ -152,6 +152,7 @@ pub fn tray_spec(paused: bool, history: &[ClipboardEntry]) -> TraySpec<TrayActio
             .iter()
             .enumerate()
             .map(|(index, entry)| MenuEntry::Action {
+                icon: None,
                 label: menu_label(entry, MENU_LABEL_CHAR_LIMIT),
                 enabled: true,
                 action: TrayAction::CopyEntry(index),
@@ -159,6 +160,15 @@ pub fn tray_spec(paused: bool, history: &[ClipboardEntry]) -> TraySpec<TrayActio
             .collect()
     };
     let action = |label: &str, action| MenuEntry::Action {
+        icon: match action {
+            TrayAction::TogglePause => Some(if paused {
+                ty_common::tray::MenuIcon::Resume
+            } else {
+                ty_common::tray::MenuIcon::Pause
+            }),
+            TrayAction::Quit => Some(ty_common::tray::MenuIcon::Quit),
+            _ => None,
+        },
         label: label.to_string(),
         enabled: true,
         action,
@@ -179,6 +189,7 @@ pub fn tray_spec(paused: bool, history: &[ClipboardEntry]) -> TraySpec<TrayActio
             ),
             MenuEntry::Separator,
             MenuEntry::Submenu {
+                icon: Some(ty_common::tray::MenuIcon::History),
                 label: "History".to_string(),
                 entries: history_entries,
             },
@@ -347,6 +358,7 @@ mod tests {
             entries[0],
             MenuEntry::Action {
                 label: "a\\nb".to_string(),
+                icon: None,
                 enabled: true,
                 action: TrayAction::CopyEntry(0),
             }

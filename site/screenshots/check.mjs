@@ -1,4 +1,4 @@
-// Fail the site build if a listed tool has no real capture or stale metadata.
+// Fail the site build if a visual tool has no real capture or stale metadata.
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tools } from "../src/tools.js";
@@ -6,7 +6,9 @@ import { tools } from "../src/tools.js";
 const directory = new URL("../public/screenshots/", import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL("manifest.json", directory), "utf8"));
 const scenes = JSON.parse(readFileSync(new URL("scenes.json", import.meta.url), "utf8"));
-for (const { name } of tools) {
+// tytts is demonstrated with audio examples rather than screenshots.
+const visualTools = tools.filter(tool => tool.name !== "tytts");
+for (const { name } of visualTools) {
   if (!Object.values(scenes).some(scene => scene.tool === name)) {
     throw new Error(`Missing screenshot scene for ${name}`);
   }
@@ -22,4 +24,4 @@ for (const [name, scene] of Object.entries(scenes)) {
     throw new Error(`Missing or stale screenshot for ${name}; run npm run screenshots`);
   }
 }
-console.log(`Screenshot coverage: ${Object.keys(scenes).length} views across ${tools.length} tools`);
+console.log(`Screenshot coverage: ${Object.keys(scenes).length} views across ${visualTools.length} tools`);

@@ -168,6 +168,10 @@ fn handle(config: &AppConfig, shown: &[Port], action: Action) {
 
 fn action(label: impl Into<String>, action: Action) -> MenuEntry<Action> {
     MenuEntry::Action {
+        icon: match action {
+            Action::KillAll => Some(ty_common::tray::MenuIcon::Stop),
+            _ => None,
+        },
         label: label.into(),
         enabled: true,
         action,
@@ -205,11 +209,13 @@ fn port_entries(config: &AppConfig, port: &Port) -> Vec<MenuEntry<Action>> {
         MenuEntry::Separator,
         MenuEntry::Action {
             label: "Stop".into(),
+            icon: Some(ty_common::tray::MenuIcon::Stop),
             enabled: found,
             action: Action::Kill(port.port),
         },
         MenuEntry::Action {
             label: "Force kill".into(),
+            icon: None,
             enabled: found,
             action: Action::ForceKill(port.port),
         },
@@ -229,6 +235,7 @@ fn spec(config: &AppConfig, ports: &[Port]) -> TraySpec<Action> {
     }
     for port in ports {
         menu.push(MenuEntry::Submenu {
+            icon: None,
             label: match &port.title {
                 Some(title) => format!(":{}  {title} · {}", port.port, port.label()),
                 None => format!(":{}  {}", port.port, port.label()),

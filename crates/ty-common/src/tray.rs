@@ -75,17 +75,53 @@ pub enum IconState {
     Busy,
 }
 
+/// Shared action icons keep the same meaning across all applets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuIcon {
+    Capture,
+    Record,
+    Stop,
+    Pause,
+    Resume,
+    History,
+    Folder,
+    Refresh,
+    Power,
+    Reset,
+    Quit,
+}
+
+impl MenuIcon {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Capture => "camera-photo-symbolic",
+            Self::Record => "media-record-symbolic",
+            Self::Stop => "media-playback-stop-symbolic",
+            Self::Pause => "media-playback-pause-symbolic",
+            Self::Resume => "media-playback-start-symbolic",
+            Self::History => "document-open-recent-symbolic",
+            Self::Folder => "folder-open-symbolic",
+            Self::Refresh => "view-refresh-symbolic",
+            Self::Power => "system-shutdown-symbolic",
+            Self::Reset => "edit-undo-symbolic",
+            Self::Quit => "application-exit-symbolic",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuEntry<A> {
     /// Insensitive informational line.
     Label(String),
     Action {
         label: String,
+        icon: Option<MenuIcon>,
         enabled: bool,
         action: A,
     },
     Submenu {
         label: String,
+        icon: Option<MenuIcon>,
         entries: Vec<MenuEntry<A>>,
     },
     Separator,
@@ -306,10 +342,11 @@ fn build_entries<A: Clone + Send + 'static>(
                 }
                 MenuEntry::Action {
                     label,
+                    icon,
                     enabled,
                     action,
                 } => {
-                    let item = gtk::MenuItem::with_label(label);
+                    let item = menu_item(label, *icon);
                     item.set_sensitive(*enabled);
                     let actions = actions.clone();
                     let action = action.clone();
@@ -318,8 +355,12 @@ fn build_entries<A: Clone + Send + 'static>(
                     });
                     item
                 }
-                MenuEntry::Submenu { label, entries } => {
-                    let item = gtk::MenuItem::with_label(label);
+                MenuEntry::Submenu {
+                    label,
+                    icon,
+                    entries,
+                } => {
+                    let item = menu_item(label, *icon);
                     let submenu = gtk::Menu::new();
                     children = build_entries(&submenu, entries, actions);
                     submenu.show_all();
@@ -334,6 +375,26 @@ fn build_entries<A: Clone + Send + 'static>(
         .collect()
 }
 
+// ImageMenuItem is deprecated by GTK, but libdbusmenu requires it to export icons
+// to the tray host. gtk-rs omits its wrapper, so construct it through GtkBuilder
+// and use the MenuItem base class. Custom image/label boxes are not exported.
+fn menu_item(label: &str, icon: Option<MenuIcon>) -> gtk::MenuItem {
+    match icon {
+        Some(icon) => {
+            let builder = gtk::Builder::from_string(
+                r#"<interface><object class="GtkImageMenuItem" id="item"/></interface>"#,
+            );
+            let item: gtk::MenuItem = builder.object("item").expect("tray image menu item");
+            item.set_label(label);
+            let image = gtk::Image::from_icon_name(Some(icon.name()), gtk::IconSize::Menu);
+            item.set_property("image", &image);
+            item.set_property("always-show-image", true);
+            item
+        }
+        None => gtk::MenuItem::with_label(label),
+    }
+}
+
 fn update_in_place<A>(entries: &[MenuEntry<A>], slots: &[Slot]) {
     for (entry, slot) in entries.iter().zip(slots) {
         match entry {
@@ -342,7 +403,7 @@ fn update_in_place<A>(entries: &[MenuEntry<A>], slots: &[Slot]) {
                 slot.widget.set_label(label);
                 slot.widget.set_sensitive(*enabled);
             }
-            MenuEntry::Submenu { label, entries } => {
+            MenuEntry::Submenu { label, entries, .. } => {
                 slot.widget.set_label(label);
                 update_in_place(entries, &slot.children);
             }
@@ -352,16 +413,36 @@ fn update_in_place<A>(entries: &[MenuEntry<A>], slots: &[Slot]) {
 }
 
 /// Whether `new` can reuse the widgets built for `old`: same kinds in the same places, and
-/// the same actions (the activate handlers capture them).
+/// the same icons and actions (the activate handlers capture the actions).
 fn same_shape<A: PartialEq>(new: &[MenuEntry<A>], old: &[MenuEntry<A>]) -> bool {
     new.len() == old.len()
         && new.iter().zip(old).all(|pair| match pair {
             (MenuEntry::Label(_), MenuEntry::Label(_)) => true,
             (MenuEntry::Separator, MenuEntry::Separator) => true,
-            (MenuEntry::Action { action: a, .. }, MenuEntry::Action { action: b, .. }) => a == b,
-            (MenuEntry::Submenu { entries: a, .. }, MenuEntry::Submenu { entries: b, .. }) => {
-                same_shape(a, b)
-            }
+            (
+                MenuEntry::Action {
+                    action: a,
+                    icon: ai,
+                    ..
+                },
+                MenuEntry::Action {
+                    action: b,
+                    icon: bi,
+                    ..
+                },
+            ) => a == b && ai == bi,
+            (
+                MenuEntry::Submenu {
+                    entries: a,
+                    icon: ai,
+                    ..
+                },
+                MenuEntry::Submenu {
+                    entries: b,
+                    icon: bi,
+                    ..
+                },
+            ) => ai == bi && same_shape(a, b),
             _ => false,
         })
 }
@@ -546,6 +627,7 @@ mod tests {
     fn action(action: u8) -> MenuEntry<u8> {
         MenuEntry::Action {
             label: "x".into(),
+            icon: None,
             enabled: true,
             action,
         }
@@ -564,6 +646,7 @@ mod tests {
     fn submenus_compare_their_entries() {
         let sub = |entries: Vec<MenuEntry<u8>>| MenuEntry::Submenu {
             label: "Model".into(),
+            icon: None,
             entries,
         };
         assert!(same_shape(

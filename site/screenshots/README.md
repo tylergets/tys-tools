@@ -36,7 +36,7 @@ unprivileged user namespaces; the script fails rather than capturing the host de
 
 All scenes use Adwaita dark, pinned DejaVu fonts and a plain background. Menus and
 dialogs are cropped to their real content with 12px of breathing room; tylock and
-tyshot retain their full-screen view. There is no synthetic desktop frame or website
+tyshot's selection and annotation views retain their full-screen view. There is no synthetic desktop frame or website
 border. Native window decorations are kept only where the app has them. The lock
 screen clock is fixed. The applications themselves are real processes. The minimal tray host
 renders their real exported menus using libdbusmenu-gtk3. GUI interactions use normal
@@ -61,7 +61,8 @@ have to build every native app.
 
 Add its views to `scenes.json`, add scenes in `scene.py` and any sample inputs in
 `fixtures.py`. Capture it, inspect the PNG, and commit it with `manifest.json`. Every
-entry in `site/src/tools.js` should have a corresponding image. Do not silently replace
+visual tool in `site/src/tools.js` should have a corresponding image. `tytts` uses audio
+examples instead and is exempt from screenshot coverage. Do not silently replace
 a failed scene with a blank desktop or a fabricated app window.
 
 `scenes.json` maps each image name to its app and caption. App detail pages show a
@@ -70,5 +71,7 @@ tyshot's views; `--only tyshot-annotate` captures only its annotation scene.
 
 Additional views cover tybat's device/charge menu, tynotif's history, tycapture's
 active recording controls, tyshot's annotations, and tylight's schedule graph.
+Every tray app has a menu capture; tycapture, tyshot, and tygesture also have
+dedicated `-tray` scenes. Menu icons come from the app's real D-Bus export.
 The battery menu uses a private UPower fixture and an inert charge-limit command;
 the recording scene starts a real recording inside the sandbox.
