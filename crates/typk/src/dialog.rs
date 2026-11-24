@@ -20,9 +20,9 @@ use gtk::gdk_pixbuf::Pixbuf;
 use gtk::glib::{self, ControlFlow};
 use gtk::prelude::*;
 use gtk::{cairo, gdk, pango};
+use ty_common::fingerprint;
 use ty_common::icons::ATTENTION_COLOR;
 use ty_common::overlay;
-use ty_common::fingerprint;
 use ty_common::tray;
 
 use crate::appinfo::App;
@@ -650,10 +650,7 @@ impl Prompt {
         let (rgb, alpha) = if flashing {
             (hex_rgb(ATTENTION_COLOR), 1.0)
         } else {
-            (
-                (color.red(), color.green(), color.blue()),
-                color.alpha(),
-            )
+            ((color.red(), color.green(), color.blue()), color.alpha())
         };
         let width = f64::from(area.allocated_width());
         let height = f64::from(area.allocated_height());

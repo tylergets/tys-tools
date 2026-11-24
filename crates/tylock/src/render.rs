@@ -12,8 +12,8 @@ use gtk::cairo::{self, Context, Format, ImageSurface};
 use gtk::gdk::prelude::GdkContextExt;
 use gtk::gdk_pixbuf::Pixbuf;
 use gtk::pango::{self, FontDescription, Weight};
-use ty_common::screenlock::{Canvas, Damage, Output};
 use ty_common::fingerprint;
+use ty_common::screenlock::{Canvas, Damage, Output};
 
 use crate::config::{AppConfig, Palette, Rgba};
 

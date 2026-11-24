@@ -7,10 +7,10 @@ pub mod appearance;
 #[cfg(target_os = "linux")]
 pub mod clipboard;
 pub mod config;
-#[cfg(target_os = "linux")]
-pub mod fingerprint;
 #[cfg(feature = "download")]
 pub mod download;
+#[cfg(target_os = "linux")]
+pub mod fingerprint;
 #[cfg(target_os = "linux")]
 pub mod frame;
 pub mod geometry;
