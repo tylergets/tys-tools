@@ -17,7 +17,7 @@ struct Loaded {
     max_samples: Option<usize>,
 }
 
-/// Holds at most one model. Cheap to clone; clones share the model.
+/// Holds the active model. Cheap to clone; clones share the model.
 #[derive(Clone, Default)]
 pub struct Engine {
     loaded: Arc<Mutex<Option<Loaded>>>,
@@ -45,8 +45,8 @@ impl Engine {
         if loaded.as_ref().is_some_and(|current| current.id == id) {
             return Ok(true);
         }
-        // Free the old model first so two never sit in memory together.
-        *loaded = None;
+        // Keep the working session until its replacement is ready. A failed switch
+        // must not leave dictation without a model.
         let model = Model::load(path)
             .map_err(anyhow::Error::new)
             .with_context(|| format!("failed to load {}", path.display()))?;
@@ -69,6 +69,9 @@ impl Engine {
             model.variant(),
             model.backend()
         );
+        if !self.is_current(generation) {
+            return Ok(false);
+        }
         *loaded = Some(Loaded {
             id: id.to_string(),
             session,
@@ -137,6 +140,20 @@ fn energy(samples: &[f32]) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::split_points;
+
+    #[test]
+    fn bundled_speech_runtime_accepts_the_bindings() {
+        // Exercise the native version/ABI gate without downloading a speech model.
+        // A missing file must reach the file check, rather than fail compatibility.
+        let path = std::env::temp_dir()
+            .join(format!("tyspeak-missing-model-{}", std::process::id()))
+            .join("missing.gguf");
+        let err = transcribe_cpp::Model::load(path).err().unwrap();
+        assert!(
+            matches!(err, transcribe_cpp::Error::ModelFileNotFound(_)),
+            "{err}"
+        );
+    }
 
     #[test]
     fn short_audio_is_one_piece() {

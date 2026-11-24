@@ -147,7 +147,18 @@
       };
   };
 
-  buildTool = name: crates.workspaceMembers.${name}.build;
+  buildTool = name: let
+    crate = crates.workspaceMembers.${name}.build;
+  in
+    if name == "tyspeak"
+    then
+      (crate.override {
+        # Exercise the linked native library before shipping the package. Matching
+        # Cargo versions alone did not catch the upstream 0.4.1/0.4.2 mismatch.
+        runTests = true;
+        testCrateFlags = ["speech::engine::tests::bundled_speech_runtime_accepts_the_bindings" "--exact"];
+      }).overrideAttrs (_: {inherit (crate) version;})
+    else crate;
 
   workspace = pkgs.symlinkJoin {
     name = "tys-tools-${commonArgs.version}";

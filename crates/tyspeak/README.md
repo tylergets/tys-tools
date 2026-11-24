@@ -84,6 +84,13 @@ Holding a key makes X send release/press pairs (autorepeat). `stop` waits `audio
 before it takes effect, and a `start` in that window keeps the recording going, so
 push-to-talk works while the key is held.
 
+Model switches wait for the current dictation to finish. If a replacement fails to
+load, the previous working model stays available. Loading a replacement temporarily
+uses memory for both models.
+
+Nix packages verify the linked speech runtime against its Rust bindings during the
+build, catching incompatible library versions before installation.
+
 The text is typed with `xdotool type --clearmodifiers`, so modifiers still held from the
 binding don't change it. On Wayland, `wtype`'s virtual keyboard has its own modifier state,
 so held modifiers don't apply either.

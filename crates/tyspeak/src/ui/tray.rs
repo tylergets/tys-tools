@@ -373,7 +373,9 @@ impl App {
                 eprintln!("warning: failed to remember the model: {err:#}");
             }
         }
-        if self.active.get() == Some(model) || self.loading.get() == Some(model) {
+        if (self.active.get() == Some(model) && self.loading.get().is_none())
+            || self.loading.get() == Some(model)
+        {
             return Ok(());
         }
         self.failed.borrow_mut().take();
@@ -453,8 +455,12 @@ impl App {
     }
 
     fn load(&self, model: &'static ModelInfo) {
+        // Finish the current utterance with its working model. refresh() picks up
+        // the latest selection once recording and transcription have finished.
+        if self.recorder.borrow().is_some() || self.transcribing.get() > 0 {
+            return;
+        }
         let generation = self.engine.next_generation();
-        self.active.set(None);
         self.loading.set(Some(model));
         self.failed.borrow_mut().take();
         let engine = self.engine.clone();
@@ -505,8 +511,7 @@ impl App {
                     Ok(true) => app.active.set(Some(model)),
                     Ok(false) => {}
                     Err(err) => {
-                        // The engine dropped the previous model before loading.
-                        app.active.set(None);
+                        // The previous working model remains available.
                         *app.failed.borrow_mut() = Some((model.id, format!("{err:#}")));
                         app.report(Err(err));
                     }
@@ -575,6 +580,15 @@ impl App {
     fn refresh(&self) {
         self.poll_download();
         self.check_recorder();
+        if self.recorder.borrow().is_none()
+            && self.transcribing.get() == 0
+            && self.loading.get().is_none()
+            && self.active.get() != Some(self.selected.get())
+            && self.failed.borrow().is_none()
+            && self.selected.get().is_downloaded(&self.model_dir)
+        {
+            self.load(self.selected.get());
+        }
         let status = self.snapshot();
         self.applet.borrow_mut().update(self.tray_spec(&status));
         let changed = self.last_status.borrow().as_ref() != Some(&status);
