@@ -72,6 +72,9 @@ fn action(label: impl Into<String>, action: Command) -> MenuEntry<Command> {
     MenuEntry::Action {
         icon: match action {
             Command::Toggle => Some(ty_common::tray::MenuIcon::Power),
+            Command::Auto => None,
+            Command::AutoBrightness(_) => Some(ty_common::tray::MenuIcon::Automatic),
+            Command::ShowGraph => Some(ty_common::tray::MenuIcon::Graph),
             _ => None,
         },
         label: label.into(),
@@ -101,7 +104,7 @@ fn spec(status: &Status, step: i32, presets: &[String]) -> TraySpec<Command> {
     ));
     menu.push(MenuEntry::Submenu {
         label: "Disable for".into(),
-        icon: None,
+        icon: Some(ty_common::tray::MenuIcon::Timer),
         entries: vec![
             action("30 minutes", Command::Disable(Some(30 * 60))),
             action("1 hour", Command::Disable(Some(3600))),
@@ -134,7 +137,7 @@ fn spec(status: &Status, step: i32, presets: &[String]) -> TraySpec<Command> {
         }));
         menu.push(MenuEntry::Submenu {
             label: "Presets".into(),
-            icon: None,
+            icon: Some(ty_common::tray::MenuIcon::Settings),
             entries,
         });
     }
@@ -157,7 +160,7 @@ fn spec(status: &Status, step: i32, presets: &[String]) -> TraySpec<Command> {
     }));
     menu.push(MenuEntry::Submenu {
         label: "Temperature".into(),
-        icon: None,
+        icon: Some(ty_common::tray::MenuIcon::Temperature),
         entries: temperatures,
     });
 
@@ -173,7 +176,7 @@ fn spec(status: &Status, step: i32, presets: &[String]) -> TraySpec<Command> {
         );
         let auto = status.auto_brightness == Some(true);
         menu.push(MenuEntry::Submenu {
-            icon: None,
+            icon: Some(ty_common::tray::MenuIcon::Brightness),
             label: format!(
                 "Monitor brightness ({percent}%{})",
                 if auto { ", auto" } else { "" }

@@ -35,7 +35,8 @@ enum TrayAction {
 fn spec() -> TraySpec<TrayAction> {
     let action = |label: &str, action| MenuEntry::Action {
         icon: match action {
-            TrayAction::CaptureRegion | TrayAction::CaptureScreen => Some(MenuIcon::Capture),
+            TrayAction::CaptureRegion => Some(MenuIcon::Region),
+            TrayAction::CaptureScreen => Some(MenuIcon::Screen),
             TrayAction::OpenFolder => Some(MenuIcon::Folder),
             TrayAction::Quit => Some(MenuIcon::Quit),
             _ => None,
@@ -50,7 +51,7 @@ fn spec() -> TraySpec<TrayAction> {
         menu: vec![
             action("Capture Region", TrayAction::CaptureRegion),
             MenuEntry::Submenu {
-                icon: None,
+                icon: Some(MenuIcon::Timer),
                 label: "Capture Region After".to_string(),
                 entries: REGION_DELAYS
                     .iter()

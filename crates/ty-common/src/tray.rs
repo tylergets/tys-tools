@@ -78,9 +78,12 @@ pub enum IconState {
 /// Shared action icons keep the same meaning across all applets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuIcon {
-    Capture,
+    Screen,
+    Window,
+    Region,
     Record,
     Stop,
+    StopAll,
     Pause,
     Resume,
     History,
@@ -88,23 +91,58 @@ pub enum MenuIcon {
     Refresh,
     Power,
     Reset,
+    Copy,
+    Clear,
+    Open,
+    Timer,
+    Settings,
+    Brightness,
+    Temperature,
+    Automatic,
+    Graph,
+    Battery,
+    Model,
+    Cancel,
+    Download,
+    CancelDownload,
+    Warning,
+    Gestures,
     Quit,
 }
 
 impl MenuIcon {
-    fn name(self) -> &'static str {
+    fn svg(self) -> &'static str {
         match self {
-            Self::Capture => "camera-photo-symbolic",
-            Self::Record => "media-record-symbolic",
-            Self::Stop => "media-playback-stop-symbolic",
-            Self::Pause => "media-playback-pause-symbolic",
-            Self::Resume => "media-playback-start-symbolic",
-            Self::History => "document-open-recent-symbolic",
-            Self::Folder => "folder-open-symbolic",
-            Self::Refresh => "view-refresh-symbolic",
-            Self::Power => "system-shutdown-symbolic",
-            Self::Reset => "edit-undo-symbolic",
-            Self::Quit => "application-exit-symbolic",
+            Self::Screen => include_str!("../icons/lucide/monitor.svg"),
+            Self::Window => include_str!("../icons/lucide/app-window.svg"),
+            Self::Region => include_str!("../icons/lucide/scan.svg"),
+            Self::Record => include_str!("../icons/lucide/mic.svg"),
+            Self::Stop => include_str!("../icons/lucide/square.svg"),
+            Self::StopAll => include_str!("../icons/lucide/octagon.svg"),
+            Self::Pause => include_str!("../icons/lucide/pause.svg"),
+            Self::Resume => include_str!("../icons/lucide/play.svg"),
+            Self::History => include_str!("../icons/lucide/rotate-ccw-clock.svg"),
+            Self::Folder => include_str!("../icons/lucide/folder-open.svg"),
+            Self::Refresh => include_str!("../icons/lucide/refresh-cw.svg"),
+            Self::Power => include_str!("../icons/lucide/power.svg"),
+            Self::Reset => include_str!("../icons/lucide/undo-2.svg"),
+            Self::Copy => include_str!("../icons/lucide/copy.svg"),
+            Self::Clear => include_str!("../icons/lucide/trash.svg"),
+            Self::Open => include_str!("../icons/lucide/external-link.svg"),
+            Self::Timer => include_str!("../icons/lucide/timer.svg"),
+            Self::Settings => include_str!("../icons/lucide/sliders-horizontal.svg"),
+            Self::Brightness => include_str!("../icons/lucide/sun.svg"),
+            Self::Temperature => include_str!("../icons/lucide/thermometer.svg"),
+            Self::Automatic => include_str!("../icons/lucide/sun-moon.svg"),
+            Self::Graph => include_str!("../icons/lucide/chart-no-axes-combined.svg"),
+            Self::Battery => include_str!("../icons/lucide/battery.svg"),
+            Self::Model => include_str!("../icons/lucide/cpu.svg"),
+            Self::Cancel => include_str!("../icons/lucide/x.svg"),
+            Self::Download => include_str!("../icons/lucide/download.svg"),
+            Self::CancelDownload => include_str!("../icons/lucide/cloud-off.svg"),
+            Self::Warning => include_str!("../icons/lucide/triangle-exclamation-point.svg"),
+            Self::Gestures => include_str!("../icons/lucide/touchpad.svg"),
+            Self::Quit => include_str!("../icons/lucide/log-out.svg"),
         }
     }
 }
@@ -386,12 +424,32 @@ fn menu_item(label: &str, icon: Option<MenuIcon>) -> gtk::MenuItem {
             );
             let item: gtk::MenuItem = builder.object("item").expect("tray image menu item");
             item.set_label(label);
-            let image = gtk::Image::from_icon_name(Some(icon.name()), gtk::IconSize::Menu);
+            let image = gtk::Image::new();
+            render_menu_icon(&item, &image, icon);
             item.set_property("image", &image);
             item.set_property("always-show-image", true);
+            item.connect_style_updated(move |item| render_menu_icon(item, &image, icon));
             item
         }
         None => gtk::MenuItem::with_label(label),
+    }
+}
+
+// Export pixels through libdbusmenu so the host cannot substitute its own icon set.
+// Use the app's menu foreground, including when its GTK theme changes.
+fn render_menu_icon(item: &gtk::MenuItem, image: &gtk::Image, icon: MenuIcon) {
+    let color = item.style_context().color(gtk::StateFlags::NORMAL);
+    let svg = icon.svg().replace("currentColor", &color.to_string());
+    let result = (|| -> Result<()> {
+        let loader = gtk::gdk_pixbuf::PixbufLoader::with_type("svg")?;
+        loader.set_size(16, 16);
+        loader.write(svg.as_bytes())?;
+        loader.close()?;
+        image.set_from_pixbuf(loader.pixbuf().as_ref());
+        Ok(())
+    })();
+    if let Err(error) = result {
+        eprintln!("failed to render tray menu icon: {error:#}");
     }
 }
 

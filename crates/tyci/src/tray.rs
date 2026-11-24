@@ -225,7 +225,7 @@ fn spec(snapshot: &Snapshot, fetching: bool, now: DateTime<Utc>) -> TraySpec<Tra
     if !snapshot.errors.is_empty() {
         menu.push(MenuEntry::Separator);
         menu.push(MenuEntry::Submenu {
-            icon: None,
+            icon: Some(ty_common::tray::MenuIcon::Warning),
             label: format!("⚠ {} gh errors", snapshot.errors.len()),
             entries: snapshot
                 .errors

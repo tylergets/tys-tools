@@ -67,7 +67,7 @@ def main():
                 "NO_AT_BRIDGE": "1",
                 "SCREENSHOT_ICON_DIR": os.environ["SCREENSHOT_ICON_DIR"],
             }
-            for key in ("GI_TYPELIB_PATH", "XDG_DATA_DIRS", "GIO_EXTRA_MODULES", "LD_LIBRARY_PATH", "LOCALE_ARCHIVE", "PYTHONPATH"):
+            for key in ("GI_TYPELIB_PATH", "XDG_DATA_DIRS", "GIO_EXTRA_MODULES", "GDK_PIXBUF_MODULE_FILE", "LD_LIBRARY_PATH", "LOCALE_ARCHIVE", "PYTHONPATH"):
                 if key in os.environ:
                     env[key] = os.environ[key]
             for key, value in env.items():

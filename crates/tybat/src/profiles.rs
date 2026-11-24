@@ -41,7 +41,7 @@ fn read_menu() -> Result<MenuEntry<Action>> {
         })
         .collect();
     Ok(MenuEntry::Submenu {
-        icon: None,
+        icon: Some(ty_common::tray::MenuIcon::Power),
         label: format!("Power profile: {}", label(&active)),
         entries,
     })

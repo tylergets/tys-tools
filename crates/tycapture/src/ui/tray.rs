@@ -928,7 +928,12 @@ fn tray_spec(status: &Status) -> TraySpec<TrayAction> {
     let active = matches!(status.state, State::Recording | State::Countdown);
     let action = |label: &str, enabled: bool, action: TrayAction| MenuEntry::Action {
         icon: Some(match action {
-            TrayAction::Start(_) => ty_common::tray::MenuIcon::Record,
+            TrayAction::Start(Target::Screen) => ty_common::tray::MenuIcon::Screen,
+            TrayAction::Start(Target::Window) => ty_common::tray::MenuIcon::Window,
+            TrayAction::Start(Target::Region) => ty_common::tray::MenuIcon::Region,
+            TrayAction::Stop if status.state == State::Countdown => {
+                ty_common::tray::MenuIcon::Cancel
+            }
             TrayAction::Stop => ty_common::tray::MenuIcon::Stop,
             TrayAction::OpenFolder => ty_common::tray::MenuIcon::Folder,
             TrayAction::Quit => ty_common::tray::MenuIcon::Quit,

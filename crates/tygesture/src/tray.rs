@@ -100,7 +100,7 @@ fn spec(status: &Status) -> TraySpec<Action> {
             MenuEntry::Separator,
             MenuEntry::Action {
                 label: "Show gestures…".to_string(),
-                icon: None,
+                icon: Some(ty_common::tray::MenuIcon::Gestures),
                 enabled: true,
                 action: Action::Show,
             },

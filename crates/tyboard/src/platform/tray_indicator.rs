@@ -167,6 +167,7 @@ pub fn tray_spec(paused: bool, history: &[ClipboardEntry]) -> TraySpec<TrayActio
                 ty_common::tray::MenuIcon::Pause
             }),
             TrayAction::Quit => Some(ty_common::tray::MenuIcon::Quit),
+            TrayAction::ClearHistory => Some(ty_common::tray::MenuIcon::Clear),
             _ => None,
         },
         label: label.to_string(),

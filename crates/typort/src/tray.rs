@@ -169,7 +169,9 @@ fn handle(config: &AppConfig, shown: &[Port], action: Action) {
 fn action(label: impl Into<String>, action: Action) -> MenuEntry<Action> {
     MenuEntry::Action {
         icon: match action {
-            Action::KillAll => Some(ty_common::tray::MenuIcon::Stop),
+            Action::KillAll => Some(ty_common::tray::MenuIcon::StopAll),
+            Action::Open(_) => Some(ty_common::tray::MenuIcon::Open),
+            Action::CopyUrl(_) => Some(ty_common::tray::MenuIcon::Copy),
             _ => None,
         },
         label: label.into(),
@@ -215,7 +217,7 @@ fn port_entries(config: &AppConfig, port: &Port) -> Vec<MenuEntry<Action>> {
         },
         MenuEntry::Action {
             label: "Force kill".into(),
-            icon: None,
+            icon: Some(ty_common::tray::MenuIcon::Cancel),
             enabled: found,
             action: Action::ForceKill(port.port),
         },

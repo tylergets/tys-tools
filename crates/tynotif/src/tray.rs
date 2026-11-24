@@ -150,7 +150,7 @@ fn spec(state: &State) -> TraySpec<Action> {
             ),
             MenuEntry::Submenu {
                 label: "Sleep notifications".into(),
-                icon: None,
+                icon: Some(ty_common::tray::MenuIcon::Timer),
                 entries: [15, 30, 60, 120]
                     .into_iter()
                     .map(|minutes| {
@@ -166,13 +166,13 @@ fn spec(state: &State) -> TraySpec<Action> {
             },
             MenuEntry::Action {
                 label: "Clear history".into(),
-                icon: None,
+                icon: Some(ty_common::tray::MenuIcon::Clear),
                 enabled: !state.history.is_empty(),
                 action: Action::ClearHistory,
             },
             MenuEntry::Action {
                 label: format!("Dismiss all ({})", state.active.len()),
-                icon: None,
+                icon: Some(ty_common::tray::MenuIcon::Cancel),
                 enabled: !state.active.is_empty(),
                 action: Action::DismissAll,
             },

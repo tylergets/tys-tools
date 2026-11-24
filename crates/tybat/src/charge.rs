@@ -160,7 +160,7 @@ impl Controller {
             action: crate::devices::Action::Charge(Action::Reset),
         });
         MenuEntry::Submenu {
-            icon: None,
+            icon: Some(ty_common::tray::MenuIcon::Battery),
             label: if self.applied {
                 format!("Maximum charge: {}%", self.selected)
             } else {

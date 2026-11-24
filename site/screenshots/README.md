@@ -73,5 +73,6 @@ Additional views cover tybat's device/charge menu, tynotif's history, tycapture'
 active recording controls, tyshot's annotations, and tylight's schedule graph.
 Every tray app has a menu capture; tycapture, tyshot, and tygesture also have
 dedicated `-tray` scenes. Menu icons come from the app's real D-Bus export.
+The apps bundle Lucide glyphs and export rendered image data for a consistent icon set.
 The battery menu uses a private UPower fixture and an inert charge-limit command;
 the recording scene starts a real recording inside the sandbox.

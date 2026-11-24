@@ -698,6 +698,13 @@ impl App {
                 }),
                 TrayAction::OpenModelsFolder => Some(ty_common::tray::MenuIcon::Folder),
                 TrayAction::Quit => Some(ty_common::tray::MenuIcon::Quit),
+                TrayAction::Cancel => Some(ty_common::tray::MenuIcon::Cancel),
+                TrayAction::CancelDownload => Some(ty_common::tray::MenuIcon::CancelDownload),
+                TrayAction::RetryModel => Some(if status.model_state == ModelState::Missing {
+                    ty_common::tray::MenuIcon::Download
+                } else {
+                    ty_common::tray::MenuIcon::Refresh
+                }),
                 _ => None,
             },
             label,
@@ -732,7 +739,7 @@ impl App {
             MenuEntry::Separator,
             MenuEntry::Submenu {
                 label: format!("Model: {}", selected.name),
-                icon: None,
+                icon: Some(ty_common::tray::MenuIcon::Model),
                 entries: self.model_entries(download),
             },
         ]);

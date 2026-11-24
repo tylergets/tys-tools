@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: Rust workspace formatting
+        entry: nix develop -c cargo fmt --all -- --check
+        language: system
+        pass_filenames: false
+        always_run: true

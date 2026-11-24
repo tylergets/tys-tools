@@ -154,11 +154,17 @@ unwrapped workspace. CI still checks all apps.
 
 ```sh
 nix develop
+pre-commit install   # install the workspace formatting check before committing
 cargo test --workspace
 cargo run -p tyboard -- run
 crate2nix generate   # regenerate Cargo.nix after manifest/lockfile/version changes
 nix flake check      # build all tools, run tests, clippy and rustfmt
 ```
+
+The Git hook runs `nix develop -c cargo fmt --all -- --check` against the staged
+workspace on every commit. Install the `pre-commit` CLI if needed, then run
+`pre-commit install` once per clone. To fix formatting, run
+`nix develop -c cargo fmt --all` and stage the changes.
 
 Commit the generated `Cargo.nix` alongside dependency changes. Generation can also
 run without entering the development shell:
