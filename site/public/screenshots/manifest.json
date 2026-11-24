@@ -31,7 +31,7 @@
     "scene": "tyboard",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "cae49de21e06ba9180ed8a11a5bee370a659475ae4da1b8d5def475badba29bd",
+    "sha256": "6e65fe2177030fc8ffe340904df1076aa8bd4f33e5865282b82941eec532bc53",
     "tool": "tyboard",
     "caption": "Clipboard history"
   },
@@ -43,7 +43,7 @@
     "scene": "tykey",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "76f431d79831fa3d8ec78f18c8d4097c2656a2631b1146a134b5210d6697738d",
+    "sha256": "8836b8000ae43d432031701520622b877c7000f7f272bbbe13b64cae59fd6236",
     "tool": "tykey",
     "caption": "Snippet menu"
   },
@@ -79,7 +79,7 @@
     "scene": "tyspeak",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "7bdb617790b05e3d9a163d4c195fad13cd6dee9a7f652e96603a307942454802",
+    "sha256": "a9ffa88874c672318a9b7946e4329000dc686c6bef237856f537f4146d27c163",
     "tool": "tyspeak",
     "caption": "Model selection"
   },
@@ -91,7 +91,7 @@
     "scene": "tylight",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "7af1651c36b586bdb69ffdd7ece7ff3ff422ed99b762d12f91ce8acb5eff365a",
+    "sha256": "6c379165de2282ee02c20bdacf24a33256837c468147aecc88a4832d8eadc9e7",
     "tool": "tylight",
     "caption": "Color temperature presets"
   },
@@ -115,7 +115,7 @@
     "scene": "typort",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "128825045a54cf664444db2bb0955e3c46c4c3504479c348b8252a4323f8162a",
+    "sha256": "df4229c9c5c2797f4877438ed32bb6b362340d22fd486da548ea1fbd30562e9f",
     "tool": "typort",
     "caption": "Local server controls"
   },
@@ -127,7 +127,7 @@
     "scene": "tyci",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "00d0c8c36bf8c0b9fb20ed90e24f3f806316348ad06b7b056c72664295ba81ac",
+    "sha256": "3d86b0f559fdc2e7d35e5c57c6deb176745beeef2c08d41b233d72f4d947c106",
     "tool": "tyci",
     "caption": "Builds and pull requests"
   },
@@ -175,7 +175,7 @@
     "scene": "tybat-tray",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "9080eb9552fbb8c76b73ef939d3db777172a84b3a1a8bd2af9b6cee0e2b5d169",
+    "sha256": "1502b75930f765c352fb49a0ca07db5bb8a436612475c350a98b99675782a61d",
     "tool": "tybat",
     "caption": "Device batteries and charge limit"
   },
@@ -187,7 +187,7 @@
     "scene": "tynotif-history",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "857d572b492e12d4c19ff0da7b005c1154b8e661d9acd1351c7702108fc3024e",
+    "sha256": "c6af8a8c2833081ba0e0297fd31caf30d061a9025d4b1c69e31e0cdc5e2f842e",
     "tool": "tynotif",
     "caption": "Notification history"
   },
@@ -199,7 +199,7 @@
     "scene": "tycapture-recording",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "3b6bbc991f4ccd4ad2b3002f8d709545e29a2a4dba49a9cdc2da46f819c685f1",
+    "sha256": "408eeaa4151eac9afba941f76cf981df1609c4d744ea18912e38dca5cb836260",
     "tool": "tycapture",
     "caption": "Recording controls"
   },
@@ -223,7 +223,7 @@
     "scene": "tylight-graph",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "edfc24385bbd494b875f6f3bf1f0a9ef7ab8dbe3aaf23e45c2f9f6e3da218f2b",
+    "sha256": "4ae5f023b68d4a5bc801fc96461478b0d12e651106f923f6b0e2e8214efbe844",
     "tool": "tylight",
     "caption": "Temperature schedule"
   },
@@ -235,7 +235,7 @@
     "scene": "tycapture-tray",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "f9873e36d5a6a345fcdb0aae9922509d80062a1948f44667b373cd03a69e9f20",
+    "sha256": "cf383edec75ed268255020abe44df29cdee0ee1d3425a1dcbf5768e2332f01bc",
     "tool": "tycapture",
     "caption": "Recording menu"
   },
@@ -247,7 +247,7 @@
     "scene": "tyshot-tray",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "f2d7b8e6fb75a045fadc70360b42af3f9cb6a1606443d75d9296a13ff8ec3f73",
+    "sha256": "84ac125421b1d20ba0657ed48a8c921b0ac323432931ed280174a6781941544f",
     "tool": "tyshot",
     "caption": "Capture menu"
   },
@@ -259,7 +259,7 @@
     "scene": "tygesture-tray",
     "theme": "Adwaita:dark",
     "font": "DejaVu Sans 11",
-    "sha256": "b7477167324dd3edbb39342fcd9af534d62aded9264c5727f78fceefab8704a8",
+    "sha256": "3bbec96cc88b87407e4947993ab269177a3521165677d10054e8c29475c585e2",
     "tool": "tygesture",
     "caption": "Gesture controls"
   }
